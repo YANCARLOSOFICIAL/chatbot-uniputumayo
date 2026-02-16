@@ -87,178 +87,128 @@ service]  service] service]   service]
 ### Infraestructura
 | Tecnología | Uso |
 |------------|-----|
-| Docker Compose | Orquestación de PostgreSQL + Ollama |
+| Docker Compose | Orquestación completa (PostgreSQL + Ollama + Backend + Frontend + Nginx) |
 | pgvector/pgvector:pg16 | Imagen Docker de PostgreSQL con pgvector |
 | ollama/ollama | Imagen Docker de Ollama |
+| Nginx | Reverse proxy unificando frontend y backend en puerto 80 |
 
 ---
 
 ## Requisitos Previos
 
 - **Docker Desktop** (con Docker Compose)
-- **Python 3.11+**
-- **Node.js 20+** y npm
 - **Git**
+- (Opcional) **Python 3.11+** y **Node.js 20+** para desarrollo local sin Docker
 - (Opcional) **API key de OpenAI** para usar el proveedor en la nube
 
 ---
 
-## Instalación
+## Instalación y Ejecución
 
-### 1. Clonar el repositorio
+### Opción 1: Docker Compose (Recomendada)
+
+Todo el proyecto esta dockerizado. Un solo comando levanta todos los servicios:
 
 ```bash
+# 1. Clonar el repositorio
 git clone <url-del-repositorio>
 cd chatbot-uniputumayo
-```
 
-### 2. Iniciar la infraestructura (PostgreSQL + Ollama)
+# 2. (Opcional) Configurar OpenAI si lo necesitas
+cp .env.example .env
+# Editar .env con tu OPENAI_API_KEY
 
-```bash
-cd backend
-docker compose up -d
-```
+# 3. Levantar todo
+docker compose up --build -d
 
-Esto creará y arrancará:
-- **PostgreSQL 16** con pgvector en el puerto `5433`
-- **Ollama** en el puerto `11434`
-
-Verificar que estén corriendo:
-
-```bash
-docker ps --filter "name=iup-chatbot"
-```
-
-### 3. Descargar modelo LLM en Ollama
-
-```bash
-# Modelo de generación (obligatorio)
+# 4. Descargar modelos de Ollama (primera vez)
 docker exec iup-chatbot-ollama ollama pull llama3.1:8b
-
-# Modelo de embeddings (opcional si se usa OpenAI para embeddings)
 docker exec iup-chatbot-ollama ollama pull nomic-embed-text
 ```
 
-### 4. Configurar el backend
+Esto levanta **5 servicios**:
+- **PostgreSQL 16** con pgvector (puerto `5433`)
+- **Ollama** para LLM local (puerto `11434`)
+- **Backend FastAPI** con migraciones automaticas (puerto `8000`)
+- **Frontend Next.js** (puerto `3000`)
+- **Nginx** reverse proxy (puerto `80`)
+
+> **Nota:** El backend descarga automaticamente los modelos de Ollama al iniciar si detecta que no estan disponibles.
+
+#### URLs de acceso (Docker)
+
+| Servicio | URL |
+|----------|-----|
+| Aplicacion completa (Nginx) | http://localhost |
+| Frontend directo | http://localhost:3000 |
+| Backend API directo | http://localhost:8000 |
+| Swagger/OpenAPI Docs | http://localhost/docs |
+| Health Check | http://localhost/api/v1/health |
+
+#### Comandos utiles
 
 ```bash
-cd backend
+# Ver logs de todos los servicios
+docker compose logs -f
 
-# Crear entorno virtual
-python -m venv venv
+# Ver logs de un servicio especifico
+docker compose logs -f backend
 
-# Activar entorno virtual
-# En Windows (Git Bash / MSYS2):
-source venv/Scripts/activate
-# En Linux/macOS:
-source venv/bin/activate
+# Reiniciar un servicio
+docker compose restart backend
 
-# Instalar dependencias
-pip install -r requirements.txt
-```
+# Detener todo
+docker compose down
 
-### 5. Configurar variables de entorno
-
-Copiar el archivo de ejemplo y editar según necesidad:
-
-```bash
-cp .env.example .env
-```
-
-Variables clave en `backend/.env`:
-
-```env
-# Base de datos
-DATABASE_URL=postgresql+asyncpg://chatbot_user:chatbot_password@localhost:5433/chatbot_db
-
-# Ollama
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_DEFAULT_MODEL=llama3.1:8b
-
-# OpenAI (opcional - solo si quieres usar OpenAI)
-OPENAI_API_KEY=sk-tu-api-key-aqui
-
-# Proveedor por defecto: "ollama" o "openai"
-DEFAULT_LLM_PROVIDER=ollama
-
-# CORS - incluir los puertos donde corre el frontend
-CORS_ORIGINS=http://localhost:3000,http://localhost:3001
-```
-
-### 6. Aplicar migraciones de base de datos
-
-```bash
-cd backend
-source venv/Scripts/activate  # o source venv/bin/activate en Linux
-
-# Generar migración (solo si es la primera vez o hay cambios en modelos)
-alembic revision --autogenerate -m "initial schema"
-
-# Aplicar migraciones
-alembic upgrade head
-```
-
-### 7. Configurar el frontend
-
-```bash
-cd frontend
-
-# Instalar dependencias
-npm install
-
-# Configurar variables de entorno (ya creado)
-# Verificar que frontend/.env.local contenga:
-# NEXT_PUBLIC_API_URL=http://localhost:8000
+# Detener todo y eliminar volumenes (reset completo)
+docker compose down -v
 ```
 
 ---
 
-## Ejecución
+### Opcion 2: Desarrollo Local (sin Docker para backend/frontend)
 
-### Iniciar todos los servicios
+Para desarrollo con hot-reload, puedes correr solo la infraestructura en Docker:
 
-Se necesitan **3 terminales** (o usar procesos en segundo plano):
-
-**Terminal 1 - Infraestructura Docker:**
 ```bash
+# 1. Levantar solo PostgreSQL + Ollama
 cd backend
 docker compose up -d
+
+# 2. Descargar modelos
+docker exec iup-chatbot-ollama ollama pull llama3.1:8b
+docker exec iup-chatbot-ollama ollama pull nomic-embed-text
 ```
 
-**Terminal 2 - Backend FastAPI:**
+#### Backend
+
 ```bash
 cd backend
-source venv/Scripts/activate  # o source venv/bin/activate
+python -m venv venv
+source venv/Scripts/activate  # Windows Git Bash
+# source venv/bin/activate    # Linux/macOS
+pip install -r requirements.txt
+cp .env.example .env          # Editar si es necesario
+alembic upgrade head          # Aplicar migraciones
 uvicorn app.main:app --reload --port 8000
 ```
 
-**Terminal 3 - Frontend Next.js:**
+#### Frontend
+
 ```bash
 cd frontend
+npm install
 npm run dev -- --port 3001
 ```
 
-### URLs de acceso
+#### URLs de acceso (Desarrollo Local)
 
 | Servicio | URL |
 |----------|-----|
-| Frontend (Chat) | http://localhost:3001 |
-| Frontend (Chat directo) | http://localhost:3001/chat |
-| Frontend (Admin) | http://localhost:3001/admin |
+| Frontend | http://localhost:3001 |
 | Backend API | http://localhost:8000 |
-| Swagger/OpenAPI Docs | http://localhost:8000/docs |
-| ReDoc | http://localhost:8000/redoc |
+| Swagger Docs | http://localhost:8000/docs |
 | Health Check | http://localhost:8000/api/v1/health |
-
-### Detener todos los servicios
-
-```bash
-# Detener Docker
-cd backend
-docker compose down
-
-# Los procesos de uvicorn y next se detienen con Ctrl+C en sus terminales
-```
 
 ---
 
@@ -355,9 +305,17 @@ docker compose down
 chatbot-uniputumayo/
 ├── .gitignore
 ├── README.md
+├── .env.example                     # Variables para Docker Compose
+├── docker-compose.yml               # Orquestación completa (5 servicios)
+│
+├── nginx/
+│   └── nginx.conf                   # Configuración del reverse proxy
 │
 ├── backend/
-│   ├── docker-compose.yml          # PostgreSQL + pgvector + Ollama
+│   ├── Dockerfile                   # Imagen Docker del backend
+│   ├── entrypoint.sh                # Script de inicio (migraciones + uvicorn)
+│   ├── .dockerignore
+│   ├── docker-compose.yml          # PostgreSQL + pgvector + Ollama (dev local)
 │   ├── requirements.txt            # Dependencias Python
 │   ├── .env                        # Variables de entorno (no versionado)
 │   ├── .env.example                # Plantilla de variables

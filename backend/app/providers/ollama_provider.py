@@ -51,7 +51,7 @@ class OllamaProvider(BaseLLMProvider):
 
     async def embed(self, texts: list[str], model: str) -> dict:
         embeddings = []
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             for text in texts:
                 response = await client.post(
                     f"{self.base_url}/api/embeddings",
@@ -60,7 +60,6 @@ class OllamaProvider(BaseLLMProvider):
                 response.raise_for_status()
                 data = response.json()
                 embeddings.append(data["embedding"])
-
         return {"embeddings": embeddings}
 
     async def is_available(self) -> bool:

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 from uuid import UUID
 
@@ -32,7 +32,7 @@ class ChunkResponse(BaseModel):
     chunk_index: int
     content: str
     token_count: int | None
-    metadata: dict | None
+    metadata: dict | None = Field(None, alias="metadata_")
     created_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "populate_by_name": True}

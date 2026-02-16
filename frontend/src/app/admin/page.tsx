@@ -1,11 +1,50 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { apiClient } from "@/lib/api/client";
+
+interface HealthData {
+  status: string;
+  services: Record<string, { status: string; latency_ms?: number }>;
+}
 
 export default function AdminPage() {
+  const [health, setHealth] = useState<HealthData | null>(null);
+
+  useEffect(() => {
+    apiClient.checkHealth().then(setHealth).catch(() => setHealth(null));
+  }, []);
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">
         Panel de Administración
       </h1>
+
+      {/* Health Status */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+        <h2 className="text-lg font-semibold text-gray-800 mb-4">Estado del Sistema</h2>
+        {health ? (
+          <div className="flex flex-wrap gap-4">
+            {Object.entries(health.services).map(([name, svc]) => (
+              <div key={name} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg">
+                <div className={`w-2.5 h-2.5 rounded-full ${svc.status === "healthy" ? "bg-green-500" : "bg-red-500"}`} />
+                <span className="text-sm font-medium text-gray-700 capitalize">{name}</span>
+                {svc.latency_ms != null && (
+                  <span className="text-xs text-gray-400">{svc.latency_ms}ms</span>
+                )}
+              </div>
+            ))}
+            <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg">
+              <div className={`w-2.5 h-2.5 rounded-full ${health.status === "healthy" ? "bg-green-500" : "bg-yellow-500"}`} />
+              <span className="text-sm font-medium text-gray-700">General: {health.status}</span>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400">No se pudo conectar con el servidor</p>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Link

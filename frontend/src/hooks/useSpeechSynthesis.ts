@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 interface UseSpeechSynthesisReturn {
   speak: (text: string) => void;
@@ -11,10 +11,28 @@ interface UseSpeechSynthesisReturn {
 
 export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isSupported, setIsSupported] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
 
-  const isSupported =
-    typeof window !== "undefined" && "speechSynthesis" in window;
+  useEffect(() => {
+    setIsSupported("speechSynthesis" in window);
+  }, []);
+
+  // Load voices asynchronously (they may not be available immediately)
+  useEffect(() => {
+    if (!isSupported) return;
+
+    const loadVoices = () => {
+      voicesRef.current = window.speechSynthesis.getVoices();
+    };
+
+    loadVoices();
+    window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
+    return () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", loadVoices);
+    };
+  }, [isSupported]);
 
   const speak = useCallback(
     (text: string) => {
@@ -28,8 +46,10 @@ export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
       utterance.rate = 1.0;
       utterance.pitch = 1.0;
 
-      // Try to find a Spanish voice
-      const voices = window.speechSynthesis.getVoices();
+      // Try to find a Spanish voice (use cached voices)
+      const voices = voicesRef.current.length > 0
+        ? voicesRef.current
+        : window.speechSynthesis.getVoices();
       const spanishVoice = voices.find(
         (v) => v.lang.startsWith("es-CO") || v.lang.startsWith("es")
       );

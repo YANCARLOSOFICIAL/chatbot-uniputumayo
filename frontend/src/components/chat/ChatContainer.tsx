@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { useChat } from "@/hooks/useChat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useSpeechSynthesis } from "@/hooks/useSpeechSynthesis";
@@ -36,24 +36,12 @@ export function ChatContainer() {
 
   const { speak, isSpeaking } = useSpeechSynthesis();
 
+  const handleSendRef = useRef<((content: string, inputType: "text" | "voice") => Promise<void>) | null>(null);
+
   // Load conversations on mount
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
-
-  // Handle voice transcript
-  useEffect(() => {
-    if (transcript && !isListening) {
-      handleSend(transcript, "voice");
-    }
-  }, [transcript, isListening]);
-
-  // Sync speaking state with avatar
-  useEffect(() => {
-    if (!isSpeaking && avatarState === "speaking") {
-      dispatch({ type: "SET_AVATAR_STATE", payload: "idle" });
-    }
-  }, [isSpeaking, avatarState, dispatch]);
 
   const handleSend = useCallback(
     async (content: string, inputType: "text" | "voice" = "text") => {
@@ -69,6 +57,22 @@ export function ChatContainer() {
     },
     [activeConversationId, createConversation, sendMessage, speak]
   );
+
+  handleSendRef.current = handleSend;
+
+  // Handle voice transcript
+  useEffect(() => {
+    if (transcript && !isListening) {
+      handleSendRef.current?.(transcript, "voice");
+    }
+  }, [transcript, isListening]);
+
+  // Sync speaking state with avatar
+  useEffect(() => {
+    if (!isSpeaking && avatarState === "speaking") {
+      dispatch({ type: "SET_AVATAR_STATE", payload: "idle" });
+    }
+  }, [isSpeaking, avatarState, dispatch]);
 
   const handleVoiceStart = useCallback(() => {
     dispatch({ type: "SET_AVATAR_STATE", payload: "listening" });

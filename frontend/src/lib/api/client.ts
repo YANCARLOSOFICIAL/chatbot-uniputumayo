@@ -62,7 +62,7 @@ export const apiClient = {
     request<{
       user_message: { id: string; role: string; content: string; created_at: string };
       assistant_message: { id: string; role: string; content: string; created_at: string; response_time_ms: number };
-      sources: Array<{ chunk_id: string; document_title: string; content_preview: string; score: number }>;
+      sources: Array<{ chunk_id: string; document_title: string; content_preview: string; score: number; program: string | null; faculty: string | null }>;
     }>(`/api/v1/chat/conversations/${conversationId}/messages`, {
       method: "POST",
       body: JSON.stringify({

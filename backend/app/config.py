@@ -26,13 +26,14 @@ class Settings(BaseSettings):
     chunk_overlap: int = 77
     rag_top_k: int = 5
     rag_score_threshold: float = 0.7
-    embedding_dimensions: int = 1536
+    # nomic-embed-text=768, text-embedding-3-small=1536
+    embedding_dimensions: int = 768
 
     # Server
     host: str = "0.0.0.0"
     port: int = 8000
     log_level: str = "info"
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = "http://localhost:3000,http://localhost:3001"
 
     # Document Upload
     max_upload_size_mb: int = 50

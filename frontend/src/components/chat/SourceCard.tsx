@@ -24,6 +24,11 @@ export function SourceCard({ sources }: SourceCardProps) {
               <p className="font-medium text-gray-700 truncate max-w-[200px]">
                 {source.document_title}
               </p>
+              {source.program && (
+                <p className="text-gray-500 mt-0.5 truncate max-w-[200px]">
+                  {source.program}
+                </p>
+              )}
               <p className="text-gray-400 mt-0.5">
                 Relevancia: {Math.round(source.score * 100)}%
               </p>

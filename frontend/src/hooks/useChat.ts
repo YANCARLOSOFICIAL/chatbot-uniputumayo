@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { useChatContext } from "@/context/ChatContext";
 import { apiClient } from "@/lib/api/client";
 import type { Message } from "@/types/chat";
 
 export function useChat() {
   const { state, dispatch } = useChatContext();
+  const messagesRef = useRef(state.messages);
+  messagesRef.current = state.messages;
 
   const loadConversations = useCallback(async () => {
     try {
@@ -58,6 +60,7 @@ export function useChat() {
   const selectConversation = useCallback(
     async (conversationId: string) => {
       dispatch({ type: "SET_ACTIVE_CONVERSATION", payload: conversationId });
+      dispatch({ type: "SET_ERROR", payload: null });
       try {
         const messages = await apiClient.getMessages(conversationId);
         dispatch({
@@ -104,11 +107,14 @@ export function useChat() {
           inputType
         );
 
-        // Replace temp message with real one and add assistant response
+        // Use ref to get current messages (avoids stale closure)
+        const currentMessages = messagesRef.current.filter(
+          (m) => m.id !== tempUserMessage.id
+        );
         dispatch({
           type: "SET_MESSAGES",
           payload: [
-            ...state.messages,
+            ...currentMessages,
             response.user_message as unknown as Message,
             response.assistant_message as unknown as Message,
           ],
@@ -121,8 +127,8 @@ export function useChat() {
             document_title: s.document_title,
             content_preview: s.content_preview,
             score: s.score,
-            program: null,
-            faculty: null,
+            program: s.program ?? null,
+            faculty: s.faculty ?? null,
           })),
         });
 
@@ -131,6 +137,11 @@ export function useChat() {
         // Return assistant content for TTS
         return (response.assistant_message as unknown as Message).content;
       } catch (error) {
+        // Remove optimistic message on error
+        dispatch({
+          type: "SET_MESSAGES",
+          payload: messagesRef.current.filter((m) => m.id !== tempUserMessage.id),
+        });
         dispatch({
           type: "SET_ERROR",
           payload: error instanceof Error ? error.message : "Error enviando mensaje",
@@ -140,7 +151,7 @@ export function useChat() {
         dispatch({ type: "SET_LOADING", payload: false });
       }
     },
-    [state.activeConversationId, state.messages, dispatch]
+    [state.activeConversationId, dispatch]
   );
 
   const deleteConversation = useCallback(

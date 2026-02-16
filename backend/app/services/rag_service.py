@@ -29,7 +29,7 @@ class RAGService:
         # Build filter conditions
         filters = []
         params = {
-            "embedding": str(query_embedding),
+            "embedding": query_embedding,
             "threshold": request.score_threshold,
             "top_k": request.top_k,
         }
@@ -47,11 +47,15 @@ class RAGService:
 
         where_clause = " AND ".join(filters) if filters else "1=1"
 
+        # Convert embedding list to PostgreSQL array format
+        embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
+        params["embedding"] = embedding_str
+
         query = text(f"""
             SELECT
                 dc.id AS chunk_id,
                 dc.content,
-                1 - (dc.embedding <=> :embedding::vector) AS score,
+                1 - (dc.embedding <=> CAST(:embedding AS vector)) AS score,
                 d.title AS document_title,
                 d.program,
                 d.faculty,
@@ -60,7 +64,7 @@ class RAGService:
             JOIN documents d ON dc.document_id = d.id
             WHERE dc.embedding IS NOT NULL
               AND {where_clause}
-            ORDER BY dc.embedding <=> :embedding::vector
+            ORDER BY dc.embedding <=> CAST(:embedding AS vector)
             LIMIT :top_k
         """)
 

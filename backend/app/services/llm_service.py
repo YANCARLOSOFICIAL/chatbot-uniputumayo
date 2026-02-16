@@ -14,12 +14,9 @@ from app.config import settings
 
 
 class LLMService:
-    def __init__(self):
-        self.factory = ProviderFactory()
-
     async def generate(self, request: GenerateRequest) -> GenerateResponse:
         provider_name = request.provider or settings.default_llm_provider
-        provider = self.factory.get_provider(provider_name)
+        provider = ProviderFactory.get_provider(provider_name)
 
         model = request.model
         if not model:
@@ -49,9 +46,8 @@ class LLMService:
         )
 
     async def embed(self, request: EmbedRequest) -> EmbedResponse:
-        # Always use OpenAI for embeddings for consistency
-        provider_name = request.provider or "openai"
-        provider = self.factory.get_provider(provider_name)
+        provider_name = request.provider or settings.default_llm_provider
+        provider = ProviderFactory.get_provider(provider_name)
 
         if provider_name == "openai":
             model = settings.openai_embedding_model
@@ -72,7 +68,7 @@ class LLMService:
     async def get_providers(self) -> ProvidersResponse:
         providers = []
         for name in ["ollama", "openai"]:
-            provider = self.factory.get_provider(name)
+            provider = ProviderFactory.get_provider(name)
             is_available = await provider.is_available()
             models = []
             if name == "ollama":
