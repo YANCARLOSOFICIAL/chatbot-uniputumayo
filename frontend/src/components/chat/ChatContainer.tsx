@@ -50,7 +50,7 @@ export function ChatContainer() {
         convId = await createConversation();
         if (!convId) return;
       }
-      const response = await sendMessage(content, inputType);
+      const response = await sendMessage(content, inputType, convId);
       if (response && inputType === "voice") {
         speak(response);
       }

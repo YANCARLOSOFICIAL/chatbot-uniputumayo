@@ -78,8 +78,9 @@ export function useChat() {
   );
 
   const sendMessage = useCallback(
-    async (content: string, inputType: "text" | "voice" = "text") => {
-      if (!state.activeConversationId) return;
+    async (content: string, inputType: "text" | "voice" = "text", conversationId?: string) => {
+      const convId = conversationId || state.activeConversationId;
+      if (!convId) return;
 
       dispatch({ type: "SET_LOADING", payload: true });
       dispatch({ type: "SET_AVATAR_STATE", payload: "thinking" });
@@ -88,7 +89,7 @@ export function useChat() {
       // Optimistically add user message
       const tempUserMessage: Message = {
         id: `temp-${Date.now()}`,
-        conversation_id: state.activeConversationId,
+        conversation_id: convId,
         role: "user",
         content,
         input_type: inputType,
@@ -102,7 +103,7 @@ export function useChat() {
 
       try {
         const response = await apiClient.sendMessage(
-          state.activeConversationId,
+          convId,
           content,
           inputType
         );
