@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 50
     upload_dir: str = "./uploads"
 
+    # Auth / JWT
+    jwt_secret: str = "change-me-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 480
+    admin_email: str = "admin@iup.edu.co"
+    admin_password: str = "admin123"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

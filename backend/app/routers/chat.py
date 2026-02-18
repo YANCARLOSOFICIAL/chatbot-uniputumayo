@@ -12,24 +12,35 @@ from app.schemas.chat import (
     ChatResponse,
 )
 from app.services.chat_service import ChatService
+from app.auth import get_current_user
+from app.models.user import User
 
 router = APIRouter()
 
 
 @router.post("/conversations", response_model=ConversationResponse)
 async def create_conversation(
-    data: ConversationCreate, db: AsyncSession = Depends(get_db)
+    data: ConversationCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ):
+    # Associate conversation with logged-in user if present
+    if current_user:
+        data.user_id = current_user.id
     service = ChatService(db)
     return await service.create_conversation(data)
 
 
 @router.get("/conversations", response_model=list[ConversationResponse])
 async def list_conversations(
-    limit: int = 20, offset: int = 0, db: AsyncSession = Depends(get_db)
+    limit: int = 20,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ):
     service = ChatService(db)
-    return await service.list_conversations(limit=limit, offset=offset)
+    user_id = current_user.id if current_user else None
+    return await service.list_conversations(limit=limit, offset=offset, user_id=user_id)
 
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationResponse)

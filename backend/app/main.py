@@ -4,9 +4,10 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import select
 
 from app.config import settings
-from app.routers import health, chat, rag, llm, documents, config
+from app.routers import health, chat, rag, llm, documents, config, auth
 from app.middleware.error_handler import global_exception_handler
 
 # Configure logging
@@ -47,9 +48,37 @@ async def _ensure_ollama_models():
         logger.warning(f"No se pudo conectar con Ollama: {e}")
 
 
+async def _seed_admin():
+    """Create default admin user if it doesn't exist."""
+    from app.database import async_session
+    from app.models.user import User
+    from app.auth import hash_password
+
+    async with async_session() as db:
+        result = await db.execute(select(User).where(User.email == settings.admin_email))
+        existing = result.scalar_one_or_none()
+        if existing:
+            logger.info(f"Admin user already exists: {settings.admin_email}")
+            return
+        admin = User(
+            email=settings.admin_email,
+            display_name="Administrador",
+            password_hash=hash_password(settings.admin_password),
+            role="admin",
+        )
+        db.add(admin)
+        await db.commit()
+        logger.info(f"Admin user created: {settings.admin_email}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Iniciando IUP Chatbot API...")
+    # Seed admin user
+    try:
+        await _seed_admin()
+    except Exception as e:
+        logger.warning(f"No se pudo crear admin seed (DB no disponible?): {e}")
     # Pull models in background so it doesn't block startup/healthcheck
     import asyncio
     asyncio.create_task(_ensure_ollama_models())
@@ -79,6 +108,7 @@ app.add_exception_handler(Exception, global_exception_handler)
 
 # Routers (SOA service modules)
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
 app.include_router(rag.router, prefix="/api/v1/rag", tags=["rag"])
 app.include_router(llm.router, prefix="/api/v1/llm", tags=["llm"])

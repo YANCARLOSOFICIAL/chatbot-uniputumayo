@@ -18,7 +18,7 @@ from app.services.llm_service import LLMService
 from app.schemas.rag import SearchRequest
 from app.schemas.llm import GenerateRequest, LLMMessage
 from app.utils.prompts import build_chat_prompt
-from app.config import settings
+from app.runtime_config import runtime_config
 
 
 class ChatService:
@@ -36,15 +36,13 @@ class ChatService:
         return conversation
 
     async def list_conversations(
-        self, limit: int = 20, offset: int = 0
+        self, limit: int = 20, offset: int = 0, user_id=None
     ) -> list[Conversation]:
-        result = await self.db.execute(
-            select(Conversation)
-            .where(Conversation.is_active.is_(True))
-            .order_by(desc(Conversation.updated_at))
-            .limit(limit)
-            .offset(offset)
-        )
+        query = select(Conversation).where(Conversation.is_active.is_(True))
+        if user_id is not None:
+            query = query.where(Conversation.user_id == user_id)
+        query = query.order_by(desc(Conversation.updated_at)).limit(limit).offset(offset)
+        result = await self.db.execute(query)
         return list(result.scalars().all())
 
     async def get_conversation(self, conversation_id: UUID) -> Conversation | None:
@@ -112,7 +110,7 @@ class ChatService:
         messages.extend(history)
         messages.append(LLMMessage(role="user", content=data.content))
 
-        provider = data.llm_provider or settings.default_llm_provider
+        provider = data.llm_provider or runtime_config.default_llm_provider
         llm_service = LLMService()
         llm_response = await llm_service.generate(
             GenerateRequest(messages=messages, provider=provider)

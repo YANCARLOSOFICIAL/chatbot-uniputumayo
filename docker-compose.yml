@@ -65,6 +65,9 @@ services:
       MAX_UPLOAD_SIZE_MB: "50"
       UPLOAD_DIR: /app/uploads
       LOG_LEVEL: info
+      JWT_SECRET: ${JWT_SECRET:-super-secret-change-me}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@iup.edu.co}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
     ports:
       - "8000:8000"
     volumes:

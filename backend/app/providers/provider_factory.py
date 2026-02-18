@@ -16,3 +16,8 @@ class ProviderFactory:
             else:
                 raise ValueError(f"Unknown LLM provider: {name}")
         return cls._providers[name]
+
+    @classmethod
+    def reset_provider(cls, name: str) -> None:
+        """Remove a cached provider so it gets re-created with fresh config."""
+        cls._providers.pop(name, None)

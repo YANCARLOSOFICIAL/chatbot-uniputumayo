@@ -119,6 +119,7 @@ export function ChatContainer() {
           messages={messages}
           sources={sources}
           isLoading={isLoading}
+          onQuickReply={(msg) => handleSend(msg, "text")}
         />
 
         {/* Input */}

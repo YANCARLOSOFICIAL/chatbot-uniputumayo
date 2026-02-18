@@ -3,14 +3,14 @@ import logging
 from openai import AsyncOpenAI
 
 from app.providers.base import BaseLLMProvider
-from app.config import settings
+from app.runtime_config import runtime_config
 
 logger = logging.getLogger(__name__)
 
 
 class OpenAIProvider(BaseLLMProvider):
     def __init__(self):
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
+        self.client = AsyncOpenAI(api_key=runtime_config.openai_api_key)
 
     async def generate(
         self,
@@ -49,4 +49,5 @@ class OpenAIProvider(BaseLLMProvider):
         return {"embeddings": embeddings}
 
     async def is_available(self) -> bool:
-        return bool(settings.openai_api_key and settings.openai_api_key != "sk-your-key-here")
+        key = runtime_config.openai_api_key
+        return bool(key and key != "sk-your-key-here")

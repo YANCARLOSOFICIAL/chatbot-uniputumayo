@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils/cn";
+import { MiniGuacamaya } from "@/components/avatar/AvatarDisplay";
 import type { Message } from "@/types/chat";
 
 interface MessageBubbleProps {
@@ -17,15 +18,24 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         "justify-start": !isUser,
       })}
     >
+      {!isUser && (
+        <div className="flex-shrink-0 mr-2 mt-1">
+          <MiniGuacamaya className="w-7 h-7" />
+        </div>
+      )}
       <div
-        className={cn("max-w-[80%] rounded-2xl px-4 py-3 shadow-sm", {
-          "bg-green-700 text-white rounded-br-md": isUser,
-          "bg-white text-gray-900 border border-gray-200 rounded-bl-md": !isUser,
+        className={cn("max-w-[80%] px-4 py-3 shadow-sm", {
+          "bg-gradient-to-br from-[var(--primary-600)] to-[var(--primary-500)] text-white rounded-2xl rounded-br-sm":
+            isUser,
+          "bg-white text-gray-900 border-l-[3px] border-l-[var(--primary-500)] rounded-2xl rounded-bl-sm":
+            !isUser,
         })}
       >
         {!isUser && (
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-semibold text-green-700">IUP Bot</span>
+            <span className="text-xs font-semibold text-[var(--primary-600)]">
+              IUP Bot
+            </span>
             {message.input_type === "voice" && (
               <span className="text-xs text-gray-400">via voz</span>
             )}
