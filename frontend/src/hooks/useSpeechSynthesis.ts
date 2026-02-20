@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 interface UseSpeechSynthesisReturn {
   speak: (text: string) => void;
@@ -11,67 +13,70 @@ interface UseSpeechSynthesisReturn {
 
 export function useSpeechSynthesis(): UseSpeechSynthesisReturn {
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isSupported, setIsSupported] = useState(false);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
-
-  useEffect(() => {
-    setIsSupported("speechSynthesis" in window);
-  }, []);
-
-  // Load voices asynchronously (they may not be available immediately)
-  useEffect(() => {
-    if (!isSupported) return;
-
-    const loadVoices = () => {
-      voicesRef.current = window.speechSynthesis.getVoices();
-    };
-
-    loadVoices();
-    window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
-    return () => {
-      window.speechSynthesis.removeEventListener("voiceschanged", loadVoices);
-    };
-  }, [isSupported]);
-
-  const speak = useCallback(
-    (text: string) => {
-      if (!isSupported) return;
-
-      // Cancel any ongoing speech
-      window.speechSynthesis.cancel();
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = "es-CO";
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-
-      // Try to find a Spanish voice (use cached voices)
-      const voices = voicesRef.current.length > 0
-        ? voicesRef.current
-        : window.speechSynthesis.getVoices();
-      const spanishVoice = voices.find(
-        (v) => v.lang.startsWith("es-CO") || v.lang.startsWith("es")
-      );
-      if (spanishVoice) {
-        utterance.voice = spanishVoice;
-      }
-
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
-
-      utteranceRef.current = utterance;
-      window.speechSynthesis.speak(utterance);
-    },
-    [isSupported]
-  );
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
 
   const stop = useCallback(() => {
-    if (!isSupported) return;
-    window.speechSynthesis.cancel();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
     setIsSpeaking(false);
-  }, [isSupported]);
+  }, []);
 
-  return { speak, stop, isSpeaking, isSupported };
+  const speak = useCallback(
+    async (text: string) => {
+      // Stop any ongoing speech before starting new one
+      stop();
+
+      try {
+        setIsSpeaking(true);
+
+        const response = await fetch(`${API_BASE}/api/v1/audio/tts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, voice: "es-CO-SalomeNeural" }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`TTS error: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        objectUrlRef.current = url;
+
+        const audio = new Audio(url);
+        audioRef.current = audio;
+
+        audio.onended = () => {
+          setIsSpeaking(false);
+          URL.revokeObjectURL(url);
+          objectUrlRef.current = null;
+          audioRef.current = null;
+        };
+
+        audio.onerror = () => {
+          setIsSpeaking(false);
+          URL.revokeObjectURL(url);
+          objectUrlRef.current = null;
+          audioRef.current = null;
+        };
+
+        await audio.play();
+      } catch (error) {
+        console.error("Error en TTS:", error);
+        setIsSpeaking(false);
+      }
+    },
+    [stop]
+  );
+
+  // isSupported is always true: we use fetch + Audio API, available in all modern browsers
+  return { speak, stop, isSpeaking, isSupported: true };
 }

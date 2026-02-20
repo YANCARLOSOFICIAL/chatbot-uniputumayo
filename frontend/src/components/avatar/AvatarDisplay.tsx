@@ -168,7 +168,7 @@ export function AvatarDisplay({ state, size = "md" }: AvatarDisplayProps) {
 
       {size !== "sm" && (
         <span className="mt-2 text-xs text-gray-500 font-medium">
-          {state === "idle" && "IUP Bot"}
+          {state === "idle" && "Nexus"}
           {state === "listening" && "Escuchando..."}
           {state === "thinking" && "Pensando..."}
           {state === "speaking" && "Hablando..."}

@@ -1,4 +1,4 @@
-# Chatbot IUP - Institución Universitaria del Putumayo
+# Chatbot Uniputumayo- Institución Universitaria del Putumayo
 
 Chatbot interactivo basado en **RAG (Retrieval-Augmented Generation)** y **LLM (Large Language Models)** que brinda información precisa y accesible sobre los programas académicos de la Institución Universitaria del Putumayo.
 

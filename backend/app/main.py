@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
 from app.config import settings
-from app.routers import health, chat, rag, llm, documents, config, auth
+from app.routers import health, chat, rag, llm, documents, config, auth, audio
 from app.middleware.error_handler import global_exception_handler
 
 # Configure logging
@@ -73,7 +73,7 @@ async def _seed_admin():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Iniciando IUP Chatbot API...")
+    logger.info("Iniciando Nexus UniPutumayo API...")
     # Seed admin user
     try:
         await _seed_admin()
@@ -83,12 +83,12 @@ async def lifespan(app: FastAPI):
     import asyncio
     asyncio.create_task(_ensure_ollama_models())
     yield
-    logger.info("Cerrando IUP Chatbot API...")
+    logger.info("Cerrando Nexus UniPutumayo API...")
 
 
 app = FastAPI(
-    title="IUP Chatbot API",
-    description="API del chatbot de la Institución Universitaria del Putumayo",
+    title="Nexus UniPutumayo API",
+    description="API del asistente virtual Nexus de la Institución Universitaria del Putumayo",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -114,12 +114,13 @@ app.include_router(rag.router, prefix="/api/v1/rag", tags=["rag"])
 app.include_router(llm.router, prefix="/api/v1/llm", tags=["llm"])
 app.include_router(documents.router, prefix="/api/v1/documents", tags=["documents"])
 app.include_router(config.router, prefix="/api/v1/config", tags=["config"])
+app.include_router(audio.router, prefix="/api/v1/audio", tags=["audio"])
 
 
 @app.get("/")
 async def root():
     return {
-        "name": "IUP Chatbot API",
+        "name": "Nexus UniPutumayo API",
         "version": "1.0.0",
         "docs": "/docs",
     }

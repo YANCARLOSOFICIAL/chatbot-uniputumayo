@@ -26,7 +26,7 @@ export function ConversationSidebar({
         <div className="flex items-center gap-2 mb-4">
           <MiniGuacamaya className="w-7 h-7" />
           <div>
-            <p className="text-sm font-bold text-white leading-tight">Chatbot IUP</p>
+            <p className="text-sm font-bold text-white leading-tight">Nexus UniPutumayo</p>
             <p className="text-xs text-green-300/70 leading-tight">Universidad del Putumayo</p>
           </div>
         </div>

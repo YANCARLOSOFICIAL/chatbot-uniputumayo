@@ -27,7 +27,7 @@ export function Header() {
       <Link href="/" className="flex items-center gap-3">
         <MiniGuacamaya className="w-8 h-8" />
         <div>
-          <h1 className="text-sm font-bold leading-tight">Chatbot IUP</h1>
+          <h1 className="text-sm font-bold leading-tight">Nexus UniPutumayo</h1>
           <p className="text-xs text-green-200 leading-tight">
             Universidad del Putumayo
           </p>

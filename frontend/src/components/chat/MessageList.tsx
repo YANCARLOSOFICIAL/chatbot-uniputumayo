@@ -29,10 +29,10 @@ export function MessageList({ messages, sources, isLoading, onQuickReply }: Mess
             <MiniGuacamaya className="w-full h-full" />
           </div>
           <h3 className="text-lg font-semibold text-gray-700 mb-2">
-            Bienvenido al Chatbot IUP
+            Bienvenido a Nexus UniPutumayo
           </h3>
           <p className="text-sm text-gray-500 max-w-md">
-            Soy el asistente virtual de la Institución Universitaria del
+            Soy Nexus, el asistente virtual de la Institución Universitaria del
             Putumayo. Pregúntame sobre programas académicos, pensum, requisitos
             de admisión y más.
           </p>

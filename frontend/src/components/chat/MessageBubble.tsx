@@ -34,7 +34,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         {!isUser && (
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-semibold text-[var(--primary-600)]">
-              IUP Bot
+              Nexus
             </span>
             {message.input_type === "voice" && (
               <span className="text-xs text-gray-400">via voz</span>

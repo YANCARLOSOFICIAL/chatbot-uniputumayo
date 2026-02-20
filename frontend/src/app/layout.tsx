@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Chatbot IUP - Institución Universitaria del Putumayo",
+  title: "Nexus UniPutumayo - Institución Universitaria del Putumayo",
   description:
-    "Asistente virtual de la Institución Universitaria del Putumayo. Consulta información sobre programas académicos.",
+    "Nexus, el asistente virtual de la Institución Universitaria del Putumayo. Consulta información sobre programas académicos.",
 };
 
 export default function RootLayout({
