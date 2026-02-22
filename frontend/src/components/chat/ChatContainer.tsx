@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { useChat } from "@/hooks/useChat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useSpeechSynthesis } from "@/hooks/useSpeechSynthesis";
@@ -10,6 +10,8 @@ import { ConversationSidebar } from "./ConversationSidebar";
 import { AvatarDisplay } from "@/components/avatar/AvatarDisplay";
 
 export function ChatContainer() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   const {
     conversations,
     activeConversationId,
@@ -38,7 +40,6 @@ export function ChatContainer() {
 
   const handleSendRef = useRef<((content: string, inputType: "text" | "voice") => Promise<void>) | null>(null);
 
-  // Load conversations on mount
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
@@ -60,14 +61,12 @@ export function ChatContainer() {
 
   handleSendRef.current = handleSend;
 
-  // Handle voice transcript
   useEffect(() => {
     if (transcript && !isListening) {
       handleSendRef.current?.(transcript, "voice");
     }
   }, [transcript, isListening]);
 
-  // Sync speaking state with avatar
   useEffect(() => {
     if (!isSpeaking && avatarState === "speaking") {
       dispatch({ type: "SET_AVATAR_STATE", payload: "idle" });
@@ -84,7 +83,7 @@ export function ChatContainer() {
   }, [stopListening]);
 
   return (
-    <div className="flex h-[calc(100vh-64px)] bg-white">
+    <div className="flex h-[calc(100dvh-64px)] bg-white overflow-hidden">
       {/* Sidebar */}
       <ConversationSidebar
         conversations={conversations}
@@ -92,24 +91,61 @@ export function ChatContainer() {
         onSelect={selectConversation}
         onNew={createConversation}
         onDelete={deleteConversation}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Avatar */}
-        <div className="border-b border-gray-100">
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile top bar */}
+        <div className="flex items-center gap-3 px-3 py-2.5 border-b border-gray-100 bg-white md:hidden flex-shrink-0">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 active:bg-gray-200 transition-colors"
+            aria-label="Abrir menú de conversaciones"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+            </svg>
+          </button>
+          <span className="text-sm font-semibold text-gray-800 flex-1 truncate">
+            {activeConversationId
+              ? conversations.find((c) => c.id === activeConversationId)?.title || "Conversación"
+              : "Nexus UniPutumayo"}
+          </span>
+          <button
+            onClick={createConversation}
+            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-[var(--primary-600)] active:bg-gray-200 transition-colors"
+            aria-label="Nueva conversación"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Avatar — hidden on small phones, visible on sm+ */}
+        <div className="hidden sm:block border-b border-gray-100 flex-shrink-0">
           <AvatarDisplay state={avatarState} />
         </div>
 
         {/* Error Banner */}
         {error && (
-          <div className="bg-red-50 border-b border-red-200 px-4 py-2 text-sm text-red-700 flex items-center justify-between">
-            <span>{error}</span>
+          <div className="bg-red-50 border-b border-red-200 px-4 py-2 text-sm text-red-700 flex items-center justify-between flex-shrink-0">
+            <span className="flex items-center gap-2">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {error}
+            </span>
             <button
               onClick={() => dispatch({ type: "SET_ERROR", payload: null })}
-              className="text-red-500 hover:text-red-700"
+              className="ml-2 p-1 text-red-400 hover:text-red-600 rounded transition-colors flex-shrink-0"
+              aria-label="Cerrar error"
             >
-              &times;
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
         )}

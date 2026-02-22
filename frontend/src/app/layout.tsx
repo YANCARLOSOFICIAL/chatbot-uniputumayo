@@ -16,6 +16,11 @@ export const metadata: Metadata = {
   title: "Nexus UniPutumayo - Institución Universitaria del Putumayo",
   description:
     "Nexus, el asistente virtual de la Institución Universitaria del Putumayo. Consulta información sobre programas académicos.",
+  viewport: {
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+  },
 };
 
 export default function RootLayout({

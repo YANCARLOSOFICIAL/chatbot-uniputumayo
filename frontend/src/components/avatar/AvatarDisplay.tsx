@@ -11,12 +11,12 @@ interface AvatarDisplayProps {
 export function AvatarDisplay({ state, size = "md" }: AvatarDisplayProps) {
   const sizeClasses = {
     sm: "w-8 h-8",
-    md: "w-24 h-24",
-    lg: "w-36 h-36",
+    md: "w-16 h-16 sm:w-20 sm:h-20",
+    lg: "w-28 h-28 sm:w-36 sm:h-36",
   };
 
   return (
-    <div className="flex flex-col items-center py-4">
+    <div className="flex flex-col items-center py-2 sm:py-4">
       <div className={cn("relative", sizeClasses[size])}>
         {/* Listening ring */}
         {state === "listening" && (
@@ -167,7 +167,13 @@ export function AvatarDisplay({ state, size = "md" }: AvatarDisplayProps) {
       </div>
 
       {size !== "sm" && (
-        <span className="mt-2 text-xs text-gray-500 font-medium">
+        <span className={cn(
+          "mt-1.5 text-xs font-medium px-2 py-0.5 rounded-full",
+          state === "idle" && "text-gray-500",
+          state === "listening" && "text-blue-600 bg-blue-50",
+          state === "thinking" && "text-amber-600 bg-amber-50",
+          state === "speaking" && "text-[var(--primary-600)] bg-[var(--primary-100)]",
+        )}>
           {state === "idle" && "Nexus"}
           {state === "listening" && "Escuchando..."}
           {state === "thinking" && "Pensando..."}

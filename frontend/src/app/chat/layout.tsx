@@ -8,7 +8,7 @@ export default function ChatLayout({
 }) {
   return (
     <ChatProvider>
-      <div className="h-screen flex flex-col">
+      <div className="h-[100dvh] flex flex-col overflow-hidden">
         <Header />
         {children}
       </div>
