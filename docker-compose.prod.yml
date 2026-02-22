@@ -1,0 +1,91 @@
+version: "3"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=chatbot_user
+      - POSTGRES_PASSWORD=chatbot_password
+      - POSTGRES_DB=chatbot_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - chatbot-net
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - chatbot-net
+
+  backend:
+    image: yancarlos45/iup-chatbot-backend:latest
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://chatbot_user:chatbot_password@postgres:5432/chatbot_db
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_DEFAULT_MODEL=llama3.1:8b
+      - OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+      - OPENAI_API_KEY=
+      - OPENAI_DEFAULT_MODEL=gpt-4o-mini
+      - OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+      - DEFAULT_LLM_PROVIDER=ollama
+      - DEFAULT_TEMPERATURE=0.3
+      - DEFAULT_MAX_TOKENS=1024
+      - CHUNK_SIZE=512
+      - CHUNK_OVERLAP=77
+      - RAG_TOP_K=5
+      - RAG_SCORE_THRESHOLD=0.7
+      - EMBEDDING_DIMENSIONS=768
+      - CORS_ORIGINS=*
+      - MAX_UPLOAD_SIZE_MB=50
+      - UPLOAD_DIR=/app/uploads
+      - LOG_LEVEL=info
+      - JWT_SECRET=super-secret-change-me
+      - ADMIN_EMAIL=admin@iup.edu.co
+      - ADMIN_PASSWORD=admin123
+    ports:
+      - "8000:8000"
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      - postgres
+      - ollama
+    networks:
+      - chatbot-net
+
+  frontend:
+    image: yancarlos45/iup-chatbot-frontend:latest
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    depends_on:
+      - backend
+    networks:
+      - chatbot-net
+
+  nginx:
+    image: yancarlos45/iup-chatbot-nginx:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - chatbot-net
+
+volumes:
+  pgdata:
+  ollama_data:
+  uploads_data:
+
+networks:
+  chatbot-net:
