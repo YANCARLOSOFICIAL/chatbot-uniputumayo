@@ -133,6 +133,60 @@ export const apiClient = {
       }),
     }),
 
+  sendMessageStream: async (
+    conversationId: string,
+    content: string,
+    inputType: string = "text",
+    onEvent: (event: Record<string, unknown>) => void,
+    llmProvider?: string
+  ): Promise<void> => {
+    const url = `${API_BASE}/api/v1/chat/conversations/${conversationId}/messages/stream`;
+    const token = getStoredToken();
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ content, input_type: inputType, llm_provider: llmProvider }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: "Error del servidor" }));
+      throw new Error(error.detail || `Error ${response.status}`);
+    }
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr) {
+            let event: Record<string, unknown>;
+            try {
+              event = JSON.parse(jsonStr);
+            } catch {
+              continue; // ignore malformed JSON lines
+            }
+            onEvent(event); // outside try/catch so event handler errors propagate
+          }
+        }
+      }
+    }
+  },
+
   getMessages: (conversationId: string, limit = 50, offset = 0) =>
     request<
       Array<{ id: string; role: string; content: string; created_at: string }>

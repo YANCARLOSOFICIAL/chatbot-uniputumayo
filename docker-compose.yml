@@ -48,18 +48,20 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://chatbot_user:chatbot_password@postgres:5432/chatbot_db
       OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_DEFAULT_MODEL: llama3.1:8b
+      OLLAMA_DEFAULT_MODEL: qwen2.5:7b
       OLLAMA_EMBEDDING_MODEL: nomic-embed-text
+      OLLAMA_VISION_MODEL: gemma3:4b
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_DEFAULT_MODEL: gpt-4o-mini
       OPENAI_EMBEDDING_MODEL: text-embedding-3-small
       DEFAULT_LLM_PROVIDER: ollama
-      DEFAULT_TEMPERATURE: "0.3"
-      DEFAULT_MAX_TOKENS: "1024"
+      DEFAULT_TEMPERATURE: "0.1"
+      DEFAULT_MAX_TOKENS: "2048"
       CHUNK_SIZE: "512"
       CHUNK_OVERLAP: "77"
       RAG_TOP_K: "5"
-      RAG_SCORE_THRESHOLD: "0.7"
+      RAG_SCORE_THRESHOLD: "0.35"
+      EMBEDDING_PROVIDER: ollama
       EMBEDDING_DIMENSIONS: "768"
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001,http://localhost:80,http://localhost"
       MAX_UPLOAD_SIZE_MB: "50"

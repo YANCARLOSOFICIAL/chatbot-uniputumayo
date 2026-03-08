@@ -1,4 +1,5 @@
 import logging
+from typing import AsyncIterator
 
 from openai import AsyncOpenAI
 
@@ -39,6 +40,24 @@ class OpenAIProvider(BaseLLMProvider):
             "content": choice.message.content or "",
             "tokens_used": tokens_used,
         }
+
+    async def generate_stream(
+        self,
+        messages: list[dict],
+        model: str,
+        temperature: float = 0.3,
+        max_tokens: int = 1024,
+    ) -> AsyncIterator[str]:
+        stream = await self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=True,
+        )
+        async for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
 
     async def embed(self, texts: list[str], model: str) -> dict:
         response = await self.client.embeddings.create(

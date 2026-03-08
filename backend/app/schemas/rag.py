@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from uuid import UUID
 
+from app.config import settings
+
 
 class SearchFilters(BaseModel):
     program: str | None = None
@@ -10,8 +12,8 @@ class SearchFilters(BaseModel):
 
 class SearchRequest(BaseModel):
     query: str
-    top_k: int = 5
-    score_threshold: float = 0.7
+    top_k: int = settings.rag_top_k
+    score_threshold: float = settings.rag_score_threshold
     filters: SearchFilters | None = None
 
 

@@ -46,7 +46,9 @@ class LLMService:
         )
 
     async def embed(self, request: EmbedRequest) -> EmbedResponse:
-        provider_name = request.provider or runtime_config.default_llm_provider
+        # Use dedicated embedding_provider (separate from chat provider) to avoid
+        # pgvector dimension mismatch when the chat provider is changed (e.g. ollama→openai)
+        provider_name = request.provider or runtime_config.embedding_provider
         provider = ProviderFactory.get_provider(provider_name)
 
         if provider_name == "openai":

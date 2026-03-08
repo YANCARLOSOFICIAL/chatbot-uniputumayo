@@ -20,7 +20,13 @@ logger = logging.getLogger(__name__)
 
 async def _ensure_ollama_models():
     """Pull required Ollama models if not already present."""
-    models_needed = [settings.ollama_default_model, settings.ollama_embedding_model]
+    models_needed = [
+        m for m in [
+            settings.ollama_default_model,
+            settings.ollama_embedding_model,
+            settings.ollama_vision_model,
+        ] if m
+    ]
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(f"{settings.ollama_base_url}/api/tags")

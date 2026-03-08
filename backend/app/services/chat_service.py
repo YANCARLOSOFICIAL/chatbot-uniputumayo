@@ -1,4 +1,6 @@
+import json
 import time
+from typing import AsyncIterator
 from uuid import UUID
 
 from sqlalchemy import select, desc
@@ -19,6 +21,7 @@ from app.schemas.rag import SearchRequest
 from app.schemas.llm import GenerateRequest, LLMMessage
 from app.utils.prompts import build_chat_prompt
 from app.runtime_config import runtime_config
+from app.providers.provider_factory import ProviderFactory
 
 
 class ChatService:
@@ -160,3 +163,103 @@ class ChatService:
             assistant_message=MessageResponse.model_validate(assistant_message),
             sources=sources,
         )
+
+    async def process_message_stream(
+        self, conversation_id: UUID, data: MessageCreate
+    ) -> AsyncIterator[str]:
+        """Stream the assistant response via SSE. Yields SSE-formatted strings."""
+        start_time = time.time()
+
+        # 1. Save user message
+        user_message = Message(
+            conversation_id=conversation_id,
+            role="user",
+            content=data.content,
+            input_type=data.input_type,
+        )
+        self.db.add(user_message)
+        await self.db.flush()
+
+        try:
+            # 2. RAG search
+            rag_service = RAGService(self.db)
+            search_results = await rag_service.search(SearchRequest(query=data.content))
+
+            # 3. Build context
+            context = "\n\n---\n\n".join(r.content for r in search_results.results)
+
+            # 4. Get conversation history
+            history_messages = await self.get_messages(conversation_id, limit=10)
+            history = [
+                LLMMessage(role=m.role, content=m.content)
+                for m in history_messages
+                if m.id != user_message.id
+            ]
+
+            # 5. Build prompt
+            system_prompt = build_chat_prompt(context)
+            messages = [LLMMessage(role="system", content=system_prompt)]
+            messages.extend(history)
+            messages.append(LLMMessage(role="user", content=data.content))
+
+            # Send sources event immediately (before LLM starts generating)
+            sources_payload = [
+                {
+                    "chunk_id": str(r.chunk_id),
+                    "document_title": r.document_title,
+                    "content_preview": r.content[:200],
+                    "score": r.score,
+                    "program": r.program,
+                    "faculty": r.faculty,
+                }
+                for r in search_results.results
+            ]
+            yield f"data: {json.dumps({'type': 'sources', 'sources': sources_payload})}\n\n"
+
+            # 6. Stream LLM response token by token
+            provider_name = data.llm_provider or runtime_config.default_llm_provider
+            provider = ProviderFactory.get_provider(provider_name)
+
+            model = (
+                runtime_config.ollama_default_model
+                if provider_name == "ollama"
+                else runtime_config.openai_default_model
+            )
+            temperature = runtime_config.default_temperature
+            max_tokens = runtime_config.default_max_tokens
+            messages_dicts = [{"role": m.role, "content": m.content} for m in messages]
+
+            full_content = ""
+            async for token in provider.generate_stream(messages_dicts, model, temperature, max_tokens):
+                full_content += token
+                yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+
+            response_time = int((time.time() - start_time) * 1000)
+
+            # 7. Save assistant message
+            assistant_message = Message(
+                conversation_id=conversation_id,
+                role="assistant",
+                content=full_content,
+                input_type="text",
+                llm_provider=provider_name,
+                llm_model=model,
+                response_time_ms=response_time,
+            )
+            self.db.add(assistant_message)
+
+            # 8. Update conversation title if first message
+            conversation = await self.get_conversation(conversation_id)
+            if conversation and conversation.title == "Nueva conversación":
+                conversation.title = data.content[:100]
+
+            await self.db.commit()
+            await self.db.refresh(user_message)
+            await self.db.refresh(assistant_message)
+
+            # 9. Done event with persisted message IDs
+            yield f"data: {json.dumps({'type': 'done', 'user_message': {'id': str(user_message.id), 'conversation_id': str(conversation_id), 'role': 'user', 'content': user_message.content, 'input_type': user_message.input_type, 'tokens_used': None, 'llm_provider': None, 'llm_model': None, 'response_time_ms': None, 'created_at': user_message.created_at.isoformat()}, 'assistant_message': {'id': str(assistant_message.id), 'conversation_id': str(conversation_id), 'role': 'assistant', 'content': full_content, 'input_type': 'text', 'tokens_used': None, 'llm_provider': provider_name, 'llm_model': model, 'response_time_ms': response_time, 'created_at': assistant_message.created_at.isoformat()}})}\n\n"
+
+        except Exception as e:
+            await self.db.rollback()
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"

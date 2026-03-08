@@ -1,6 +1,10 @@
+import base64
 import hashlib
+import logging
 import os
 from uuid import UUID
+
+import httpx
 
 from fastapi import UploadFile
 from sqlalchemy import select, desc
@@ -16,10 +20,110 @@ from app.services.llm_service import LLMService
 from app.schemas.llm import EmbedRequest
 from app.config import settings
 
+logger = logging.getLogger(__name__)
+
 
 class DocumentService:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def _extract_pdf_with_vision(self, file_path: str) -> str:
+        """Render PDF pages as images and send them to the vision model for structured extraction."""
+        if not settings.ollama_vision_model:
+            return ""
+        try:
+            import fitz  # PyMuPDF already in requirements
+
+            images_b64: list[str] = []
+            with fitz.open(file_path) as doc:
+                for page_num in range(min(4, len(doc))):
+                    page = doc[page_num]
+                    # 2x zoom → better resolution for table reading
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0))
+                    img_b64 = base64.b64encode(pix.tobytes("png")).decode()
+                    images_b64.append(img_b64)
+
+            if not images_b64:
+                return ""
+
+            prompt = (
+                "Este documento es un plan de estudios universitario. "
+                "Extrae TODAS las materias organizadas por semestre usando este formato EXACTO:\n\n"
+                "SEMESTRE 1: Nombre Materia 1, Nombre Materia 2, Nombre Materia 3\n"
+                "SEMESTRE 2: Nombre Materia 1, Nombre Materia 2, Nombre Materia 3\n"
+                "...\n\n"
+                "INSTRUCCIONES IMPORTANTES:\n"
+                "- Los encabezados de columna I, II, III, IV, V, VI, VII, VIII, IX, X representan semestres (I=1, II=2, etc.).\n"
+                "- Incluye SOLO los nombres de materias, no códigos (TD101, BAS01...) ni créditos ni horas.\n"
+                "- Si una materia aparece en la columna III, pertenece al SEMESTRE 3.\n"
+                "- Responde ÚNICAMENTE con las líneas 'SEMESTRE N: ...' sin texto adicional."
+            )
+
+            async with httpx.AsyncClient(timeout=180.0) as client:
+                response = await client.post(
+                    f"{settings.ollama_base_url}/api/chat",
+                    json={
+                        "model": settings.ollama_vision_model,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": prompt,
+                                "images": images_b64,
+                            }
+                        ],
+                        "stream": False,
+                        "options": {"temperature": 0.0, "num_predict": 1200},
+                    },
+                )
+
+            if response.status_code != 200:
+                logger.warning(f"Vision model returned {response.status_code}")
+                return ""
+
+            result = response.json().get("message", {}).get("content", "").strip()
+            if "SEMESTRE" not in result.upper():
+                logger.warning("Vision model did not return expected curriculum format")
+                return ""
+
+            logger.info(f"Vision extraction OK — {len(result)} chars extracted")
+            return result
+
+        except Exception as e:
+            logger.warning(f"PDF vision extraction failed: {e}")
+            return ""
+
+    async def _enrich_curriculum_text(self, text: str) -> str:
+        """Use Ollama to generate a structured semester-by-semester summary from curriculum text."""
+        try:
+            from app.providers.provider_factory import ProviderFactory
+            from app.runtime_config import runtime_config
+
+            provider = ProviderFactory.get_provider("ollama")
+            extraction_prompt = (
+                "Analiza este texto extraído de un plan de estudios universitario y extrae las materias por semestre.\n"
+                "INSTRUCCIONES:\n"
+                "1. Si es un plan de estudios, lista las materias en formato exacto:\n"
+                "SEMESTRE 1: [Materia 1], [Materia 2], [Materia 3]\n"
+                "SEMESTRE 2: [Materia 1], [Materia 2], [Materia 3]\n"
+                "... (hasta el último semestre)\n"
+                "2. Códigos como TD101, BAS01, IS701 van seguidos de nombres de materias.\n"
+                "3. Si NO es un plan de estudios, responde únicamente: NO_ES_CURRICULUM\n"
+                "Texto a analizar:\n"
+            )
+            result = await provider.generate(
+                messages=[{"role": "user", "content": extraction_prompt + text[:4000]}],
+                model=runtime_config.ollama_default_model,
+                temperature=0.0,
+                max_tokens=800,
+            )
+            summary = result.get("content", "").strip()
+            if not summary or "NO_ES_CURRICULUM" in summary or "SEMESTRE" not in summary.upper():
+                return ""
+            logger.info("Curriculum enrichment generated successfully")
+            return summary
+        except Exception as e:
+            logger.warning(f"Could not enrich curriculum text: {e}")
+            return ""
 
     async def upload_and_process(
         self,
@@ -59,6 +163,24 @@ class DocumentService:
             # 4. Extract text
             raw_text = extract_text(file_path, file_type)
             cleaned_text = clean_text(raw_text)
+
+            # 4b. Vision-based extraction for PDFs (most accurate for tables)
+            structured_summary = ""
+            if file_type == "pdf":
+                structured_summary = await self._extract_pdf_with_vision(file_path)
+
+            # 4c. Fall back to LLM text enrichment if vision failed/unavailable
+            if not structured_summary:
+                structured_summary = await self._enrich_curriculum_text(cleaned_text)
+
+            if structured_summary:
+                logger.info("Prepending structured curriculum summary to document text")
+                cleaned_text = (
+                    "=== RESUMEN DE MATERIAS POR SEMESTRE ===\n"
+                    + structured_summary
+                    + "\n=== FIN DEL RESUMEN ===\n\n"
+                    + cleaned_text
+                )
 
             # 5. Chunk text
             chunks = chunk_text(
@@ -184,6 +306,23 @@ class DocumentService:
         try:
             raw_text = extract_text(file_path, doc.file_type)
             cleaned_text = clean_text(raw_text)
+
+            structured_summary = ""
+            if doc.file_type == "pdf":
+                structured_summary = await self._extract_pdf_with_vision(file_path)
+
+            if not structured_summary:
+                structured_summary = await self._enrich_curriculum_text(cleaned_text)
+
+            if structured_summary:
+                logger.info("Prepending structured curriculum summary (reindex)")
+                cleaned_text = (
+                    "=== RESUMEN DE MATERIAS POR SEMESTRE ===\n"
+                    + structured_summary
+                    + "\n=== FIN DEL RESUMEN ===\n\n"
+                    + cleaned_text
+                )
+
             chunks = chunk_text(cleaned_text)
 
             llm_service = LLMService()

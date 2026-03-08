@@ -1,4 +1,6 @@
+import json
 import logging
+from typing import AsyncIterator
 
 import httpx
 
@@ -19,7 +21,8 @@ class OllamaProvider(BaseLLMProvider):
         temperature: float = 0.3,
         max_tokens: int = 1024,
     ) -> dict:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        # 300s: first load of a model on CPU can take 3-5 min
+        async with httpx.AsyncClient(timeout=300.0) as client:
             response = await client.post(
                 f"{self.base_url}/api/chat",
                 json={
@@ -48,6 +51,39 @@ class OllamaProvider(BaseLLMProvider):
                 "content": data["message"]["content"],
                 "tokens_used": tokens_used,
             }
+
+    async def generate_stream(
+        self,
+        messages: list[dict],
+        model: str,
+        temperature: float = 0.3,
+        max_tokens: int = 1024,
+    ) -> AsyncIterator[str]:
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/api/chat",
+                json={
+                    "model": model,
+                    "messages": messages,
+                    "stream": True,
+                    "options": {
+                        "temperature": temperature,
+                        "num_predict": max_tokens,
+                    },
+                },
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if line:
+                        try:
+                            data = json.loads(line)
+                            if not data.get("done") and "message" in data:
+                                content = data["message"].get("content", "")
+                                if content:
+                                    yield content
+                        except json.JSONDecodeError:
+                            continue
 
     async def embed(self, texts: list[str], model: str) -> dict:
         embeddings = []

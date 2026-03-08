@@ -8,8 +8,9 @@ class Settings(BaseSettings):
 
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
-    ollama_default_model: str = "llama3.1:8b"
+    ollama_default_model: str = "qwen2.5:7b"  # chat model
     ollama_embedding_model: str = "nomic-embed-text"
+    ollama_vision_model: str = "gemma3:4b"
 
     # OpenAI
     openai_api_key: Optional[str] = None
@@ -18,14 +19,15 @@ class Settings(BaseSettings):
 
     # LLM Configuration
     default_llm_provider: str = "ollama"
-    default_temperature: float = 0.3
-    default_max_tokens: int = 1024
+    default_temperature: float = 0.1
+    default_max_tokens: int = 2048
 
     # RAG Configuration
     chunk_size: int = 512
     chunk_overlap: int = 77
     rag_top_k: int = 5
-    rag_score_threshold: float = 0.7
+    rag_score_threshold: float = 0.35  # Lowered from 0.7 - Spanish docs with nomic-embed-text score ~0.4-0.65
+    embedding_provider: str = "ollama"  # Fixed provider for embeddings (must match stored vector dims)
     # nomic-embed-text=768, text-embedding-3-small=1536
     embedding_dimensions: int = 768
 

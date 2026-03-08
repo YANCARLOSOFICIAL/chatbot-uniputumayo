@@ -26,6 +26,7 @@ type ChatAction =
   | { type: "SET_ACTIVE_CONVERSATION"; payload: string | null }
   | { type: "SET_MESSAGES"; payload: Message[] }
   | { type: "ADD_MESSAGE"; payload: Message }
+  | { type: "UPDATE_MESSAGE_CONTENT"; payload: { id: string; append: string } }
   | { type: "SET_SOURCES"; payload: SourceInfo[] }
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_AVATAR_STATE"; payload: AvatarState }
@@ -55,6 +56,15 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, messages: action.payload };
     case "ADD_MESSAGE":
       return { ...state, messages: [...state.messages, action.payload] };
+    case "UPDATE_MESSAGE_CONTENT":
+      return {
+        ...state,
+        messages: state.messages.map((m) =>
+          m.id === action.payload.id
+            ? { ...m, content: m.content + action.payload.append }
+            : m
+        ),
+      };
     case "SET_SOURCES":
       return { ...state, sources: action.payload };
     case "SET_LOADING":

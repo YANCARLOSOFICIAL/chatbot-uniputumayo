@@ -17,6 +17,8 @@ class _RuntimeConfig:
         self.openai_default_model: str = settings.openai_default_model
         self.ollama_embedding_model: str = settings.ollama_embedding_model
         self.openai_embedding_model: str = settings.openai_embedding_model
+        # Dedicated embedding provider - independent of chat provider to avoid vector dim mismatch
+        self.embedding_provider: str = settings.embedding_provider
 
 
 runtime_config = _RuntimeConfig()

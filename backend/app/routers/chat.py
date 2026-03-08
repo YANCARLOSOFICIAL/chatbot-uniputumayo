@@ -1,9 +1,11 @@
+import json
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.database import get_db, async_session as create_session
 from app.schemas.chat import (
     ConversationCreate,
     ConversationResponse,
@@ -78,6 +80,34 @@ async def send_message(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return await service.process_message(conversation_id, data)
+
+
+@router.post("/conversations/{conversation_id}/messages/stream")
+async def send_message_stream(
+    conversation_id: UUID,
+    data: MessageCreate,
+):
+    """SSE streaming endpoint. Manages its own DB session to avoid connection leaks."""
+
+    async def generate():
+        # Own session lifecycle inside the generator ensures proper cleanup
+        async with create_session() as db:
+            try:
+                service = ChatService(db)
+                conversation = await service.get_conversation(conversation_id)
+                if not conversation:
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'Conversation not found'})}\n\n"
+                    return
+                async for chunk in service.process_message_stream(conversation_id, data):
+                    yield chunk
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get(
