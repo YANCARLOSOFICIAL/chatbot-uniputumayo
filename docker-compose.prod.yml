@@ -1,4 +1,4 @@
-version: "3"
+name: chatbotuniputumayo
 
 services:
   postgres:
@@ -15,22 +15,12 @@ services:
     networks:
       - chatbot-net
 
-  ollama:
-    image: ollama/ollama:latest
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - chatbot-net
-
   backend:
     image: yancarlos45/iup-chatbot-backend:latest
     restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql+asyncpg://chatbot_user:chatbot_password@postgres:5432/chatbot_db
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=http://localhost:11434
       - OLLAMA_DEFAULT_MODEL=llama3.1:8b
       - OLLAMA_EMBEDDING_MODEL=nomic-embed-text
       - OPENAI_API_KEY=
@@ -52,12 +42,11 @@ services:
       - ADMIN_EMAIL=admin@iup.edu.co
       - ADMIN_PASSWORD=admin123
     ports:
-      - "8000:8000"
+      - "8001:8000"
     volumes:
       - uploads_data:/app/uploads
     depends_on:
       - postgres
-      - ollama
     networks:
       - chatbot-net
 
@@ -75,7 +64,7 @@ services:
     image: yancarlos45/iup-chatbot-nginx:latest
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8080:80"
     depends_on:
       - frontend
       - backend
@@ -84,7 +73,6 @@ services:
 
 volumes:
   pgdata:
-  ollama_data:
   uploads_data:
 
 networks:
