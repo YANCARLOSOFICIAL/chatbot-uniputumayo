@@ -72,17 +72,13 @@ jobs:
     needs: build-and-push
 
     steps:
-      - name: Pull latest images
-        run: |
-          docker pull yancarlos45/iup-chatbot-backend:latest
-          docker pull yancarlos45/iup-chatbot-frontend:latest
-          docker pull yancarlos45/iup-chatbot-nginx:latest
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Restart containers
+      - name: Deploy with docker compose
         run: |
-          docker restart chatbotuniputumayo-backend-1
-          docker restart chatbotuniputumayo-frontend-1
-          docker restart chatbotuniputumayo-nginx-1
+          docker compose -f docker-compose.prod.yml pull
+          docker compose -f docker-compose.prod.yml up -d
 
       - name: Verify containers are running
         run: |
