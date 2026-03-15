@@ -1,21 +1,24 @@
 "use client";
 
-import { MiniGuacamaya } from "@/components/avatar/AvatarDisplay";
+import { Sparkles } from "lucide-react";
 
 export function TypingIndicator() {
   return (
-    <div className="flex justify-start mb-3 sm:mb-4">
-      <div className="flex-shrink-0 mr-2 mt-1 self-end">
-        <MiniGuacamaya className="w-6 h-6 sm:w-7 sm:h-7" />
+    <div className="flex gap-3 animate-fade-up">
+      {/* Avatar */}
+      <div className="shrink-0 mt-1">
+        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm">
+          <Sparkles size={12} className="text-white" />
+        </div>
       </div>
-      <div className="bg-white border border-gray-100 border-l-[3px] border-l-[var(--primary-400)] rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-[var(--primary-600)]">Nexus</span>
-          <div className="flex gap-1 items-center">
-            <span className="w-1.5 h-1.5 bg-[var(--primary-400)] rounded-full animate-bounce [animation-delay:0ms]" />
-            <span className="w-1.5 h-1.5 bg-[var(--primary-400)] rounded-full animate-bounce [animation-delay:150ms]" />
-            <span className="w-1.5 h-1.5 bg-[var(--primary-400)] rounded-full animate-bounce [animation-delay:300ms]" />
-          </div>
+
+      {/* Content */}
+      <div className="pt-0.5">
+        <p className="text-xs font-semibold text-[var(--brand)] mb-2">Nexus</p>
+        <div className="flex items-center gap-1 h-5">
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-4)] typing-dot-1" />
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-4)] typing-dot-2" />
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-4)] typing-dot-3" />
         </div>
       </div>
     </div>

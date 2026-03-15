@@ -1,271 +1,429 @@
+"use client";
+
 import Link from "next/link";
+import { useState, useEffect, useId } from "react";
+import {
+  MessageSquare, Zap, Users, ArrowRight, CheckCircle2,
+  Mic, Globe, BrainCircuit, GraduationCap, ChevronRight,
+  Sparkles, Shield, Clock, Menu, X
+} from "lucide-react";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
-export default function HomePage() {
+/* ─── Guacamaya SVG ─── */
+function GuacamayaHero() {
+  const uid = useId().replace(/:/g, "_");
   return (
-    <main className="min-h-screen bg-white flex flex-col">
-      {/* ── Nav ── */}
-      <nav className="flex items-center justify-between px-5 sm:px-8 py-4 border-b border-gray-100 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="flex items-center gap-2">
-          {/* Mini guacamaya inline */}
-          <svg viewBox="0 0 120 120" className="w-8 h-8">
-            <defs>
-              <linearGradient id="nb" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#1B5E20" /><stop offset="100%" stopColor="#2E7D32" />
-              </linearGradient>
-            </defs>
-            <ellipse cx="58" cy="72" rx="26" ry="30" fill="url(#nb)" />
-            <circle cx="58" cy="38" r="22" fill="url(#nb)" />
-            <ellipse cx="48" cy="36" rx="9" ry="8" fill="white" />
-            <ellipse cx="68" cy="36" rx="9" ry="8" fill="white" />
-            <circle cx="48" cy="36" r="5" fill="#1a1a1a" />
-            <circle cx="68" cy="36" r="5" fill="#1a1a1a" />
-            <circle cx="46" cy="34" r="1.8" fill="white" />
-            <circle cx="66" cy="34" r="1.8" fill="white" />
-          </svg>
-          <span className="font-bold text-gray-900 text-sm sm:text-base">Nexus <span className="text-[var(--primary-600)]">IUP</span></span>
-        </div>
-        <div className="flex items-center gap-2 sm:gap-3">
-          <Link
-            href="/admin/login"
-            className="text-sm text-gray-600 hover:text-gray-900 transition-colors px-3 py-1.5 hidden sm:block"
-          >
-            Iniciar Sesión
-          </Link>
-          <Link
-            href="/chat"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--primary-600)] text-white text-sm rounded-xl font-medium hover:bg-[var(--primary-700)] transition-colors shadow-sm"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            Chatear
-          </Link>
-        </div>
-      </nav>
+    <svg viewBox="0 0 120 160" fill="none" className="w-full h-full drop-shadow-2xl" aria-hidden>
+      <defs>
+        <radialGradient id={`${uid}_glow`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id={`${uid}_body`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#059669" />
+          <stop offset="100%" stopColor="#047857" />
+        </linearGradient>
+        <linearGradient id={`${uid}_wing`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#0891b2" />
+          <stop offset="100%" stopColor="#0e7490" />
+        </linearGradient>
+        <linearGradient id={`${uid}_chest`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#fbbf24" />
+          <stop offset="100%" stopColor="#f59e0b" />
+        </linearGradient>
+        <linearGradient id={`${uid}_tail1`} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#ef4444" />
+          <stop offset="100%" stopColor="#dc2626" />
+        </linearGradient>
+        <linearGradient id={`${uid}_tail2`} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#f97316" />
+          <stop offset="100%" stopColor="#ea580c" />
+        </linearGradient>
+        <radialGradient id={`${uid}_eye`} cx="40%" cy="35%" r="60%">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="100%" stopColor="#e5e7eb" />
+        </radialGradient>
+      </defs>
+      <ellipse cx="60" cy="100" rx="50" ry="30" fill={`url(#${uid}_glow)`} />
+      <path d="M 52 110 Q 40 130 35 155 Q 42 145 52 135 Z" fill={`url(#${uid}_tail1)`} opacity=".9" />
+      <path d="M 56 112 Q 50 135 48 160 Q 54 148 58 135 Z" fill={`url(#${uid}_tail2)`} opacity=".95" />
+      <path d="M 60 113 Q 60 138 60 162 Q 64 150 64 135 Z" fill={`url(#${uid}_tail1)`} />
+      <path d="M 64 112 Q 70 135 72 160 Q 66 148 62 135 Z" fill={`url(#${uid}_tail2)`} opacity=".95" />
+      <path d="M 68 110 Q 80 130 85 155 Q 78 145 68 135 Z" fill={`url(#${uid}_tail1)`} opacity=".9" />
+      <path d="M 30 75 Q 10 60 8 85 Q 20 95 35 95 Z" fill={`url(#${uid}_wing)`} opacity=".9" />
+      <path d="M 90 75 Q 110 60 112 85 Q 100 95 85 95 Z" fill={`url(#${uid}_wing)`} opacity=".9" />
+      <ellipse cx="60" cy="90" rx="28" ry="32" fill={`url(#${uid}_body)`} />
+      <ellipse cx="60" cy="95" rx="16" ry="20" fill={`url(#${uid}_chest)`} opacity=".85" />
+      <circle cx="60" cy="52" r="22" fill={`url(#${uid}_body)`} />
+      <path d="M 42 50 Q 60 42 78 50 Q 78 62 60 66 Q 42 62 42 50 Z" fill="#ef4444" opacity=".5" />
+      <circle cx="50" cy="49" r="7" fill={`url(#${uid}_eye)`} />
+      <circle cx="70" cy="49" r="7" fill={`url(#${uid}_eye)`} />
+      <circle cx="51" cy="50" r="4" fill="#1a1a2e" />
+      <circle cx="71" cy="50" r="4" fill="#1a1a2e" />
+      <circle cx="52.5" cy="48.5" r="1.5" fill="white" opacity=".9" />
+      <circle cx="72.5" cy="48.5" r="1.5" fill="white" opacity=".9" />
+      <path d="M 54 60 Q 60 65 66 60 Q 63 70 60 72 Q 57 70 54 60 Z" fill="#f97316" />
+      <path d="M 55 62 Q 60 66 65 62" stroke="#ea580c" strokeWidth="1" fill="none" />
+      <path d="M 50 32 Q 48 20 52 15 Q 54 22 55 30" fill="#059669" />
+      <path d="M 60 30 Q 60 18 62 13 Q 64 20 64 30" fill="#10b981" />
+      <path d="M 70 32 Q 72 20 68 15 Q 66 22 65 30" fill="#059669" />
+    </svg>
+  );
+}
 
-      {/* ── Hero ── */}
-      <section className="relative flex-1 flex flex-col items-center justify-center px-5 py-16 sm:py-20 bg-gradient-to-b from-[var(--primary-100)] via-white to-white overflow-hidden">
-        {/* Background decoration */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-[var(--primary-100)] rounded-full opacity-40 blur-3xl pointer-events-none" />
-        <div className="absolute top-20 right-10 w-32 h-32 bg-[var(--accent-gold-light)] rounded-full opacity-30 blur-2xl pointer-events-none" />
-
-        <div className="relative text-center max-w-2xl mx-auto z-10">
-          {/* Avatar */}
-          <div className="mx-auto mb-6 sm:mb-8 w-24 h-24 sm:w-32 sm:h-32 drop-shadow-xl">
-            <svg viewBox="0 0 120 120" className="w-full h-full animate-[avatar-bob_3s_ease-in-out_infinite]">
-              <defs>
-                <linearGradient id="hbGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#1B5E20" />
-                  <stop offset="100%" stopColor="#2E7D32" />
-                </linearGradient>
-                <linearGradient id="hcGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#E8C07A" />
-                  <stop offset="100%" stopColor="#D4A574" />
-                </linearGradient>
-                <linearGradient id="hbeakG" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#FF8F00" />
-                  <stop offset="100%" stopColor="#E65100" />
-                </linearGradient>
-                <linearGradient id="hwGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#1B5E20" />
-                  <stop offset="60%" stopColor="#00897B" />
-                  <stop offset="100%" stopColor="#26A69A" />
-                </linearGradient>
-                <linearGradient id="htGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#E53935" />
-                  <stop offset="40%" stopColor="#FF7043" />
-                  <stop offset="100%" stopColor="#2E7D32" />
-                </linearGradient>
-                <linearGradient id="hcrGrad" x1="0%" y1="100%" x2="0%" y2="0%">
-                  <stop offset="0%" stopColor="#1B5E20" />
-                  <stop offset="100%" stopColor="#43A047" />
-                </linearGradient>
-              </defs>
-              <ellipse cx="42" cy="108" rx="8" ry="14" fill="url(#htGrad)" transform="rotate(-15 42 108)" />
-              <ellipse cx="55" cy="110" rx="6" ry="16" fill="url(#htGrad)" />
-              <ellipse cx="67" cy="108" rx="8" ry="14" fill="url(#htGrad)" transform="rotate(15 67 108)" />
-              <ellipse cx="58" cy="72" rx="26" ry="30" fill="url(#hbGrad)" />
-              <ellipse cx="58" cy="78" rx="16" ry="20" fill="url(#hcGrad)" />
-              <path d="M32 58 C20 52, 12 62, 16 78 C18 86, 26 88, 34 82 Z" fill="url(#hwGrad)" opacity="0.9" />
-              <path d="M84 58 C96 52, 104 62, 100 78 C98 86, 90 88, 82 82 Z" fill="url(#hwGrad)" opacity="0.9" />
-              <circle cx="58" cy="38" r="22" fill="url(#hbGrad)" />
-              <path d="M48 18 C50 10, 58 6, 60 12 C62 6, 70 10, 68 18 C66 14, 58 12, 56 14 Z" fill="url(#hcrGrad)" />
-              <ellipse cx="48" cy="36" rx="9" ry="8" fill="white" />
-              <ellipse cx="68" cy="36" rx="9" ry="8" fill="white" />
-              <circle cx="48" cy="36" r="5" fill="#1a1a1a" />
-              <circle cx="68" cy="36" r="5" fill="#1a1a1a" />
-              <circle cx="46" cy="34" r="1.8" fill="white" />
-              <circle cx="66" cy="34" r="1.8" fill="white" />
-              <circle cx="50" cy="37" r="0.8" fill="white" opacity="0.6" />
-              <circle cx="70" cy="37" r="0.8" fill="white" opacity="0.6" />
-              <path d="M53 42 C55 40, 61 40, 63 42 L60 50 C59 51, 57 51, 56 50 Z" fill="url(#hbeakG)" />
-              <path d="M55 49 C56 49, 60 49, 61 49 L59 53 C58.5 53.5, 57.5 53.5, 57 53 Z" fill="#BF360C" />
-              <circle cx="40" cy="40" r="4" fill="#E57373" opacity="0.3" />
-              <circle cx="76" cy="40" r="4" fill="#E57373" opacity="0.3" />
-              <path d="M48 98 L44 106 M48 98 L48 106 M48 98 L52 106" stroke="#FF8F00" strokeWidth="2" strokeLinecap="round" fill="none" />
-              <path d="M68 98 L64 106 M68 98 L68 106 M68 98 L72 106" stroke="#FF8F00" strokeWidth="2" strokeLinecap="round" fill="none" />
-            </svg>
-          </div>
-
-          {/* Badge */}
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[var(--primary-100)] text-[var(--primary-600)] text-xs font-semibold rounded-full mb-4 border border-[var(--primary-100)]">
-            <span className="w-1.5 h-1.5 bg-[var(--primary-500)] rounded-full animate-pulse" />
-            Asistente Virtual IA
-          </span>
-
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-3 tracking-tight leading-tight">
-            Hola, soy{" "}
-            <span className="text-[var(--primary-600)]">Nexus</span>
-          </h1>
-          <p className="text-base sm:text-lg text-gray-600 mb-2 font-medium">
-            Institución Universitaria del Putumayo
-          </p>
-          <p className="text-sm sm:text-base text-gray-500 mb-8 max-w-lg mx-auto leading-relaxed">
-            Consulta programas académicos, pensum, requisitos de admisión,
-            horarios y mucho más. Disponible 24/7 en texto y voz.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link
-              href="/chat"
-              className="inline-flex items-center justify-center gap-2 px-7 py-3 bg-gradient-to-r from-[var(--primary-600)] to-[var(--primary-500)] text-white rounded-xl font-semibold hover:-translate-y-0.5 hover:shadow-lg hover:shadow-green-200 transition-all shadow-md text-sm sm:text-base"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-              Iniciar Chat
-            </Link>
-            <Link
-              href="/admin/login"
-              className="inline-flex items-center justify-center gap-2 px-7 py-3 bg-white text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors border border-gray-200 shadow-sm text-sm sm:text-base"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-              Iniciar Sesión
-            </Link>
+function ChatPreview() {
+  return (
+    <div className="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-xl)] overflow-hidden">
+      <div className="px-4 py-3 border-b border-[var(--border)] flex items-center gap-2 bg-[var(--surface-2)]">
+        <div className="w-2 h-2 rounded-full bg-red-400" />
+        <div className="w-2 h-2 rounded-full bg-yellow-400" />
+        <div className="w-2 h-2 rounded-full bg-green-400" />
+        <span className="ml-2 text-xs text-[var(--text-3)] font-medium">Nexus · Chat</span>
+      </div>
+      <div className="p-4 space-y-3">
+        <div className="flex gap-2">
+          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 shrink-0 mt-1" />
+          <div className="bg-[var(--surface-3)] rounded-2xl rounded-tl-sm px-3 py-2 text-xs text-[var(--text-2)] max-w-[85%]">
+            Hola, ¿en qué puedo ayudarte hoy?
           </div>
         </div>
-
-        {/* Wave */}
-        <div className="absolute bottom-0 left-0 right-0 pointer-events-none">
-          <svg viewBox="0 0 1440 60" fill="none" className="w-full">
-            <path d="M0 30 C360 60, 720 0, 1080 30 C1260 45, 1380 38, 1440 30 L1440 60 L0 60 Z" fill="white" />
-          </svg>
+        <div className="flex justify-end">
+          <div className="bg-[var(--brand)] text-white rounded-2xl rounded-tr-sm px-3 py-2 text-xs max-w-[85%]">
+            ¿Cuáles son los programas de ingeniería?
+          </div>
         </div>
-      </section>
+        <div className="flex gap-2">
+          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 shrink-0 mt-1" />
+          <div className="bg-[var(--surface-3)] rounded-2xl rounded-tl-sm px-3 py-2 text-xs text-[var(--text-2)] max-w-[90%]">
+            IUP ofrece <strong>Ingeniería de Sistemas</strong> e <strong>Ingeniería Agroecológica</strong>...
+          </div>
+        </div>
+        <div className="flex gap-2 items-end">
+          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 shrink-0" />
+          <div className="bg-[var(--surface-3)] rounded-2xl rounded-tl-sm px-4 py-3 flex gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-4)] typing-dot-1" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-4)] typing-dot-2" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-4)] typing-dot-3" />
+          </div>
+        </div>
+      </div>
+      <div className="px-4 pb-4">
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--input-bg)] px-3 py-2 flex items-center gap-2">
+          <span className="flex-1 text-xs text-[var(--text-4)]">Escribe tu pregunta...</span>
+          <div className="w-6 h-6 rounded-full bg-[var(--brand)] flex items-center justify-center">
+            <ArrowRight size={11} className="text-white ml-0.5" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-      {/* ── Features ── */}
-      <section className="py-12 sm:py-16 px-5 bg-white">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-center text-xl sm:text-2xl font-bold text-gray-900 mb-2">
-            ¿Qué puedo hacer por ti?
-          </h2>
-          <p className="text-center text-sm text-gray-500 mb-8 sm:mb-10">
-            Toda la información de la IUP al alcance de tu voz y tus manos
-          </p>
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="text-center">
+      <div className="text-3xl md:text-4xl font-bold gradient-text">{value}</div>
+      <div className="text-sm text-[var(--text-3)] mt-1">{label}</div>
+    </div>
+  );
+}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
+function Feature({ icon: Icon, title, description, accent }: {
+  icon: React.ElementType; title: string; description: string; accent: string
+}) {
+  return (
+    <div className="feature-card card-hover group cursor-default">
+      <div
+        className="w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-transform duration-300 group-hover:scale-110"
+        style={{ background: accent + "20", color: accent }}
+      >
+        <Icon size={22} />
+      </div>
+      <h3 className="font-semibold text-[var(--text-1)] mb-2">{title}</h3>
+      <p className="text-sm text-[var(--text-3)] leading-relaxed">{description}</p>
+    </div>
+  );
+}
+
+function Step({ n, title, description }: { n: number; title: string; description: string }) {
+  return (
+    <div className="flex gap-4 items-start">
+      <div className="w-10 h-10 rounded-full bg-[var(--brand)] text-white flex items-center justify-center font-bold text-sm shrink-0">
+        {n}
+      </div>
+      <div>
+        <h4 className="font-semibold text-[var(--text-1)] mb-1">{title}</h4>
+        <p className="text-sm text-[var(--text-3)]">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+export default function LandingPage() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", handler, { passive: true });
+    return () => window.removeEventListener("scroll", handler);
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--text-1)]">
+
+      {/* ── NAVBAR ── */}
+      <header className={`sticky top-0 z-50 transition-all duration-300 ${
+        scrolled ? "glass shadow-[var(--shadow-md)] border-b border-[var(--border)]" : "bg-transparent"
+      }`}>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
+              <Sparkles size={16} className="text-white" />
+            </div>
+            <div>
+              <span className="font-bold text-[var(--text-1)] tracking-tight">Nexus</span>
+              <span className="hidden sm:inline text-[var(--text-3)] text-sm ml-1.5">· UniPutumayo</span>
+            </div>
+          </Link>
+
+          <nav className="hidden md:flex items-center gap-1">
             {[
-              {
-                icon: (
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                  </svg>
-                ),
-                title: "Texto y Voz",
-                desc: "Interactúa escribiendo o usando tu voz en español colombiano con respuesta hablada.",
-                color: "bg-blue-50 text-blue-600",
-              },
-              {
-                icon: (
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                ),
-                title: "IA con Contexto",
-                desc: "Respuestas precisas basadas en documentos oficiales y actualizados de la universidad.",
-                color: "bg-[var(--primary-100)] text-[var(--primary-600)]",
-              },
-              {
-                icon: (
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                  </svg>
-                ),
-                title: "Programas Académicos",
-                desc: "Pensum, horarios, perfiles profesionales y requisitos de admisión de cada carrera.",
-                color: "bg-amber-50 text-amber-600",
-              },
-            ].map((f) => (
-              <div
-                key={f.title}
-                className="p-5 sm:p-6 rounded-2xl border border-gray-100 hover:shadow-md hover:-translate-y-0.5 transition-all group cursor-default"
-              >
-                <div className={`w-11 h-11 ${f.color} rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
-                  {f.icon}
-                </div>
-                <h3 className="font-semibold text-gray-900 mb-1.5">{f.title}</h3>
-                <p className="text-sm text-gray-500 leading-relaxed">{f.desc}</p>
-              </div>
+              { label: "Características", href: "#features" },
+              { label: "Cómo funciona", href: "#how" },
+              { label: "Sobre IUP", href: "#about" },
+            ].map((item) => (
+              <a key={item.href} href={item.href}
+                className="px-3 py-2 rounded-lg text-sm text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--surface-3)] transition-all">
+                {item.label}
+              </a>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-2">
+            <ThemeToggle size="sm" />
+            <Link href="/admin/login"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-[var(--text-2)] hover:bg-[var(--surface-3)] transition-all border border-[var(--border)]">
+              Iniciar sesión
+            </Link>
+            <Link href="/chat"
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)] transition-all shadow-sm">
+              Chatear <ArrowRight size={14} />
+            </Link>
+            <button
+              className="md:hidden w-9 h-9 rounded-lg flex items-center justify-center hover:bg-[var(--surface-3)] transition-all"
+              onClick={() => setMenuOpen(!menuOpen)} aria-label="Menú">
+              {menuOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
+          </div>
+        </div>
+
+        {menuOpen && (
+          <div className="md:hidden px-4 pb-4 border-t border-[var(--border)] bg-[var(--bg)] animate-fade-down">
+            {[
+              { label: "Características", href: "#features" },
+              { label: "Cómo funciona", href: "#how" },
+              { label: "Sobre IUP", href: "#about" },
+              { label: "Iniciar sesión", href: "/admin/login" },
+            ].map((item) => (
+              <a key={item.href} href={item.href} onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-[var(--text-2)] hover:bg-[var(--surface-3)] transition-all mt-1">
+                <ChevronRight size={14} className="text-[var(--brand)]" /> {item.label}
+              </a>
             ))}
           </div>
-        </div>
-      </section>
+        )}
+      </header>
 
-      {/* ── CTA strip ── */}
-      <section className="bg-gradient-to-r from-[var(--primary-600)] to-[var(--primary-800)] py-10 sm:py-12 px-5">
-        <div className="max-w-2xl mx-auto text-center">
-          <h2 className="text-xl sm:text-2xl font-bold text-white mb-2">
-            ¿Tienes preguntas sobre la UniPutumayo?
-          </h2>
-          <p className="text-green-200 mb-6 text-sm sm:text-base">
-            Nexus está disponible 24 horas al día, 7 días a la semana
-          </p>
-          <Link
-            href="/chat"
-            className="inline-flex items-center gap-2 px-8 py-3 bg-white text-[var(--primary-700)] rounded-xl font-semibold hover:bg-green-50 transition-colors shadow-md text-sm sm:text-base"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            Hablar con Nexus ahora
-          </Link>
-        </div>
-      </section>
-
-      {/* ── Footer ── */}
-      <footer className="bg-gray-900 text-gray-400 py-6 px-5">
-        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <svg viewBox="0 0 120 120" className="w-6 h-6">
-              <defs>
-                <linearGradient id="fb" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#1B5E20" /><stop offset="100%" stopColor="#2E7D32" />
-                </linearGradient>
-              </defs>
-              <ellipse cx="58" cy="72" rx="26" ry="30" fill="url(#fb)" />
-              <circle cx="58" cy="38" r="22" fill="url(#fb)" />
-              <ellipse cx="48" cy="36" rx="9" ry="8" fill="white" />
-              <ellipse cx="68" cy="36" rx="9" ry="8" fill="white" />
-              <circle cx="48" cy="36" r="5" fill="#1a1a1a" />
-              <circle cx="68" cy="36" r="5" fill="#1a1a1a" />
-              <circle cx="46" cy="34" r="1.8" fill="white" />
-              <circle cx="66" cy="34" r="1.8" fill="white" />
-            </svg>
-            <span className="text-sm font-medium text-gray-300">Nexus UniPutumayo</span>
+      {/* ── HERO ── */}
+      <section className="hero-gradient pt-16 pb-24 md:pt-24 md:pb-32 px-4 sm:px-6 overflow-hidden">
+        <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
+          <div className="space-y-6 animate-fade-up">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--brand-dim)] border border-[var(--brand)] border-opacity-30 text-[var(--brand-text)] text-sm font-medium">
+              <span className="w-2 h-2 rounded-full bg-[var(--brand)] animate-pulse" />
+              Asistente Universitario con IA
+            </div>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-[1.1] tracking-tight">
+              Tu guía inteligente en{" "}
+              <span className="gradient-text">UniPutumayo</span>
+            </h1>
+            <p className="text-lg text-[var(--text-3)] leading-relaxed max-w-lg">
+              Consulta programas académicos, requisitos de admisión, horarios y más —
+              en segundos, con respuestas respaldadas por documentos oficiales de la IUP.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/chat"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)] transition-all shadow-[var(--glow-brand)] hover:shadow-lg active:scale-[.98]">
+                <MessageSquare size={18} /> Comenzar ahora
+              </Link>
+              <a href="#features"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold border border-[var(--border)] text-[var(--text-1)] hover:bg-[var(--surface-3)] transition-all">
+                Ver características <ArrowRight size={16} />
+              </a>
+            </div>
+            <div className="flex flex-wrap gap-4 text-sm text-[var(--text-3)]">
+              {["Respuestas precisas", "Disponible 24/7", "Voz + Texto"].map((t) => (
+                <span key={t} className="flex items-center gap-1.5">
+                  <CheckCircle2 size={14} className="text-[var(--brand)]" /> {t}
+                </span>
+              ))}
+            </div>
           </div>
-          <p className="text-xs text-center">
-            © {new Date().getFullYear()} Institución Universitaria del Putumayo · Todos los derechos reservados
-          </p>
-          <Link
-            href="/admin/login"
-            className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
-          >
-            Admin
-          </Link>
+
+          <div className="relative flex justify-center items-center">
+            <div className="absolute w-80 h-80 rounded-full bg-[var(--brand)] opacity-[.06] blur-3xl" />
+            <div className="relative z-10 flex flex-col items-center gap-8 lg:flex-row lg:items-end">
+              <div className="w-48 h-64 animate-float"><GuacamayaHero /></div>
+              <div className="lg:-mb-8 animate-fade-up" style={{ animationDelay: ".2s" }}>
+                <ChatPreview />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── STATS ── */}
+      <section id="about" className="py-12 border-y border-[var(--border)] bg-[var(--surface-2)]">
+        <div className="max-w-4xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-8">
+          <Stat value="5,000+" label="Estudiantes activos" />
+          <Stat value="12"     label="Programas académicos" />
+          <Stat value="24/7"   label="Disponibilidad" />
+          <Stat value="98%"    label="Precisión" />
+        </div>
+      </section>
+
+      {/* ── FEATURES ── */}
+      <section id="features" className="py-20 md:py-28 px-4 sm:px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-14 space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--surface-3)] text-sm text-[var(--text-3)] border border-[var(--border)]">
+              <Zap size={13} className="text-[var(--brand)]" /> Características
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold">
+              Todo lo que necesitas, <span className="gradient-text">en un lugar</span>
+            </h2>
+            <p className="text-[var(--text-3)] max-w-xl mx-auto">
+              Nexus combina IA avanzada con información oficial de la IUP para la experiencia de consulta más completa.
+            </p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <Feature icon={BrainCircuit} title="IA con Contexto Institucional"
+              description="Respuestas precisas respaldadas por documentos oficiales de la IUP. No inventamos — consultamos las fuentes."
+              accent="#10b981" />
+            <Feature icon={Mic} title="Voz y Texto"
+              description="Habla o escribe en español colombiano. Nexus te entiende y responde en el modo que prefieras."
+              accent="#3b82f6" />
+            <Feature icon={GraduationCap} title="Programas Académicos"
+              description="Información detallada sobre todos los programas, pensum, facultades y requisitos de ingreso."
+              accent="#f59e0b" />
+            <Feature icon={Clock} title="Disponible 24/7"
+              description="Sin colas, sin esperas. Obtén respuestas instantáneas sobre la IUP en cualquier momento."
+              accent="#8b5cf6" />
+            <Feature icon={Shield} title="Información Verificada"
+              description="Cada respuesta cita sus fuentes. Transparencia total sobre de dónde viene la información."
+              accent="#ef4444" />
+            <Feature icon={Globe} title="Multiconversación"
+              description="Guarda el historial de tus consultas. Retoma conversaciones anteriores cuando quieras."
+              accent="#0891b2" />
+          </div>
+        </div>
+      </section>
+
+      {/* ── HOW IT WORKS ── */}
+      <section id="how" className="py-20 md:py-28 px-4 sm:px-6 bg-[var(--bg-2)]">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-14 space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--surface-3)] text-sm text-[var(--text-3)] border border-[var(--border)]">
+              <Sparkles size={13} className="text-[var(--brand)]" /> Cómo funciona
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold">
+              Tres pasos para <span className="gradient-text">tu respuesta</span>
+            </h2>
+          </div>
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            <div className="space-y-8">
+              <Step n={1} title="Haz tu pregunta"
+                description="Escribe o usa la voz para preguntar sobre programas, admisiones, horarios u otra información de la IUP." />
+              <Step n={2} title="Nexus consulta la fuente"
+                description="Nuestro sistema RAG busca en los documentos oficiales de la institución para encontrar la información relevante." />
+              <Step n={3} title="Recibe respuesta precisa"
+                description="Obtienes una respuesta clara, en español, con las fuentes citadas para que puedas verificar la información." />
+            </div>
+            <div className="relative flex justify-center">
+              <div className="p-8 rounded-3xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-lg)] max-w-xs w-full">
+                <div className="space-y-4">
+                  {[
+                    { role: "user", text: "¿Cuándo son las matrículas?" },
+                    { role: "bot",  text: "Las matrículas del primer semestre inician el 15 de enero. Fuente: Reglamento Académico 2024." },
+                    { role: "user", text: "¿Qué documentos necesito?" },
+                  ].map((m, i) => (
+                    <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-xs leading-relaxed ${
+                        m.role === "user"
+                          ? "bg-[var(--brand)] text-white rounded-tr-sm"
+                          : "bg-[var(--surface-3)] text-[var(--text-2)] rounded-tl-sm border border-[var(--border)]"
+                      }`}>{m.text}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── CTA ── */}
+      <section className="py-20 md:py-28 px-4 sm:px-6">
+        <div className="max-w-3xl mx-auto">
+          <div className="relative rounded-3xl overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700" />
+            <div className="absolute inset-0 opacity-20"
+              style={{ backgroundImage: "radial-gradient(circle at 20% 50%, white 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
+            <div className="relative z-10 text-center px-8 py-14 space-y-6">
+              <h2 className="text-3xl md:text-4xl font-bold text-white">
+                Comienza a explorar la IUP hoy
+              </h2>
+              <p className="text-white/80 text-lg max-w-lg mx-auto">
+                No más esperas. Nexus está listo para responder tus preguntas sobre la Institución Universitaria del Putumayo.
+              </p>
+              <div className="flex flex-wrap justify-center gap-3">
+                <Link href="/chat"
+                  className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl font-semibold bg-white text-emerald-700 hover:bg-gray-50 transition-all shadow-lg active:scale-[.98]">
+                  <MessageSquare size={18} /> Iniciar conversación
+                </Link>
+                <Link href="/admin/login"
+                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-semibold border border-white/30 text-white hover:bg-white/10 transition-all">
+                  Acceso administrador
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FOOTER ── */}
+      <footer className="border-t border-[var(--border)] bg-[var(--surface-2)] py-10 px-4 sm:px-6">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+              <Sparkles size={14} className="text-white" />
+            </div>
+            <div>
+              <span className="font-bold text-sm text-[var(--text-1)]">Nexus</span>
+              <p className="text-xs text-[var(--text-4)]">Institución Universitaria del Putumayo</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap justify-center gap-6 text-sm text-[var(--text-3)]">
+            <Link href="/chat" className="hover:text-[var(--brand)] transition-colors">Chat</Link>
+            <Link href="/admin/login" className="hover:text-[var(--brand)] transition-colors">Administrador</Link>
+            <a href="https://www.uniputumayo.edu.co" target="_blank" rel="noopener noreferrer"
+              className="hover:text-[var(--brand)] transition-colors flex items-center gap-1">
+              <Globe size={13} /> UniPutumayo.edu.co
+            </a>
+          </div>
+          <p className="text-xs text-[var(--text-4)]">© {new Date().getFullYear()} IUP · Nexus IA</p>
         </div>
       </footer>
-    </main>
+    </div>
   );
 }

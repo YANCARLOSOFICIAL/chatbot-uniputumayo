@@ -2,26 +2,25 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { LogOut, Settings, User, ChevronDown, Sparkles } from "lucide-react";
 import { isAuthenticated, getUser, logout, type AuthUser } from "@/lib/auth";
-import { MiniGuacamaya } from "@/components/avatar/AvatarDisplay";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 export function Header() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [mounted, setMounted] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    if (isAuthenticated()) {
-      setUser(getUser());
-    }
+    if (isAuthenticated()) setUser(getUser());
   }, []);
 
-  // Close menu on route change / resize
   useEffect(() => {
-    const close = () => setMenuOpen(false);
+    const close = () => setDropdownOpen(false);
     window.addEventListener("resize", close);
-    return () => window.removeEventListener("resize", close);
+    document.addEventListener("click", close);
+    return () => { window.removeEventListener("resize", close); document.removeEventListener("click", close); };
   }, []);
 
   const handleLogout = () => {
@@ -31,134 +30,77 @@ export function Header() {
   };
 
   return (
-    <header className="h-16 bg-gradient-to-r from-[var(--primary-600)] to-[var(--primary-800)] text-white flex items-center px-4 sm:px-6 shadow-md relative z-20 flex-shrink-0">
+    <header className="h-14 bg-[var(--bg)] border-b border-[var(--border)] flex items-center px-4 sm:px-5 z-20 flex-shrink-0 shadow-[var(--shadow-xs)]">
+
       {/* Logo */}
-      <Link href="/" className="flex items-center gap-2.5 min-w-0" onClick={() => setMenuOpen(false)}>
-        <MiniGuacamaya className="w-8 h-8 flex-shrink-0" />
-        <div className="hidden sm:block min-w-0">
-          <h1 className="text-sm font-bold leading-tight">Nexus UniPutumayo</h1>
-          <p className="text-xs text-green-200 leading-tight truncate">
-            Universidad del Putumayo
-          </p>
+      <Link href="/" className="flex items-center gap-2 group mr-4">
+        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
+          <Sparkles size={14} className="text-white" />
         </div>
-        <span className="sm:hidden text-sm font-bold">Nexus</span>
+        <span className="hidden sm:block font-bold text-sm text-[var(--text-1)]">
+          Nexus
+          <span className="font-normal text-[var(--text-3)]"> · UniPutumayo</span>
+        </span>
       </Link>
 
-      {/* Desktop nav */}
-      <nav className="ml-auto hidden sm:flex items-center gap-1">
-        <Link
-          href="/chat"
-          className="px-3 py-1.5 rounded-lg text-sm text-green-100 hover:text-white hover:bg-white/10 transition-colors"
-        >
+      {/* Right actions */}
+      <div className="ml-auto flex items-center gap-1.5">
+        <ThemeToggle size="sm" />
+
+        <Link href="/chat"
+          className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-[var(--text-2)] hover:bg-[var(--surface-3)] hover:text-[var(--text-1)] transition-all">
           Chat
         </Link>
 
         {mounted && user ? (
-          <>
-            {user.role === "admin" && (
-              <Link
-                href="/admin"
-                className="px-3 py-1.5 rounded-lg text-sm text-green-100 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                Admin
-              </Link>
-            )}
-            <div className="flex items-center gap-2 ml-1 pl-3 border-l border-white/20">
-              <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold uppercase">
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setDropdownOpen(!dropdownOpen)}
+              className="flex items-center gap-2 pl-2 pr-1.5 py-1 rounded-xl hover:bg-[var(--surface-3)] transition-all group"
+            >
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[var(--brand)] to-teal-600 flex items-center justify-center text-white text-xs font-bold uppercase shadow-sm">
                 {user.display_name?.[0] ?? "U"}
               </div>
-              <span className="text-sm text-green-100 max-w-[120px] truncate hidden md:block">
+              <span className="hidden md:block text-sm text-[var(--text-2)] max-w-[120px] truncate">
                 {user.display_name}
               </span>
-              <button
-                onClick={handleLogout}
-                className="px-3 py-1.5 rounded-lg text-sm text-green-200 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-1.5"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                <span className="hidden lg:inline">Salir</span>
-              </button>
-            </div>
-          </>
+              <ChevronDown size={13} className={`text-[var(--text-4)] transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {dropdownOpen && (
+              <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-xl)] overflow-hidden z-50 animate-scale-in">
+                <div className="px-3 py-2.5 border-b border-[var(--border)]">
+                  <p className="text-xs font-semibold text-[var(--text-1)] truncate">{user.display_name}</p>
+                  <p className="text-[10px] text-[var(--text-3)] capitalize">{user.role}</p>
+                </div>
+                <div className="py-1">
+                  {user.role === "admin" && (
+                    <Link href="/admin" onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 text-sm text-[var(--text-2)] hover:bg-[var(--surface-3)] hover:text-[var(--text-1)] transition-all">
+                      <Settings size={14} className="text-[var(--text-4)]" /> Panel de administrador
+                    </Link>
+                  )}
+                  <Link href="/chat" onClick={() => setDropdownOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 text-sm text-[var(--text-2)] hover:bg-[var(--surface-3)] hover:text-[var(--text-1)] transition-all">
+                    <User size={14} className="text-[var(--text-4)]" /> Mi cuenta
+                  </Link>
+                </div>
+                <div className="py-1 border-t border-[var(--border)]">
+                  <button onClick={handleLogout}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-[var(--error)] hover:bg-[var(--error-dim)] transition-all">
+                    <LogOut size={14} /> Cerrar sesión
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         ) : mounted ? (
-          <Link
-            href="/admin/login"
-            className="px-3 py-1.5 rounded-lg text-sm bg-white/15 text-white hover:bg-white/25 transition-colors border border-white/20"
-          >
-            Iniciar Sesión
+          <Link href="/admin/login"
+            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)] transition-all shadow-sm">
+            Iniciar sesión
           </Link>
         ) : null}
-      </nav>
-
-      {/* Mobile hamburger */}
-      <button
-        onClick={() => setMenuOpen((o) => !o)}
-        className="ml-auto sm:hidden p-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-        aria-label="Menú"
-        aria-expanded={menuOpen}
-      >
-        {menuOpen ? (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        ) : (
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        )}
-      </button>
-
-      {/* Mobile dropdown menu */}
-      {menuOpen && (
-        <div className="absolute top-full left-0 right-0 bg-[var(--primary-800)] border-t border-white/10 shadow-xl sm:hidden z-50">
-          <nav className="flex flex-col py-2">
-            <Link
-              href="/chat"
-              onClick={() => setMenuOpen(false)}
-              className="px-5 py-3 text-sm text-green-100 hover:bg-white/10 hover:text-white transition-colors"
-            >
-              Chat
-            </Link>
-            {mounted && user ? (
-              <>
-                {user.role === "admin" && (
-                  <Link
-                    href="/admin"
-                    onClick={() => setMenuOpen(false)}
-                    className="px-5 py-3 text-sm text-green-100 hover:bg-white/10 hover:text-white transition-colors"
-                  >
-                    Admin
-                  </Link>
-                )}
-                <div className="px-5 py-3 border-t border-white/10 flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-xs font-bold uppercase flex-shrink-0">
-                    {user.display_name?.[0] ?? "U"}
-                  </div>
-                  <span className="text-sm text-green-200 flex-1 truncate">{user.display_name}</span>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="px-5 py-3 text-sm text-red-300 hover:bg-white/10 hover:text-red-200 transition-colors text-left flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  Cerrar Sesión
-                </button>
-              </>
-            ) : mounted ? (
-              <Link
-                href="/admin/login"
-                onClick={() => setMenuOpen(false)}
-                className="px-5 py-3 text-sm text-green-100 hover:bg-white/10 hover:text-white transition-colors"
-              >
-                Iniciar Sesión
-              </Link>
-            ) : null}
-          </nav>
-        </div>
-      )}
+      </div>
     </header>
   );
 }

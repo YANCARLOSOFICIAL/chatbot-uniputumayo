@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import {
+  Upload, FileText, CheckCircle2, Clock, XCircle, AlertCircle,
+  Trash2, Check, X, CloudUpload
+} from "lucide-react";
 import { apiClient } from "@/lib/api/client";
-import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 
 interface DocumentItem {
@@ -15,12 +18,39 @@ interface DocumentItem {
   created_at: string;
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  completed: "bg-green-100 text-green-800",
-  processing: "bg-yellow-100 text-yellow-800",
-  failed: "bg-red-100 text-red-800",
-  pending: "bg-gray-100 text-gray-800",
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ElementType }> = {
+  completed:  { label: "Completado",  color: "var(--success)",  bg: "var(--brand-dim)",   icon: CheckCircle2 },
+  processing: { label: "Procesando",  color: "var(--warning)",  bg: "var(--accent-dim)",  icon: Clock },
+  failed:     { label: "Error",        color: "var(--error)",    bg: "var(--error-dim)",   icon: XCircle },
+  pending:    { label: "Pendiente",    color: "var(--text-3)",   bg: "var(--surface-3)",   icon: Clock },
 };
+
+function StatusBadge({ status }: { status: string }) {
+  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
+  const Icon = cfg.icon;
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
+      style={{ color: cfg.color, background: cfg.bg }}>
+      <Icon size={11} /> {cfg.label}
+    </span>
+  );
+}
+
+function InputField({ label, value, onChange, placeholder, required }: {
+  label: string; value: string; onChange: (v: string) => void;
+  placeholder: string; required?: boolean;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-[var(--text-2)] mb-1.5">
+        {label} {required && <span className="text-[var(--error)]">*</span>}
+      </label>
+      <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder} required={required}
+        className="input-base" />
+    </div>
+  );
+}
 
 export default function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -29,8 +59,6 @@ export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
-
-  // Upload form state
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [faculty, setFaculty] = useState("");
@@ -49,28 +77,23 @@ export default function DocumentsPage() {
     }
   }, []);
 
-  useEffect(() => {
-    loadDocuments();
-  }, [loadDocuments]);
+  useEffect(() => { loadDocuments(); }, [loadDocuments]);
 
   const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
+    e.preventDefault(); setDragOver(false);
     const dropped = e.dataTransfer.files[0];
-    if (dropped) {
-      setFile(dropped);
-      if (!title) setTitle(dropped.name.replace(/\.[^/.]+$/, ""));
-    }
+    if (dropped) { setFile(dropped); if (!title) setTitle(dropped.name.replace(/\.[^/.]+$/, "")); }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) { setFile(f); if (!title) setTitle(f.name.replace(/\.[^/.]+$/, "")); }
   };
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file || !title) return;
-
-    setUploading(true);
-    setError(null);
-    setSuccess(null);
-
+    setUploading(true); setError(null); setSuccess(null);
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -78,20 +101,13 @@ export default function DocumentsPage() {
       if (faculty) formData.append("faculty", faculty);
       if (program) formData.append("program", program);
       if (docType) formData.append("document_type", docType);
-
       const result = await apiClient.uploadDocument(formData);
       setSuccess(result.message);
-      setFile(null);
-      setTitle("");
-      setFaculty("");
-      setProgram("");
-      setDocType("");
+      setFile(null); setTitle(""); setFaculty(""); setProgram(""); setDocType("");
       await loadDocuments();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error subiendo documento");
-    } finally {
-      setUploading(false);
-    }
+    } finally { setUploading(false); }
   };
 
   const handleDelete = async (id: string) => {
@@ -105,125 +121,84 @@ export default function DocumentsPage() {
   };
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">
-        Gestión de Documentos
-      </h1>
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-[var(--text-1)]">Gestión de Documentos</h1>
+        <p className="text-sm text-[var(--text-3)] mt-1">Sube documentos académicos para la base de conocimientos del chatbot.</p>
+      </div>
+
+      {/* Alerts */}
+      {error && (
+        <div className="flex items-center gap-2.5 p-4 rounded-xl bg-[var(--error-dim)] border border-[var(--error)] border-opacity-30 text-sm text-[var(--error)]">
+          <AlertCircle size={15} className="shrink-0" /> {error}
+          <button onClick={() => setError(null)} className="ml-auto hover:opacity-70"><X size={14} /></button>
+        </div>
+      )}
+      {success && (
+        <div className="flex items-center gap-2.5 p-4 rounded-xl bg-[var(--brand-dim)] border border-[var(--brand)] border-opacity-30 text-sm text-[var(--brand-text)]">
+          <Check size={15} className="shrink-0" /> {success}
+          <button onClick={() => setSuccess(null)} className="ml-auto hover:opacity-70"><X size={14} /></button>
+        </div>
+      )}
 
       {/* Upload Form */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
-        <h2 className="text-base font-semibold text-gray-800 mb-4">
-          Subir Nuevo Documento
+      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] shadow-[var(--shadow-xs)] p-6">
+        <h2 className="text-sm font-semibold text-[var(--text-1)] mb-5 flex items-center gap-2">
+          <CloudUpload size={15} className="text-[var(--brand)]" /> Subir nuevo documento
         </h2>
         <form onSubmit={handleUpload} className="space-y-4">
-
-          {/* Drag & Drop zone */}
+          {/* Drop zone */}
           <div
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
-            className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all ${
-              dragOver
-                ? "border-[var(--primary-500)] bg-[var(--primary-100)]"
-                : file
-                ? "border-green-400 bg-green-50"
-                : "border-gray-200 hover:border-gray-300"
-            }`}
+            className={[
+              "border-2 border-dashed rounded-xl p-8 text-center transition-all",
+              dragOver ? "border-[var(--brand)] bg-[var(--brand-dim)]"
+                : file  ? "border-[var(--brand)] bg-[var(--brand-dim)]"
+                : "border-[var(--border)] hover:border-[var(--border-2)] bg-[var(--surface-2)]",
+            ].join(" ")}
           >
             {file ? (
               <div className="flex items-center justify-center gap-3">
-                <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <FileText size={28} className="text-[var(--brand)]" />
                 <div className="text-left">
-                  <p className="text-sm font-medium text-gray-900">{file.name}</p>
-                  <p className="text-xs text-gray-500">{(file.size / 1024).toFixed(1)} KB</p>
+                  <p className="text-sm font-medium text-[var(--text-1)]">{file.name}</p>
+                  <p className="text-xs text-[var(--text-3)]">{(file.size / 1024).toFixed(1)} KB</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setFile(null)}
-                  className="ml-2 text-gray-400 hover:text-red-500 transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                <button type="button" onClick={() => setFile(null)}
+                  className="ml-2 w-7 h-7 rounded-full flex items-center justify-center text-[var(--text-3)] hover:bg-[var(--error-dim)] hover:text-[var(--error)] transition-all">
+                  <X size={14} />
                 </button>
               </div>
             ) : (
               <>
-                <svg className="w-10 h-10 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                <p className="text-sm text-gray-500 mb-1">
+                <Upload size={32} className="text-[var(--text-4)] mx-auto mb-2" />
+                <p className="text-sm text-[var(--text-3)] mb-1">
                   Arrastra tu archivo aquí o{" "}
-                  <label className="text-[var(--primary-600)] cursor-pointer hover:underline">
+                  <label className="text-[var(--brand)] cursor-pointer hover:text-[var(--brand-hover)] font-medium transition-colors">
                     selecciona uno
-                    <input
-                      type="file"
-                      accept=".pdf,.docx,.txt"
-                      className="sr-only"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) {
-                          setFile(f);
-                          if (!title) setTitle(f.name.replace(/\.[^/.]+$/, ""));
-                        }
-                      }}
-                    />
+                    <input type="file" accept=".pdf,.docx,.txt" className="sr-only" onChange={handleFileSelect} />
                   </label>
                 </p>
-                <p className="text-xs text-gray-400">PDF, DOCX, TXT — máx. 50 MB</p>
+                <p className="text-xs text-[var(--text-4)]">PDF, DOCX, TXT — máx. 50 MB</p>
               </>
             )}
           </div>
 
+          {/* Metadata */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InputField label="Título" value={title} onChange={setTitle}
+              placeholder="Ej: Pensum Ingeniería de Sistemas" required />
+            <InputField label="Facultad" value={faculty} onChange={setFaculty}
+              placeholder="Ej: Ingeniería" />
+            <InputField label="Programa" value={program} onChange={setProgram}
+              placeholder="Ej: Ingeniería de Sistemas" />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Título <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Ej: Pensum Ingeniería de Sistemas"
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-[var(--primary-500)] focus:ring-1 focus:ring-[var(--primary-500)] focus:outline-none"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Facultad
-              </label>
-              <input
-                type="text"
-                value={faculty}
-                onChange={(e) => setFaculty(e.target.value)}
-                placeholder="Ej: Ingeniería"
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-[var(--primary-500)] focus:ring-1 focus:ring-[var(--primary-500)] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Programa
-              </label>
-              <input
-                type="text"
-                value={program}
-                onChange={(e) => setProgram(e.target.value)}
-                placeholder="Ej: Ingeniería de Sistemas"
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-[var(--primary-500)] focus:ring-1 focus:ring-[var(--primary-500)] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tipo de Documento
-              </label>
-              <select
-                value={docType}
-                onChange={(e) => setDocType(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-[var(--primary-500)] focus:ring-1 focus:ring-[var(--primary-500)] focus:outline-none"
-              >
+              <label className="block text-sm font-medium text-[var(--text-2)] mb-1.5">Tipo de Documento</label>
+              <select value={docType} onChange={(e) => setDocType(e.target.value)}
+                className="input-base">
                 <option value="">Seleccionar...</option>
                 <option value="pensum">Pensum</option>
                 <option value="perfil">Perfil Profesional</option>
@@ -235,85 +210,70 @@ export default function DocumentsPage() {
             </div>
           </div>
 
-          <Button type="submit" disabled={!file || !title || uploading} size="md">
-            {uploading ? (
-              <><Spinner size="sm" className="mr-2" />Procesando...</>
-            ) : (
-              "Subir Documento"
-            )}
-          </Button>
+          <button type="submit" disabled={!file || !title || uploading}
+            className="btn btn-primary px-6 py-2.5 flex items-center gap-2">
+            {uploading
+              ? <><Spinner size="sm" /> Procesando...</>
+              : <><Upload size={15} /> Subir Documento</>
+            }
+          </button>
         </form>
       </div>
 
-      {/* Messages */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 text-sm text-green-700">
-          {success}
-        </div>
-      )}
-
-      {/* Documents Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-800">
-            Documentos{" "}
-            <span className="text-sm font-normal text-gray-400">({documents.length})</span>
+      {/* Documents table */}
+      <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] shadow-[var(--shadow-xs)] overflow-hidden">
+        <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-[var(--text-1)] flex items-center gap-2">
+            <FileText size={15} className="text-[var(--brand)]" />
+            Documentos
+            <span className="text-xs font-normal text-[var(--text-4)]">({documents.length})</span>
           </h2>
+          <button onClick={() => loadDocuments()}
+            className="text-xs text-[var(--text-3)] hover:text-[var(--brand)] transition-colors">
+            Actualizar
+          </button>
         </div>
+
         {loading ? (
-          <div className="flex justify-center py-12">
-            <Spinner size="lg" />
-          </div>
+          <div className="flex justify-center py-16"><Spinner size="lg" /></div>
         ) : documents.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">
-            <svg className="w-10 h-10 mx-auto mb-2 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            No hay documentos. Sube el primero arriba.
+          <div className="text-center py-16">
+            <FileText size={36} className="text-[var(--border)] mx-auto mb-3" />
+            <p className="text-sm text-[var(--text-3)]">No hay documentos. Sube el primero arriba.</p>
           </div>
         ) : (
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Título</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Archivo</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Chunks</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {documents.map((doc) => (
-                <tr key={doc.id} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{doc.title}</td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{doc.file_name}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[doc.ingestion_status] || STATUS_STYLES.pending}`}>
-                      {doc.ingestion_status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{doc.total_chunks}</td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
-                    {new Date(doc.created_at).toLocaleDateString("es-CO")}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => handleDelete(doc.id)}
-                      className="text-red-400 hover:text-red-600 text-sm font-medium transition-colors"
-                    >
-                      Eliminar
-                    </button>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-[var(--surface-2)]">
+                <tr>
+                  {["Título", "Archivo", "Estado", "Chunks", "Fecha", ""].map((h) => (
+                    <th key={h} className={`px-5 py-3 text-xs font-semibold text-[var(--text-4)] uppercase tracking-wider ${h === "" ? "text-right" : "text-left"}`}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {documents.map((doc) => (
+                  <tr key={doc.id} className="hover:bg-[var(--surface-2)] transition-colors">
+                    <td className="px-5 py-4 text-sm font-medium text-[var(--text-1)] max-w-[200px] truncate">{doc.title}</td>
+                    <td className="px-5 py-4 text-sm text-[var(--text-3)] max-w-[160px] truncate">{doc.file_name}</td>
+                    <td className="px-5 py-4"><StatusBadge status={doc.ingestion_status} /></td>
+                    <td className="px-5 py-4 text-sm text-[var(--text-3)]">{doc.total_chunks}</td>
+                    <td className="px-5 py-4 text-sm text-[var(--text-3)]">
+                      {new Date(doc.created_at).toLocaleDateString("es-CO")}
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <button onClick={() => handleDelete(doc.id)}
+                        className="inline-flex items-center gap-1 text-xs text-[var(--text-4)] hover:text-[var(--error)] transition-colors px-2 py-1 rounded-lg hover:bg-[var(--error-dim)]">
+                        <Trash2 size={13} /> Eliminar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

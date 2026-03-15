@@ -18,11 +18,6 @@ export function AvatarDisplay({ state, size = "md" }: AvatarDisplayProps) {
   return (
     <div className="flex flex-col items-center py-2 sm:py-4">
       <div className={cn("relative", sizeClasses[size])}>
-        {/* Listening ring */}
-        {state === "listening" && (
-          <div className="absolute inset-[-6px] rounded-full border-2 border-blue-400 animate-[pulse-ring_2s_ease-in-out_infinite] opacity-50" />
-        )}
-
         <svg
           viewBox="0 0 120 120"
           className={cn(
@@ -150,18 +145,23 @@ export function AvatarDisplay({ state, size = "md" }: AvatarDisplayProps) {
         {/* Thinking dots */}
         {state === "thinking" && (
           <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 flex gap-1">
-            <div className="w-2 h-2 bg-[var(--accent-gold)] rounded-full animate-bounce [animation-delay:0ms]" />
-            <div className="w-2 h-2 bg-[var(--accent-gold)] rounded-full animate-bounce [animation-delay:150ms]" />
-            <div className="w-2 h-2 bg-[var(--accent-gold)] rounded-full animate-bounce [animation-delay:300ms]" />
+            <div className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce [animation-delay:0ms]" />
+            <div className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce [animation-delay:150ms]" />
+            <div className="w-2 h-2 bg-[var(--accent)] rounded-full animate-bounce [animation-delay:300ms]" />
           </div>
+        )}
+
+        {/* Listening ring */}
+        {state === "listening" && (
+          <div className="absolute inset-[-6px] rounded-full border-2 border-[var(--info)] pulse-ring opacity-50" />
         )}
 
         {/* Speaking sound waves */}
         {state === "speaking" && (
           <div className="absolute -right-2 top-1/3 flex flex-col gap-1">
-            <div className="w-2.5 h-0.5 bg-[var(--primary-500)] rounded-full animate-pulse [animation-delay:0ms]" />
-            <div className="w-4 h-0.5 bg-[var(--primary-500)] rounded-full animate-pulse [animation-delay:100ms]" />
-            <div className="w-2.5 h-0.5 bg-[var(--primary-500)] rounded-full animate-pulse [animation-delay:200ms]" />
+            <div className="w-2.5 h-0.5 bg-[var(--brand)] rounded-full animate-pulse [animation-delay:0ms]" />
+            <div className="w-4 h-0.5 bg-[var(--brand)] rounded-full animate-pulse [animation-delay:100ms]" />
+            <div className="w-2.5 h-0.5 bg-[var(--brand)] rounded-full animate-pulse [animation-delay:200ms]" />
           </div>
         )}
       </div>
@@ -169,15 +169,15 @@ export function AvatarDisplay({ state, size = "md" }: AvatarDisplayProps) {
       {size !== "sm" && (
         <span className={cn(
           "mt-1.5 text-xs font-medium px-2 py-0.5 rounded-full",
-          state === "idle" && "text-gray-500",
-          state === "listening" && "text-blue-600 bg-blue-50",
-          state === "thinking" && "text-amber-600 bg-amber-50",
-          state === "speaking" && "text-[var(--primary-600)] bg-[var(--primary-100)]",
+          state === "idle"      && "text-[var(--text-3)]",
+          state === "listening" && "text-[var(--info)] bg-[var(--info-dim)]",
+          state === "thinking"  && "text-[var(--accent)] bg-[var(--accent-dim)]",
+          state === "speaking"  && "text-[var(--brand-text)] bg-[var(--brand-dim)]",
         )}>
-          {state === "idle" && "Nexus"}
+          {state === "idle"      && "Nexus"}
           {state === "listening" && "Escuchando..."}
-          {state === "thinking" && "Pensando..."}
-          {state === "speaking" && "Hablando..."}
+          {state === "thinking"  && "Pensando..."}
+          {state === "speaking"  && "Hablando..."}
         </span>
       )}
     </div>

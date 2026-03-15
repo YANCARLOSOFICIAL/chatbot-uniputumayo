@@ -1,15 +1,9 @@
 import { ChatProvider } from "@/context/ChatContext";
-import { Header } from "@/components/layout/Header";
 
-export default function ChatLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function ChatLayout({ children }: { children: React.ReactNode }) {
   return (
     <ChatProvider>
-      <div className="h-[100dvh] flex flex-col overflow-hidden">
-        <Header />
+      <div className="h-[100dvh] overflow-hidden">
         {children}
       </div>
     </ChatProvider>

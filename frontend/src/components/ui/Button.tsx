@@ -14,15 +14,15 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={cn(
-          "inline-flex items-center justify-center rounded-xl font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed",
+          "inline-flex items-center justify-center rounded-xl font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[.98]",
           {
-            "bg-gradient-to-r from-[var(--primary-600)] to-[var(--primary-500)] text-white hover:translate-y-[-1px] hover:shadow-md focus:ring-green-500":
+            "bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)] focus:ring-[var(--brand)] shadow-sm hover:-translate-y-0.5 hover:shadow-md":
               variant === "primary",
-            "bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-400":
+            "bg-[var(--surface-3)] text-[var(--text-1)] hover:bg-[var(--border)] focus:ring-[var(--border)] border border-[var(--border)]":
               variant === "secondary",
-            "bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-300":
+            "bg-transparent text-[var(--text-2)] hover:bg-[var(--surface-3)] focus:ring-[var(--border)]":
               variant === "ghost",
-            "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500":
+            "bg-[var(--error)] text-white hover:opacity-90 focus:ring-[var(--error)]":
               variant === "danger",
           },
           {

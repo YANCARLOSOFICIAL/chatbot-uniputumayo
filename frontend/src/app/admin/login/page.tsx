@@ -1,21 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useId } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  Mail, Lock, User, Eye, EyeOff, AlertCircle,
+  Sparkles, GraduationCap, ArrowRight, MessageSquare
+} from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { setToken, setUser } from "@/lib/auth";
-import { Button } from "@/components/ui/Button";
-import { Spinner } from "@/components/ui/Spinner";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 type Tab = "login" | "register";
 
+function InputField({
+  id, label, type = "text", value, onChange, placeholder, required, icon: Icon, showToggle,
+}: {
+  id: string; label: string; type?: string; value: string;
+  onChange: (v: string) => void; placeholder: string; required?: boolean;
+  icon: React.ElementType; showToggle?: boolean;
+}) {
+  const [show, setShow] = useState(false);
+  const inputType = type === "password" && show ? "text" : type;
+
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={id} className="block text-sm font-medium text-[var(--text-2)]">{label}</label>
+      <div className="relative">
+        <Icon size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-4)]" />
+        <input
+          id={id} type={inputType} value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder} required={required}
+          className="input-base pl-9 pr-9"
+        />
+        {showToggle && (
+          <button type="button" onClick={() => setShow(!show)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-4)] hover:text-[var(--text-2)] transition-colors">
+            {show ? <EyeOff size={15} /> : <Eye size={15} />}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function LoginPage() {
   const router = useRouter();
+  const uid = useId();
   const [tab, setTab] = useState<Tab>("login");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Form fields
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -23,201 +58,215 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
       const res = await apiClient.login(email, password);
-      setToken(res.access_token);
-      setUser(res.user);
-      if (res.user.role === "admin") {
-        router.push("/admin");
-      } else {
-        router.push("/chat");
-      }
+      setToken(res.access_token); setUser(res.user);
+      router.push(res.user.role === "admin" ? "/admin" : "/chat");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al iniciar sesión");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password !== confirmPassword) {
-      setError("Las contraseñas no coinciden");
-      return;
-    }
-    if (password.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres");
-      return;
-    }
-    setLoading(true);
-    setError(null);
+    if (password !== confirmPassword) return setError("Las contraseñas no coinciden");
+    if (password.length < 6) return setError("La contraseña debe tener al menos 6 caracteres");
+    setLoading(true); setError(null);
     try {
       const res = await apiClient.register(email, password, displayName);
-      setToken(res.access_token);
-      setUser(res.user);
-      if (res.user.role === "admin") {
-        router.push("/admin");
-      } else {
-        router.push("/chat");
-      }
+      setToken(res.access_token); setUser(res.user);
+      router.push(res.user.role === "admin" ? "/admin" : "/chat");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al registrarse");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
+  const switchTab = (t: Tab) => { setTab(t); setError(null); };
+
   return (
-    <div className="min-h-screen flex">
-      {/* Left side - Hero */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[var(--primary-600)] to-[var(--primary-800)] text-white flex-col justify-center items-center p-12">
-        <div className="max-w-md text-center">
-          <div className="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-6 backdrop-blur-sm">
-            <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
+    <div className="min-h-screen flex bg-[var(--bg)]">
+
+      {/* ── Left Panel (decorative) ── */}
+      <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden flex-col">
+        {/* Gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 via-teal-700 to-cyan-800" />
+        {/* Pattern overlay */}
+        <div className="absolute inset-0 opacity-10"
+          style={{ backgroundImage: "radial-gradient(circle at 2px 2px, white 1px, transparent 0)", backgroundSize: "32px 32px" }} />
+        {/* Glow orbs */}
+        <div className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full bg-emerald-400 blur-3xl opacity-20" />
+        <div className="absolute bottom-1/4 right-1/4 w-48 h-48 rounded-full bg-teal-300 blur-3xl opacity-20" />
+
+        <div className="relative z-10 flex flex-col h-full p-12">
+          {/* Top logo */}
+          <Link href="/" className="flex items-center gap-2.5 mb-auto">
+            <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-sm flex items-center justify-center border border-white/20">
+              <Sparkles size={18} className="text-white" />
+            </div>
+            <span className="font-bold text-white text-lg">Nexus</span>
+          </Link>
+
+          {/* Center content */}
+          <div className="py-8 space-y-8">
+            <div>
+              <h1 className="text-4xl font-bold text-white leading-tight mb-3">
+                Bienvenido a<br />UniPutumayo
+              </h1>
+              <p className="text-white/70 text-base leading-relaxed">
+                Accede al asistente virtual más completo de la Institución Universitaria del Putumayo.
+              </p>
+            </div>
+
+            {/* Feature list */}
+            <div className="space-y-4">
+              {[
+                { icon: MessageSquare, text: "Chat inteligente con IA" },
+                { icon: GraduationCap, text: "Información académica actualizada" },
+                { icon: Sparkles,      text: "Respuestas precisas 24/7" },
+              ].map(({ icon: Icon, text }) => (
+                <div key={text} className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center flex-shrink-0">
+                    <Icon size={16} className="text-white" />
+                  </div>
+                  <span className="text-white/80 text-sm">{text}</span>
+                </div>
+              ))}
+            </div>
           </div>
-          <h1 className="text-3xl font-bold mb-3">Nexus Uniputumayo</h1>
-          <p className="text-lg text-green-100 mb-2">
-            Institución Universitaria del Putumayo
-          </p>
-          <p className="text-sm text-green-200/80">
-            Asistente virtual inteligente para información académica, programas, admisiones y más.
-          </p>
+
+          {/* Bottom */}
+          <p className="text-white/40 text-xs">© {new Date().getFullYear()} IUP · Nexus IA</p>
         </div>
       </div>
 
-      {/* Right side - Form */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-gray-50">
-        <div className="w-full max-w-md">
-          <div className="lg:hidden text-center mb-8">
-            <h1 className="text-2xl font-bold text-gray-900">Nexus Uniputumayo</h1>
-            <p className="text-sm text-gray-500">Universidad del Putumayo</p>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex bg-gray-200 rounded-xl p-1 mb-6">
-            <button
-              onClick={() => { setTab("login"); setError(null); }}
-              className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${
-                tab === "login"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              Iniciar Sesión
-            </button>
-            <button
-              onClick={() => { setTab("register"); setError(null); }}
-              className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${
-                tab === "register"
-                  ? "bg-white text-gray-900 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              Registrarse
-            </button>
-          </div>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-sm text-red-700">
-              {error}
+      {/* ── Right Panel (form) ── */}
+      <div className="flex-1 flex flex-col">
+        {/* Top bar */}
+        <div className="flex items-center justify-between p-4 sm:p-6">
+          <Link href="/" className="flex items-center gap-2 lg:hidden">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+              <Sparkles size={14} className="text-white" />
             </div>
-          )}
+            <span className="font-bold text-[var(--text-1)] text-sm">Nexus</span>
+          </Link>
+          <div className="lg:ml-auto flex items-center gap-3">
+            <ThemeToggle size="sm" />
+            <Link href="/chat"
+              className="flex items-center gap-1.5 text-sm text-[var(--text-3)] hover:text-[var(--brand)] transition-colors">
+              Ir al chat <ArrowRight size={14} />
+            </Link>
+          </div>
+        </div>
 
-          {tab === "login" ? (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Correo electrónico
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="correo@ejemplo.com"
-                  required
-                  className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-[var(--primary-500)] focus:ring-1 focus:ring-[var(--primary-500)] focus:outline-none"
-                />
+        {/* Form container */}
+        <div className="flex-1 flex items-center justify-center px-6 pb-8">
+          <div className="w-full max-w-sm">
+            {/* Header */}
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-[var(--text-1)] mb-1">
+                {tab === "login" ? "Iniciar sesión" : "Crear cuenta"}
+              </h2>
+              <p className="text-sm text-[var(--text-3)]">
+                {tab === "login"
+                  ? "Bienvenido de nuevo al asistente IUP"
+                  : "Únete a la comunidad universitaria"}
+              </p>
+            </div>
+
+            {/* Tab switcher */}
+            <div className="flex p-1 rounded-xl bg-[var(--surface-3)] border border-[var(--border)] mb-6">
+              {(["login", "register"] as Tab[]).map((t) => (
+                <button key={t} onClick={() => switchTab(t)}
+                  className={[
+                    "flex-1 py-2 text-sm font-medium rounded-lg transition-all",
+                    tab === t
+                      ? "bg-[var(--surface)] text-[var(--text-1)] shadow-[var(--shadow-xs)] border border-[var(--border)]"
+                      : "text-[var(--text-3)] hover:text-[var(--text-1)]",
+                  ].join(" ")}
+                >
+                  {t === "login" ? "Iniciar sesión" : "Registrarse"}
+                </button>
+              ))}
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-[var(--error-dim)] border border-[var(--error)] border-opacity-30 text-sm text-[var(--error)] mb-5">
+                <AlertCircle size={15} className="shrink-0 mt-0.5" /> {error}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Contraseña
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Tu contraseña"
-                  required
-                  className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-[var(--primary-500)] focus:ring-1 focus:ring-[var(--primary-500)] focus:outline-none"
-                />
-              </div>
-              <Button type="submit" disabled={loading} size="lg" className="w-full">
-                {loading ? <><Spinner size="sm" className="mr-2" /> Ingresando...</> : "Iniciar Sesión"}
-              </Button>
-            </form>
-          ) : (
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nombre completo
-                </label>
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="Tu nombre"
-                  required
-                  className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-[var(--primary-500)] focus:ring-1 focus:ring-[var(--primary-500)] focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Correo electrónico
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="correo@ejemplo.com"
-                  required
-                  className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-[var(--primary-500)] focus:ring-1 focus:ring-[var(--primary-500)] focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Contraseña
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
-                  required
-                  className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-[var(--primary-500)] focus:ring-1 focus:ring-[var(--primary-500)] focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Confirmar contraseña
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Repite tu contraseña"
-                  required
-                  className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:border-[var(--primary-500)] focus:ring-1 focus:ring-[var(--primary-500)] focus:outline-none"
-                />
-              </div>
-              <Button type="submit" disabled={loading} size="lg" className="w-full">
-                {loading ? <><Spinner size="sm" className="mr-2" /> Registrando...</> : "Registrarse"}
-              </Button>
-            </form>
-          )}
+            )}
+
+            {/* Login form */}
+            {tab === "login" ? (
+              <form onSubmit={handleLogin} className="space-y-4">
+                <InputField id={`${uid}_email`} label="Correo electrónico" type="email"
+                  value={email} onChange={setEmail} placeholder="correo@ejemplo.com"
+                  required icon={Mail} />
+                <InputField id={`${uid}_pass`} label="Contraseña" type="password"
+                  value={password} onChange={setPassword} placeholder="Tu contraseña"
+                  required icon={Lock} showToggle />
+
+                <button type="submit" disabled={loading}
+                  className="btn btn-primary w-full py-3 text-base mt-2">
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                      Ingresando…
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
+                      Iniciar sesión <ArrowRight size={16} />
+                    </span>
+                  )}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleRegister} className="space-y-4">
+                <InputField id={`${uid}_name`} label="Nombre completo" type="text"
+                  value={displayName} onChange={setDisplayName} placeholder="Tu nombre completo"
+                  required icon={User} />
+                <InputField id={`${uid}_email2`} label="Correo electrónico" type="email"
+                  value={email} onChange={setEmail} placeholder="correo@ejemplo.com"
+                  required icon={Mail} />
+                <InputField id={`${uid}_pass2`} label="Contraseña" type="password"
+                  value={password} onChange={setPassword} placeholder="Mínimo 6 caracteres"
+                  required icon={Lock} showToggle />
+                <InputField id={`${uid}_conf`} label="Confirmar contraseña" type="password"
+                  value={confirmPassword} onChange={setConfirmPassword} placeholder="Repite tu contraseña"
+                  required icon={Lock} showToggle />
+
+                <button type="submit" disabled={loading}
+                  className="btn btn-primary w-full py-3 text-base mt-2">
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                      Registrando…
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
+                      Crear cuenta <ArrowRight size={16} />
+                    </span>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* Footer */}
+            <p className="text-center text-xs text-[var(--text-4)] mt-6">
+              {tab === "login" ? "¿No tienes cuenta?" : "¿Ya tienes cuenta?"}{" "}
+              <button onClick={() => switchTab(tab === "login" ? "register" : "login")}
+                className="text-[var(--brand)] hover:text-[var(--brand-hover)] font-medium transition-colors">
+                {tab === "login" ? "Regístrate" : "Inicia sesión"}
+              </button>
+            </p>
+          </div>
         </div>
       </div>
     </div>
