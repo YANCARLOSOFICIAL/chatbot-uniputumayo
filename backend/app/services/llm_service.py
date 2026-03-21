@@ -16,40 +16,50 @@ from app.runtime_config import runtime_config
 class LLMService:
     async def generate(self, request: GenerateRequest) -> GenerateResponse:
         provider_name = request.provider or runtime_config.default_llm_provider
-        provider = ProviderFactory.get_provider(provider_name)
+        
+        try:
+            provider = ProviderFactory.get_provider(provider_name)
+            
+            model = request.model
+            if not model:
+                if provider_name == "ollama":
+                    model = runtime_config.ollama_default_model
+                else:
+                    model = runtime_config.openai_default_model
 
-        model = request.model
-        if not model:
-            if provider_name == "ollama":
-                model = runtime_config.ollama_default_model
-            else:
-                model = runtime_config.openai_default_model
+            temperature = request.temperature or runtime_config.default_temperature
+            max_tokens = request.max_tokens or runtime_config.default_max_tokens
 
-        temperature = request.temperature or runtime_config.default_temperature
-        max_tokens = request.max_tokens or runtime_config.default_max_tokens
+            start_time = time.time()
+            result = await provider.generate(
+                messages=[{"role": m.role, "content": m.content} for m in request.messages],
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            response_time = int((time.time() - start_time) * 1000)
 
-        start_time = time.time()
-        result = await provider.generate(
-            messages=[{"role": m.role, "content": m.content} for m in request.messages],
-            model=model,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        response_time = int((time.time() - start_time) * 1000)
-
-        return GenerateResponse(
-            content=result["content"],
-            provider=provider_name,
-            model=model,
-            tokens_used=result.get("tokens_used"),
-            response_time_ms=response_time,
-        )
+            return GenerateResponse(
+                content=result["content"],
+                provider=provider_name,
+                model=model,
+                tokens_used=result.get("tokens_used"),
+                response_time_ms=response_time,
+            )
+        except ValueError as e:
+            raise ValueError(f"Cannot use provider '{provider_name}': {str(e)}")
+        except Exception as e:
+            raise Exception(f"Error generating response with {provider_name}: {str(e)}")
 
     async def embed(self, request: EmbedRequest) -> EmbedResponse:
         # Use dedicated embedding_provider (separate from chat provider) to avoid
         # pgvector dimension mismatch when the chat provider is changed (e.g. ollama→openai)
         provider_name = request.provider or runtime_config.embedding_provider
-        provider = ProviderFactory.get_provider(provider_name)
+        
+        try:
+            provider = ProviderFactory.get_provider(provider_name)
+        except ValueError as e:
+            raise ValueError(f"Cannot use embedding provider '{provider_name}': {str(e)}")
 
         if provider_name == "openai":
             model = runtime_config.openai_embedding_model
@@ -70,8 +80,14 @@ class LLMService:
     async def get_providers(self) -> ProvidersResponse:
         providers = []
         for name in ["ollama", "openai"]:
-            provider = ProviderFactory.get_provider(name)
-            is_available = await provider.is_available()
+            try:
+                provider = ProviderFactory.get_provider(name)
+                is_available = await provider.is_available()
+            except ValueError:
+                # OpenAI not configured, mark as unavailable
+                is_available = False
+                provider = None
+            
             models = []
             if name == "ollama":
                 models = [runtime_config.ollama_default_model]
@@ -83,7 +99,7 @@ class LLMService:
                     name=name,
                     models=models,
                     is_available=is_available,
-                    is_default=(name == runtime_config.default_llm_provider),
+                    is_default=(name == runtime_config.default_llm_provider and is_available),
                 )
             )
         return ProvidersResponse(providers=providers)

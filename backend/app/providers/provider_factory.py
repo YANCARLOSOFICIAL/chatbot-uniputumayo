@@ -12,6 +12,7 @@ class ProviderFactory:
             if name == "ollama":
                 cls._providers[name] = OllamaProvider()
             elif name == "openai":
+                # Lazy-load: validation happens when _ensure_client() is called
                 cls._providers[name] = OpenAIProvider()
             else:
                 raise ValueError(f"Unknown LLM provider: {name}")

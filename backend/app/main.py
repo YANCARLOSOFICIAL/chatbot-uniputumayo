@@ -80,6 +80,33 @@ async def _seed_admin():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Iniciando Nexus UniPutumayo API...")
+    
+    # Check provider availability
+    from app.providers.openai_provider import OpenAIProvider
+    from app.providers.ollama_provider import OllamaProvider
+    
+    openai_available = await OpenAIProvider().is_available()
+    ollama_available = await OllamaProvider().is_available()
+    
+    logger.info(f"Provider Status: OpenAI={'✓' if openai_available else '✗'}, Ollama={'✓' if ollama_available else '✗'}")
+    
+    default_provider = settings.default_llm_provider
+    if default_provider == "openai" and not openai_available:
+        logger.warning(
+            "⚠ Default provider is OpenAI but API key not configured. "
+            "Configure it from /admin/config or switch to Ollama."
+        )
+    elif default_provider == "ollama" and not ollama_available:
+        logger.warning(
+            "⚠ Default provider is Ollama but not running. "
+            "Start Ollama or configure OpenAI from /admin/config."
+        )
+    
+    if not (openai_available or ollama_available):
+        logger.error(
+            "❌ NO LLM PROVIDERS AVAILABLE! Configure OpenAI from /admin/config or start Ollama."
+        )
+    
     # Seed admin user
     try:
         await _seed_admin()

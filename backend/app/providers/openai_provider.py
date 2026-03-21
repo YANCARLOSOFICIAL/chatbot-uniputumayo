@@ -11,7 +11,19 @@ logger = logging.getLogger(__name__)
 
 class OpenAIProvider(BaseLLMProvider):
     def __init__(self):
-        self.client = AsyncOpenAI(api_key=runtime_config.openai_api_key)
+        self.client = None
+
+    def _ensure_client(self) -> AsyncOpenAI:
+        """Lazily initialize the OpenAI client only when an API key is available."""
+        if not runtime_config.openai_api_key:
+            raise ValueError(
+                "OpenAI is not configured. Please configure your OpenAI API key from the admin panel."
+            )
+        
+        if self.client is None:
+            self.client = AsyncOpenAI(api_key=runtime_config.openai_api_key)
+        
+        return self.client
 
     async def generate(
         self,
@@ -20,7 +32,8 @@ class OpenAIProvider(BaseLLMProvider):
         temperature: float = 0.3,
         max_tokens: int = 1024,
     ) -> dict:
-        response = await self.client.chat.completions.create(
+        client = self._ensure_client()
+        response = await client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
@@ -48,7 +61,8 @@ class OpenAIProvider(BaseLLMProvider):
         temperature: float = 0.3,
         max_tokens: int = 1024,
     ) -> AsyncIterator[str]:
-        stream = await self.client.chat.completions.create(
+        client = self._ensure_client()
+        stream = await client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
@@ -60,7 +74,8 @@ class OpenAIProvider(BaseLLMProvider):
                 yield chunk.choices[0].delta.content
 
     async def embed(self, texts: list[str], model: str) -> dict:
-        response = await self.client.embeddings.create(
+        client = self._ensure_client()
+        response = await client.embeddings.create(
             model=model,
             input=texts,
         )

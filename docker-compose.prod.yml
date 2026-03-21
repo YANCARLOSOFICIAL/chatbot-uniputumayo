@@ -20,13 +20,17 @@ services:
     restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql+asyncpg://chatbot_user:chatbot_password@postgres:5432/chatbot_db
-      - OLLAMA_BASE_URL=http://localhost:11434
+      # Ollama is not available in production (no local LLM)
+      - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_DEFAULT_MODEL=llama3.1:8b
       - OLLAMA_EMBEDDING_MODEL=nomic-embed-text
-      - OPENAI_API_KEY=
+      # OpenAI Configuration: Set from admin panel (/admin/config)
+      # If OPENAI_API_KEY is not set here, users must configure it in the UI
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_DEFAULT_MODEL=gpt-4o-mini
       - OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-      - DEFAULT_LLM_PROVIDER=ollama
+      # Production uses OpenAI (Ollama not available on server)
+      - DEFAULT_LLM_PROVIDER=openai
       - DEFAULT_TEMPERATURE=0.3
       - DEFAULT_MAX_TOKENS=1024
       - CHUNK_SIZE=512
@@ -34,6 +38,7 @@ services:
       - RAG_TOP_K=5
       - RAG_SCORE_THRESHOLD=0.7
       - EMBEDDING_DIMENSIONS=768
+      - EMBEDDING_PROVIDER=openai
       - CORS_ORIGINS=*
       - MAX_UPLOAD_SIZE_MB=50
       - UPLOAD_DIR=/app/uploads
