@@ -90,13 +90,13 @@ export default function LoginPage() {
       {/* ── Left Panel (decorative) ── */}
       <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden flex-col">
         {/* Gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 via-teal-700 to-cyan-800" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#f97316] via-[#ef4444] to-[#7c3aed]" />
         {/* Pattern overlay */}
         <div className="absolute inset-0 opacity-10"
           style={{ backgroundImage: "radial-gradient(circle at 2px 2px, white 1px, transparent 0)", backgroundSize: "32px 32px" }} />
         {/* Glow orbs */}
-        <div className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full bg-emerald-400 blur-3xl opacity-20" />
-        <div className="absolute bottom-1/4 right-1/4 w-48 h-48 rounded-full bg-teal-300 blur-3xl opacity-20" />
+        <div className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full bg-[var(--brand)] blur-3xl opacity-25" />
+        <div className="absolute bottom-1/4 right-1/4 w-48 h-48 rounded-full bg-[var(--accent)] blur-3xl opacity-20" />
 
         <div className="relative z-10 flex flex-col h-full p-12">
           {/* Top logo */}
@@ -145,7 +145,7 @@ export default function LoginPage() {
         {/* Top bar */}
         <div className="flex items-center justify-between p-4 sm:p-6">
           <Link href="/" className="flex items-center gap-2 lg:hidden">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl gradient-brand flex items-center justify-center">
               <Sparkles size={14} className="text-white" />
             </div>
             <span className="font-bold text-[var(--text-1)] text-sm">Nexus</span>

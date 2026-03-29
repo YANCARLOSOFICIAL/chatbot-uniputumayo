@@ -104,7 +104,7 @@ export default function UsersPage() {
                   <tr key={user.id} className="hover:bg-[var(--surface-2)] transition-colors">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--brand)] to-teal-600 flex items-center justify-center text-white text-xs font-bold uppercase shrink-0">
+                        <div className="w-8 h-8 rounded-full gradient-brand flex items-center justify-center text-white text-xs font-bold uppercase shrink-0">
                           {user.display_name?.[0] ?? "U"}
                         </div>
                         <span className="text-sm font-medium text-[var(--text-1)]">{user.display_name || "—"}</span>
