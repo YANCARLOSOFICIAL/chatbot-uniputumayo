@@ -70,10 +70,10 @@ export function ConversationSidebar({
 
   return (
     <>
-      {/* Mobile backdrop */}
+      {/* Backdrop - always when sidebar is open */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden animate-fade-in"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 animate-fade-in"
           onClick={onClose}
           aria-hidden
         />
@@ -83,37 +83,36 @@ export function ConversationSidebar({
         className={[
           "w-[260px] bg-[var(--sb-bg)] flex flex-col h-full border-r border-[var(--sb-border)]",
           "fixed inset-y-0 left-0 z-40 transition-transform duration-300 ease-out",
-          "md:static md:z-auto md:translate-x-0",
           isOpen ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
         aria-label="Panel de conversaciones"
       >
         {/* ── Top: Brand + new chat ── */}
-        <div className="p-3 pt-4 flex-shrink-0">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm ring-2 ring-emerald-500/20">
-                <Sparkles size={14} className="text-white" />
+        <div className="p-3 pt-4 flex-shrink-0 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-gradient-brand flex items-center justify-center shadow-sm glow-pulse">
+                <Sparkles size={13} className="text-white" strokeWidth={1.5} />
               </div>
               <div>
-                <p className="text-sm font-bold text-[var(--sb-text)] leading-none">Nexus</p>
-                <p className="text-[9px] text-[var(--sb-muted)] leading-none mt-0.5">UNIPUTUMAYO</p>
+                <p className="text-xs font-bold text-[var(--sb-text)] leading-tight">Nexus</p>
+                <p className="text-[8px] text-[var(--sb-muted)] leading-tight">UNIPUTUMAYO</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="md:hidden w-8 h-8 rounded-lg flex items-center justify-center text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-all"
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors duration-200"
             >
-              <X size={15} />
+              <X size={14} strokeWidth={1.5} />
             </button>
           </div>
 
-          {/* New conversation — large green pill */}
+          {/* New conversation — premium button */}
           <button
             onClick={() => { onNew(); onClose(); }}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-[var(--brand)] text-white font-semibold text-sm hover:bg-[var(--brand-hover)] active:scale-[.97] transition-all shadow-[0_2px_12px_rgba(16,185,129,.3)]"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-brand text-white font-semibold text-xs hover:shadow-lg active:scale-[0.98] transition-all duration-200"
           >
-            <Plus size={16} strokeWidth={2.5} />
+            <Plus size={14} strokeWidth={2} />
             Nueva conversación
           </button>
         </div>
@@ -121,13 +120,13 @@ export function ConversationSidebar({
         {/* ── Search ── */}
         <div className="px-3 pb-2 flex-shrink-0">
           <div className="relative">
-            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--sb-muted)]" />
+            <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--sb-muted)]" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar conversaciones…"
-              className="w-full pl-7 pr-3 py-1.5 text-xs rounded-lg bg-[var(--sb-hover)] border border-[var(--sb-border)] text-[var(--sb-text)] placeholder-[var(--sb-muted)] outline-none focus:border-[var(--brand)] transition-colors"
+              placeholder="Buscar…"
+              className="w-full pl-7 pr-3 py-1.5 text-xs rounded-lg bg-[var(--sb-hover)] border border-[var(--sb-border)] text-[var(--sb-text)] placeholder-[var(--sb-muted)] outline-none focus:border-[var(--brand)] focus:ring-1 focus:ring-[var(--brand)]/30 transition-all duration-200"
             />
           </div>
         </div>
@@ -156,30 +155,31 @@ export function ConversationSidebar({
                       key={conv.id}
                       onClick={() => handleSelect(conv.id)}
                       className={[
-                        "group w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left mb-0.5 transition-all",
+                        "group w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left mb-0.5 transition-all duration-200",
                         isActive
-                          ? "bg-[var(--sb-active)] text-[var(--sb-text)]"
+                          ? "bg-[var(--brand)]/10 text-[var(--text-1)] border border-[var(--brand)]/30"
                           : "text-[var(--sb-muted)] hover:bg-[var(--sb-hover)] hover:text-[var(--sb-text)]",
                       ].join(" ")}
                     >
                       <MessageSquare
-                        size={13}
+                        size={12}
+                        strokeWidth={1.5}
                         className={`shrink-0 transition-colors ${isActive ? "text-[var(--brand)]" : "text-[var(--sb-border)]"}`}
                       />
-                      <span className="flex-1 text-xs truncate">
-                        {conv.title ?? "Nueva conversación"}
+                      <span className="flex-1 text-xs truncate font-medium">
+                        {conv.title ?? "Conversación"}
                       </span>
                       <button
                         onClick={(e) => handleDeleteClick(e, conv.id)}
                         className={[
-                          "shrink-0 w-5 h-5 rounded flex items-center justify-center transition-all",
+                          "shrink-0 w-5 h-5 rounded flex items-center justify-center transition-all duration-200",
                           isConfirm
-                            ? "opacity-100 text-[var(--brand)] bg-[var(--brand)]/15 scale-110"
-                            : "opacity-0 group-hover:opacity-100 text-[var(--sb-muted)] hover:text-[var(--brand)] hover:bg-[var(--brand)]/10",
+                            ? "opacity-100 text-[var(--error)] bg-[var(--error)]/15 scale-110"
+                            : "opacity-0 group-hover:opacity-100 text-[var(--sb-muted)] hover:text-[var(--error)] hover:bg-[var(--error)]/10",
                         ].join(" ")}
-                        title={isConfirm ? "Confirmar eliminación" : "Eliminar"}
+                        title={isConfirm ? "Confirmar" : "Eliminar"}
                       >
-                        <Trash2 size={11} />
+                        <Trash2 size={10} strokeWidth={1.5} />
                       </button>
                     </button>
                   );
@@ -190,48 +190,62 @@ export function ConversationSidebar({
         </div>
 
         {/* ── Bottom: User profile ── */}
-        <div className="p-3 border-t border-[var(--sb-border)] flex-shrink-0 space-y-1">
+        <div className="p-3 border-t border-[var(--sb-border)] flex-shrink-0 space-y-1.5">
           <Link
             href="/"
-            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-all text-xs"
+            className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors duration-200 text-xs font-medium"
           >
-            <Home size={14} /> Inicio
+            <Home size={13} strokeWidth={1.5} /> Inicio
           </Link>
+
           {user?.role === "admin" && (
             <Link
               href="/admin"
-              className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-all text-xs"
+              className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[var(--sb-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent)]/10 transition-colors duration-200 text-xs font-medium"
             >
-              <Settings size={14} /> Administrador
+              <Settings size={13} strokeWidth={1.5} /> Admin
             </Link>
           )}
 
           {user && (
-            <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-[var(--sb-hover)] transition-all group cursor-default mt-1">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[var(--brand)] to-teal-600 flex items-center justify-center text-white text-xs font-bold uppercase shrink-0">
-                {user.display_name?.[0] ?? "U"}
+            <div className="px-2.5 py-2 rounded-lg hover:bg-[var(--sb-hover)] transition-colors duration-200 group cursor-default mt-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-6 h-6 rounded-lg bg-gradient-brand flex items-center justify-center text-white text-xs font-bold uppercase shrink-0 shadow-sm">
+                  {user.display_name?.[0] ?? "U"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-[var(--sb-text)] truncate">{user.display_name ?? "Usuario"}</p>
+                  <p className="text-[9px] text-[var(--sb-muted)] capitalize">{user.role}</p>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  title="Cerrar sesión"
+                  className="w-6 h-6 rounded-lg flex items-center justify-center text-[var(--sb-muted)] hover:text-[var(--error)] hover:bg-[var(--error)]/10 transition-all duration-200 opacity-0 group-hover:opacity-100"
+                >
+                  <LogOut size={11} strokeWidth={1.5} />
+                </button>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-[var(--sb-text)] truncate">{user.display_name ?? "Usuario"}</p>
-                <p className="text-[10px] text-[var(--sb-muted)] capitalize">{user.role}</p>
-              </div>
-              <button
-                onClick={handleLogout}
-                title="Cerrar sesión"
-                className="w-6 h-6 rounded flex items-center justify-center text-[var(--sb-muted)] hover:text-[var(--brand)] hover:bg-[var(--brand)]/10 transition-all opacity-0 group-hover:opacity-100"
-              >
-                <LogOut size={12} />
-              </button>
             </div>
           )}
+
           {!user && (
-            <Link
-              href="/admin/login"
-              className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-[var(--sb-muted)] hover:text-[var(--brand)] hover:bg-[var(--sb-hover)] transition-all text-xs"
-            >
-              <span>Iniciar sesión</span>
-              <ChevronRight size={12} />
-            </Link>
+            <div className="px-2.5 py-3 rounded-lg bg-[var(--surface-2)]/50 border border-[var(--border)] group cursor-default">
+              <div className="flex items-center gap-2.5 mb-2">
+                <div className="w-7 h-7 rounded-full bg-[var(--text-4)]/20 flex items-center justify-center text-[var(--text-4)] text-xs font-bold uppercase shrink-0">
+                  •
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-[var(--sb-text)] truncate">Invitado</p>
+                  <p className="text-[9px] text-[var(--sb-muted)] leading-tight mt-0.5">Inicia sesión para guardar historial</p>
+                </div>
+              </div>
+              <Link
+                href="/admin/login"
+                className="w-full flex items-center justify-center gap-2 px-2.5 py-1.5 rounded-lg bg-[var(--brand)]/10 border border-[var(--brand)]/30 text-[var(--brand)] hover:bg-[var(--brand)]/20 transition-colors duration-200 text-xs font-medium mt-2"
+              >
+                <span>Iniciar sesión</span>
+              </Link>
+            </div>
           )}
         </div>
       </aside>

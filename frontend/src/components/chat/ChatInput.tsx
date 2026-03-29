@@ -67,12 +67,12 @@ export function ChatInput({
           </div>
         )}
 
-        {/* Main input card */}
+        {/* Main input card — premium styling */}
         <div className={[
-          "relative rounded-2xl border bg-[var(--surface)] transition-all duration-200",
+          "relative rounded-xl border bg-[var(--surface)] transition-all duration-200 backdrop-blur-sm",
           isListening
-            ? "border-red-400 shadow-[0_0_0_3px_rgba(239,68,68,.12)]"
-            : "border-[var(--border)] shadow-[var(--shadow-md)] focus-within:border-[var(--brand)] focus-within:shadow-[var(--shadow-md),0_0_0_3px_rgba(16,185,129,.1)]",
+            ? "border-[var(--error)]/40 shadow-lg shadow-[var(--error)]/10"
+            : "border-[var(--border)] shadow-lg focus-within:border-[var(--brand)] focus-within:shadow-lg focus-within:shadow-[var(--brand)]/20",
         ].join(" ")}>
 
           {/* Textarea */}
@@ -88,7 +88,7 @@ export function ChatInput({
             }
             rows={1}
             disabled={isLoading || isListening}
-            className="w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-sm text-[var(--text-1)] placeholder-[var(--text-4)] outline-none leading-relaxed disabled:opacity-60"
+            className="w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-sm text-[var(--text-1)] placeholder-[var(--text-4)] outline-none leading-relaxed disabled:opacity-50"
             style={{ maxHeight: "160px", overflowY: "auto" }}
             aria-label="Escribe tu mensaje"
           />
@@ -104,20 +104,20 @@ export function ChatInput({
                   disabled={isLoading}
                   aria-label={isListening ? "Detener" : "Usar micrófono"}
                   className={[
-                    "w-8 h-8 rounded-xl flex items-center justify-center transition-all",
+                    "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200",
                     isListening
-                      ? "bg-red-500 text-white shadow-sm scale-105"
-                      : "text-[var(--text-4)] hover:bg-[var(--surface-3)] hover:text-[var(--text-2)]",
+                      ? "bg-[var(--error)] text-white shadow-md scale-105"
+                      : "text-[var(--text-4)] hover:bg-[var(--surface-3)] hover:text-[var(--brand)]",
                     isLoading ? "opacity-40 cursor-not-allowed" : "",
                   ].join(" ")}
                 >
-                  {isListening ? <Square size={13} fill="currentColor" /> : <Mic size={15} />}
+                  {isListening ? <Square size={12} fill="currentColor" strokeWidth={2} /> : <Mic size={14} strokeWidth={1.5} />}
                 </button>
               )}
 
               {/* Model pill */}
-              <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[10px] text-[var(--text-4)]">
-                <Sparkles size={9} className="text-[var(--brand)]" />
+              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--brand)]/10 border border-[var(--brand)]/30 text-[10px] font-medium text-[var(--brand)]">
+                <Sparkles size={10} />
                 Nexus AI
               </div>
             </div>
@@ -125,7 +125,7 @@ export function ChatInput({
             {/* Right: char count + send */}
             <div className="flex items-center gap-2">
               {value.length > 200 && (
-                <span className={`text-[10px] tabular-nums ${value.length > 500 ? "text-[var(--error)]" : "text-[var(--text-4)]"}`}>
+                <span className={`text-[9px] tabular-nums font-medium ${value.length > 500 ? "text-[var(--error)]" : "text-[var(--text-4)]"}`}>
                   {value.length}
                 </span>
               )}
@@ -134,9 +134,9 @@ export function ChatInput({
                 disabled={!canSend}
                 aria-label="Enviar mensaje"
                 className={[
-                  "w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-150",
+                  "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150",
                   canSend
-                    ? "bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)] shadow-sm active:scale-[.92] hover:scale-105"
+                    ? "bg-gradient-brand text-white hover:shadow-lg active:scale-[0.92] hover:scale-105"
                     : "bg-[var(--surface-3)] text-[var(--text-4)] cursor-not-allowed",
                 ].join(" ")}
               >
@@ -146,7 +146,7 @@ export function ChatInput({
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
                 ) : (
-                  <ArrowUp size={15} strokeWidth={2.5} />
+                  <ArrowUp size={14} strokeWidth={2.5} />
                 )}
               </button>
             </div>

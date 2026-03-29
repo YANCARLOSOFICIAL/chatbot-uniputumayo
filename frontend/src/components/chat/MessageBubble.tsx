@@ -26,7 +26,7 @@ function UserMessage({ message }: { message: Message }) {
         )}
 
         {/* Bubble */}
-        <div className="px-4 py-3 rounded-2xl rounded-br-sm bg-[var(--brand)] text-white shadow-sm">
+        <div className="px-4 py-2.5 rounded-xl rounded-br-sm bg-gradient-brand text-white shadow-md">
           <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.content}</p>
         </div>
 
@@ -67,19 +67,19 @@ function BotMessage({ message }: { message: Message }) {
     <div className="flex gap-3 group">
       {/* Avatar */}
       <div className="shrink-0 mt-1">
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-sm ring-2 ring-emerald-500/20">
-          <Sparkles size={14} className="text-white" />
+        <div className="w-9 h-9 rounded-lg bg-gradient-brand flex items-center justify-center shadow-md glow-pulse">
+          <Sparkles size={15} className="text-white" strokeWidth={1.5} />
         </div>
       </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
         {/* Label */}
-        <p className="text-xs font-semibold text-[var(--brand)] mb-2 flex items-center gap-1.5">
+        <p className="text-xs font-bold text-[var(--brand)] mb-2 flex items-center gap-1.5 uppercase tracking-wide">
           Nexus
           {message.input_type === "voice" && (
-            <span className="inline-flex items-center gap-0.5 text-[9px] text-[var(--text-4)] bg-[var(--surface-3)] border border-[var(--border)] px-1.5 py-0.5 rounded-full font-normal">
-              <Mic size={8} /> voz
+            <span className="inline-flex items-center gap-0.5 text-[9px] text-[var(--text-4)] bg-[var(--surface-3)] border border-[var(--border)] px-1.5 py-0.5 rounded-lg font-normal normal-case">
+              <Mic size={8} strokeWidth={1.5} /> voz
             </span>
           )}
           {isStreaming && (
@@ -87,8 +87,8 @@ function BotMessage({ message }: { message: Message }) {
           )}
         </p>
 
-        {/* Card bubble */}
-        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
+        {/* Card bubble — premium styling */}
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl rounded-tl-sm px-4 py-3 shadow-md backdrop-blur-sm">
           <div className="prose-chat text-[var(--text-1)]">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {message.content || " "}
