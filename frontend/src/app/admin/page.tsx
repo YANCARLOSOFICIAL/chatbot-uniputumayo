@@ -79,9 +79,10 @@ export default function AdminPage() {
 
       {/* ── Welcome ── */}
       <div className="relative rounded-2xl overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#f97316] via-[#ef4444] to-[#7c3aed]" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#031928] via-[#09618F] to-[#0a4f75]" />
         <div className="absolute inset-0 opacity-10"
           style={{ backgroundImage: "radial-gradient(circle at 2px 2px, white 1px, transparent 0)", backgroundSize: "24px 24px" }} />
+        <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-[#F7BF00] blur-3xl opacity-10" />
         <div className="relative z-10 p-6 sm:p-8 flex items-center justify-between gap-4">
           <div className="text-white">
             <p className="text-sm text-white/70 mb-1">{greeting},</p>

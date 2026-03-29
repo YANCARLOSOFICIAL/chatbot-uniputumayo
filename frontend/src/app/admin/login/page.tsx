@@ -88,15 +88,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex bg-[var(--bg)]">
 
       {/* ── Left Panel (decorative) ── */}
-      <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden flex-col">
-        {/* Gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#f97316] via-[#ef4444] to-[#7c3aed]" />
-        {/* Pattern overlay */}
-        <div className="absolute inset-0 opacity-10"
-          style={{ backgroundImage: "radial-gradient(circle at 2px 2px, white 1px, transparent 0)", backgroundSize: "32px 32px" }} />
-        {/* Glow orbs */}
-        <div className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full bg-[var(--brand)] blur-3xl opacity-25" />
-        <div className="absolute bottom-1/4 right-1/4 w-48 h-48 rounded-full bg-[var(--accent)] blur-3xl opacity-20" />
+      <div className="campus-panel hidden lg:flex lg:w-[45%] flex-col">
 
         <div className="relative z-10 flex flex-col h-full p-12">
           {/* Top logo */}
