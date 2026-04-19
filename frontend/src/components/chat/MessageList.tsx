@@ -2,12 +2,13 @@
 
 import { useRef, useEffect, useState } from "react";
 import {
-  ChevronDown, Sparkles, GraduationCap, BookOpen,
+  ChevronDown, GraduationCap, BookOpen,
   Clock, FileText, Mic, Globe
 } from "lucide-react";
 import { MessageBubble } from "./MessageBubble";
 import { TypingIndicator } from "./TypingIndicator";
 import { SourceCard } from "./SourceCard";
+import { GuacamayaAvatar } from "./GuacamayaAvatar";
 import type { Message, SourceInfo } from "@/types/chat";
 
 interface MessageListProps {
@@ -44,20 +45,21 @@ const CARDS = [
 /* ── Welcome / empty state ── */
 function WelcomeState({ onSend }: { onSend?: (q: string) => void }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full px-6 py-16 select-none">
-      {/* Icon */}
-      <div className="relative mb-6">
-        <div className="absolute inset-0 bg-[var(--brand)] rounded-2xl blur-2xl opacity-20 animate-pulse" />
-        <div className="relative w-14 h-14 rounded-2xl gradient-brand flex items-center justify-center shadow-lg">
-          <Sparkles size={24} className="text-white" strokeWidth={1.5} />
-        </div>
+    <div className="flex flex-col items-center justify-center h-full px-6 py-12 select-none">
+      {/* Guacamaya grande + halo */}
+      <div className="relative mb-5">
+        {/* Halo pulsante detrás */}
+        <div className="absolute inset-0 rounded-full bg-[var(--brand)] blur-3xl opacity-15 scale-150 animate-pulse" />
+        {/* Anillo exterior */}
+        <div className="absolute inset-[-10px] rounded-full border-2 border-[var(--brand)] opacity-20 pulse-ring" />
+        <GuacamayaAvatar state="idle" size={120} className="relative z-10 drop-shadow-xl" />
       </div>
 
       <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text-1)] text-center mb-2 tracking-tight">
-        ¿En qué puedo ayudarte?
+        ¡Hola! Soy <span className="gradient-text-iup">Nexus</span>
       </h1>
       <p className="text-center text-[var(--text-3)] max-w-sm mb-8 text-sm leading-relaxed">
-        Soy Nexus, asistente de la IUP. Pregúntame sobre programas, admisión, horarios y más.
+        Tu asistente virtual de la IUP. Pregúntame sobre programas académicos, admisión, horarios y más.
       </p>
 
       {/* Quick action cards */}
