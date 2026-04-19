@@ -272,6 +272,32 @@ body {
 @keyframes speak-wave  { 0%,100% { transform: scaleY(1); } 50% { transform: scaleY(1.8); } }
 @keyframes bento-in    { from { opacity: 0; transform: scale(.97) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 
+/* ── Guacamaya keyframes ── */
+@keyframes guacamaya-bob {
+  0%,100% { transform: translateY(0) rotate(0deg); }
+  30%     { transform: translateY(-5px) rotate(1.5deg); }
+  70%     { transform: translateY(-2px) rotate(-1deg); }
+}
+@keyframes guacamaya-listen {
+  0%,100% { transform: rotate(-10deg) translateY(-2px); }
+  50%     { transform: rotate(-6deg) translateY(0); }
+}
+@keyframes guacamaya-think {
+  0%,100% { transform: translateY(0) rotate(0deg); }
+  20%     { transform: translateY(-4px) rotate(4deg); }
+  40%     { transform: translateY(0) rotate(-4deg); }
+  60%     { transform: translateY(-3px) rotate(2deg); }
+  80%     { transform: translateY(0) rotate(-2deg); }
+}
+@keyframes guacamaya-beak-open {
+  0%,100% { transform: scaleY(1) translateY(0); }
+  50%     { transform: scaleY(1.7) translateY(2px); }
+}
+@keyframes guacamaya-crest-sway {
+  0%,100% { transform: rotate(0deg); }
+  50%     { transform: rotate(5deg); }
+}
+
 /* ── Clases de animación ── */
 .animate-fade-in    { animation: fade-in .22s cubic-bezier(0.16,1,0.3,1) both; }
 .animate-fade-up    { animation: fade-up .32s cubic-bezier(0.16,1,0.3,1) both; }
@@ -289,6 +315,27 @@ body {
 .typing-dot-1       { animation: typing-dot 1.2s ease-in-out infinite; }
 .typing-dot-2       { animation: typing-dot 1.2s ease-in-out .15s infinite; }
 .typing-dot-3       { animation: typing-dot 1.2s ease-in-out .30s infinite; }
+
+/* ── Guacamaya avatar classes ── */
+.guacamaya-avatar { display: inline-flex; align-items: center; justify-content: center; }
+.guacamaya-idle   { animation: guacamaya-bob 3.5s ease-in-out infinite; }
+.guacamaya-listen { animation: guacamaya-listen 1.2s ease-in-out infinite; }
+.guacamaya-think  { animation: guacamaya-think 2s ease-in-out infinite; }
+.guacamaya-speak  { animation: guacamaya-bob 0.6s ease-in-out infinite; }
+/* Beak animation when speaking */
+.guacamaya-speak .guacamaya-lower-beak {
+  animation: guacamaya-beak-open 0.28s ease-in-out infinite;
+}
+/* Crest sway when idle */
+.guacamaya-idle .guacamaya-crest {
+  animation: guacamaya-crest-sway 3.5s ease-in-out infinite;
+  transform-origin: 40px 18px;
+}
+/* Eye blink when thinking */
+.guacamaya-think circle[r="5.8"] {
+  animation: avatar-blink 2s ease-in-out infinite;
+  transform-origin: 30px 36px;
+}
 
 /* Cursor de streaming */
 .streaming-cursor {

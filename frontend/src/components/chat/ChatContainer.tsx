@@ -11,6 +11,7 @@ import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { QuickReplies } from "./QuickReplies";
 import { ConversationSidebar } from "./ConversationSidebar";
+import { GuacamayaAvatar, type GuacamayaState } from "./GuacamayaAvatar";
 
 export function ChatContainer() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -106,12 +107,11 @@ export function ChatContainer() {
 
           {/* Bot label */}
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-6 h-6 rounded-lg gradient-brand flex items-center justify-center flex-shrink-0">
-              <svg viewBox="0 0 16 16" fill="none" className="w-3.5 h-3.5 text-white">
-                <path d="M8 1L10 6H15L11 9.5L12.5 14.5L8 11.5L3.5 14.5L5 9.5L1 6H6L8 1Z"
-                  fill="currentColor" />
-              </svg>
-            </div>
+            <GuacamayaAvatar
+              state={(avatarState as GuacamayaState) ?? "idle"}
+              size={28}
+              className="flex-shrink-0"
+            />
             <span className="text-sm font-semibold text-[var(--text-1)] truncate">Nexus</span>
             <span className="hidden sm:inline text-xs text-[var(--text-4)]">· UNIPUTUMAYO</span>
             {/* Online dot */}

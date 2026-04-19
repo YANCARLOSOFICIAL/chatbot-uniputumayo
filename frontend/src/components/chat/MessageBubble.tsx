@@ -5,6 +5,7 @@ import { Check, Copy, Mic, Clock, Zap } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Message } from "@/types/chat";
+import { GuacamayaAvatar } from "./GuacamayaAvatar";
 
 interface MessageBubbleProps {
   message: Message;
@@ -52,14 +53,13 @@ function BotMessage({ message }: { message: Message }) {
 
   return (
     <div className="flex gap-3 group">
-      {/* Small avatar icon */}
+      {/* Guacamaya avatar */}
       <div className="shrink-0 mt-0.5">
-        <div className="w-7 h-7 rounded-lg gradient-brand flex items-center justify-center shadow-sm">
-          <svg viewBox="0 0 16 16" fill="none" className="w-3 h-3 text-white">
-            <path d="M8 1L10 6H15L11 9.5L12.5 14.5L8 11.5L3.5 14.5L5 9.5L1 6H6L8 1Z"
-              fill="currentColor" />
-          </svg>
-        </div>
+        <GuacamayaAvatar
+          state={isStreaming ? "speaking" : "idle"}
+          size={32}
+          className="drop-shadow-sm"
+        />
       </div>
 
       {/* Content */}
