@@ -71,65 +71,63 @@ export function ConversationSidebar({
   return (
     <aside
       className={[
-        "w-[240px] flex flex-col h-full",
+        "w-[220px] flex flex-col h-full",
         "bg-[var(--sb-bg)] border-r border-[var(--sb-border)]",
-        /* Desktop: always visible, in document flow */
         "md:relative md:translate-x-0 md:flex",
-        /* Mobile: fixed overlay, slide in/out */
-        "fixed inset-y-0 left-0 z-40 transition-transform duration-300 ease-out",
+        "fixed inset-y-0 left-0 z-40 transition-transform duration-200 ease-out",
         isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
       ].join(" ")}
       aria-label="Conversaciones"
     >
-      {/* ── Header ── */}
-      <div className="px-3 pt-4 pb-3 flex-shrink-0">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md gradient-brand flex items-center justify-center">
-              <Sparkles size={11} className="text-white" strokeWidth={2} />
+      {/* Header */}
+      <div className="px-3 pt-3.5 pb-2.5 flex-shrink-0">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-1.5">
+            <div className="w-5 h-5 rounded bg-[var(--brand)] flex items-center justify-center">
+              <Sparkles size={10} className="text-white" strokeWidth={2} />
             </div>
-            <span className="text-xs font-bold text-[var(--sb-text)] tracking-tight">NEXUS</span>
+            <span className="text-[11px] font-bold text-[var(--sb-text)] tracking-tight">NEXUS</span>
           </div>
           <button
             onClick={() => { onNew(); onClose(); }}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors"
+            className="w-6 h-6 rounded-md flex items-center justify-center text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors"
             title="Nueva conversación"
           >
-            <PenSquare size={14} strokeWidth={1.5} />
+            <PenSquare size={12} strokeWidth={1.5} />
           </button>
         </div>
 
         {/* Search */}
         <div className="relative">
-          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--sb-muted)]" />
+          <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--sb-muted)]" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar…"
-            className="w-full pl-7 pr-3 py-1.5 text-xs rounded-lg bg-[var(--sb-hover)] border border-[var(--sb-border)] text-[var(--sb-text)] placeholder-[var(--sb-muted)] outline-none focus:border-[var(--brand)]/40 transition-colors"
+            className="w-full pl-6 pr-2.5 py-1.5 text-[11px] rounded-md bg-[var(--sb-hover)] border border-[var(--sb-border)] text-[var(--sb-text)] placeholder-[var(--sb-muted)] outline-none focus:border-[var(--brand)]/30 transition-colors"
           />
         </div>
       </div>
 
-      {/* ── Conversations list ── */}
-      <div className="flex-1 overflow-y-auto sb-scroll px-2">
+      {/* Conversations list */}
+      <div className="flex-1 overflow-y-auto sb-scroll px-1.5">
         {conversations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-            <div className="w-10 h-10 rounded-xl bg-[var(--sb-hover)] flex items-center justify-center mb-3">
-              <MessageSquare size={18} className="text-[var(--sb-muted)]" strokeWidth={1.5} />
+          <div className="flex flex-col items-center justify-center py-10 text-center px-4">
+            <div className="w-8 h-8 rounded-lg bg-[var(--sb-hover)] flex items-center justify-center mb-2.5">
+              <MessageSquare size={15} className="text-[var(--sb-muted)]" strokeWidth={1.5} />
             </div>
-            <p className="text-xs text-[var(--sb-muted)] font-medium">Sin conversaciones</p>
-            <p className="text-[10px] text-[var(--sb-muted)] opacity-50 mt-0.5">
+            <p className="text-[11px] text-[var(--sb-muted)] font-medium">Sin conversaciones</p>
+            <p className="text-[9px] text-[var(--sb-muted)] opacity-50 mt-0.5">
               Empieza una nueva arriba
             </p>
           </div>
         ) : grouped.length === 0 ? (
-          <p className="text-xs text-[var(--sb-muted)] text-center py-8">Sin resultados</p>
+          <p className="text-[11px] text-[var(--sb-muted)] text-center py-8">Sin resultados</p>
         ) : (
           grouped.map(([label, items]) => (
-            <div key={label} className="mb-5">
-              <p className="text-[9px] font-semibold text-[var(--sb-muted)] uppercase tracking-widest px-2 py-1.5">
+            <div key={label} className="mb-4">
+              <p className="text-[9px] font-semibold text-[var(--sb-muted)] uppercase tracking-wider px-2 py-1">
                 {label}
               </p>
               {items.map((conv) => {
@@ -140,29 +138,29 @@ export function ConversationSidebar({
                     key={conv.id}
                     onClick={() => handleSelect(conv.id)}
                     className={[
-                      "group w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left mb-0.5 transition-all duration-150 relative",
+                      "group w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-left mb-0.5 transition-all duration-100 relative",
                       isActive
-                        ? "bg-[var(--brand)]/10 text-[var(--sb-text)] active-left-border"
+                        ? "bg-[var(--brand)]/8 text-[var(--sb-text)] active-left-border"
                         : "text-[var(--sb-muted)] hover:bg-[var(--sb-hover)] hover:text-[var(--sb-text)]",
                     ].join(" ")}
                   >
                     <MessageSquare
-                      size={11}
+                      size={10}
                       strokeWidth={1.5}
                       className={`shrink-0 ${isActive ? "text-[var(--brand)]" : "text-[var(--sb-muted)]"}`}
                     />
-                    <span className="flex-1 text-xs truncate">{conv.title ?? "Conversación"}</span>
+                    <span className="flex-1 text-[11px] truncate">{conv.title ?? "Conversación"}</span>
                     <button
                       onClick={(e) => handleDeleteClick(e, conv.id)}
                       className={[
-                        "shrink-0 w-5 h-5 rounded flex items-center justify-center transition-all duration-150",
+                        "shrink-0 w-4 h-4 rounded flex items-center justify-center transition-all duration-100",
                         isConfirm
-                          ? "opacity-100 text-[var(--error)] bg-[var(--error)]/15"
+                          ? "opacity-100 text-[var(--error)] bg-[var(--error)]/12"
                           : "opacity-0 group-hover:opacity-100 text-[var(--sb-muted)] hover:text-[var(--error)]",
                       ].join(" ")}
                       title={isConfirm ? "Confirmar eliminación" : "Eliminar"}
                     >
-                      <Trash2 size={9} strokeWidth={1.5} />
+                      <Trash2 size={8} strokeWidth={1.5} />
                     </button>
                   </button>
                 );
@@ -172,46 +170,46 @@ export function ConversationSidebar({
         )}
       </div>
 
-      {/* ── Footer ── */}
-      <div className="p-2 border-t border-[var(--sb-border)] flex-shrink-0 space-y-0.5">
+      {/* Footer */}
+      <div className="p-1.5 border-t border-[var(--sb-border)] flex-shrink-0 space-y-0.5">
         <Link href="/"
-          className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors text-xs"
+          className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors text-[11px]"
         >
-          <Home size={12} strokeWidth={1.5} /> Inicio
+          <Home size={11} strokeWidth={1.5} /> Inicio
         </Link>
 
         {user?.role === "admin" && (
           <Link href="/admin"
-            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors text-xs"
+            className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors text-[11px]"
           >
-            <Settings size={12} strokeWidth={1.5} /> Admin
+            <Settings size={11} strokeWidth={1.5} /> Admin
           </Link>
         )}
 
-        <div className="pt-1 mt-1 border-t border-[var(--sb-border)]">
+        <div className="pt-1 mt-0.5 border-t border-[var(--sb-border)]">
           {user ? (
-            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg group cursor-default">
-              <div className="w-6 h-6 rounded-full gradient-brand flex items-center justify-center text-white text-[10px] font-bold uppercase shrink-0">
+            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md group cursor-default">
+              <div className="w-5 h-5 rounded-full gradient-brand flex items-center justify-center text-white text-[8px] font-bold uppercase shrink-0">
                 {user.display_name?.[0] ?? "U"}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-[var(--sb-text)] truncate leading-tight">
+                <p className="text-[11px] font-medium text-[var(--sb-text)] truncate leading-tight">
                   {user.display_name ?? "Usuario"}
                 </p>
-                <p className="text-[9px] text-[var(--sb-muted)] capitalize">{user.role}</p>
+                <p className="text-[8px] text-[var(--sb-muted)] capitalize">{user.role}</p>
               </div>
               <button
                 onClick={handleLogout}
-                className="w-5 h-5 rounded flex items-center justify-center text-[var(--sb-muted)] hover:text-[var(--error)] transition-colors opacity-0 group-hover:opacity-100"
+                className="w-4 h-4 rounded flex items-center justify-center text-[var(--sb-muted)] hover:text-[var(--error)] transition-colors opacity-0 group-hover:opacity-100"
                 title="Cerrar sesión"
               >
-                <LogOut size={11} strokeWidth={1.5} />
+                <LogOut size={9} strokeWidth={1.5} />
               </button>
             </div>
           ) : (
             <Link
               href="/admin/login"
-              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--brand)]/10 border border-[var(--brand)]/20 text-[var(--brand)] hover:bg-[var(--brand)]/15 transition-colors text-xs font-medium"
+              className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-md bg-[var(--brand)]/8 border border-[var(--brand)]/15 text-[var(--brand)] hover:bg-[var(--brand)]/12 transition-colors text-[11px] font-medium"
             >
               Iniciar sesión
             </Link>

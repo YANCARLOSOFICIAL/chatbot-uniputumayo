@@ -52,24 +52,24 @@ export function ChatInput({
   const canSend = value.trim().length > 0 && !isLoading && !isListening;
 
   return (
-    <div className="flex-shrink-0 px-4 pb-5 pt-2 bg-[var(--bg)]">
+    <div className="flex-shrink-0 px-3 pb-4 pt-2 bg-[var(--bg)]">
       <div className="max-w-2xl mx-auto">
 
-        {/* Listening pill */}
+        {/* Listening indicator */}
         {isListening && (
           <div className="flex items-center justify-center gap-2 mb-2">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
             </span>
-            <span className="text-xs text-red-500 font-medium">Escuchando…</span>
+            <span className="text-[11px] text-red-500 font-medium">Escuchando…</span>
           </div>
         )}
 
         {/* Input card */}
         <div className={[
           "chat-input-area transition-all",
-          isListening ? "border-red-400/40 shadow-lg shadow-red-500/8" : "",
+          isListening ? "border-red-400/30 shadow-lg shadow-red-500/5" : "",
         ].join(" ")}>
           <textarea
             ref={textareaRef}
@@ -83,12 +83,12 @@ export function ChatInput({
             }
             rows={1}
             disabled={isLoading || isListening}
-            className="w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-sm text-[var(--text-1)] placeholder-[var(--text-4)] outline-none leading-relaxed disabled:opacity-40"
+            className="w-full resize-none bg-transparent px-4 pt-3 pb-1 text-sm text-[var(--text-1)] placeholder-[var(--text-3)] outline-none leading-relaxed disabled:opacity-40"
             style={{ maxHeight: "140px", overflowY: "auto" }}
             aria-label="Mensaje"
           />
 
-          <div className="flex items-center justify-between px-3 pb-3 pt-1 gap-2">
+          <div className="flex items-center justify-between px-3 pb-2.5 pt-0.5 gap-2">
             {/* Left: voice */}
             <div className="flex items-center gap-1">
               {isVoiceSupported && (
@@ -101,27 +101,22 @@ export function ChatInput({
                     "w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-150",
                     isListening
                       ? "bg-red-500 text-white shadow-sm"
-                      : "text-[var(--text-4)] hover:text-[var(--brand)] hover:bg-[var(--surface-3)]",
+                      : "text-[var(--text-3)] hover:text-[var(--brand)] hover:bg-[var(--surface-3)]",
                     isLoading ? "opacity-30 cursor-not-allowed" : "",
                   ].join(" ")}
                 >
                   {isListening
-                    ? <Square size={11} fill="currentColor" strokeWidth={2} />
+                    ? <Square size={10} fill="currentColor" strokeWidth={2} />
                     : <Mic size={13} strokeWidth={1.5} />
                   }
                 </button>
               )}
-
-              {/* Model badge */}
-              <span className="hidden sm:inline text-[10px] text-[var(--text-4)] px-2 py-0.5 rounded-full border border-[var(--border)] bg-[var(--surface-2)]">
-                Nexus AI
-              </span>
             </div>
 
             {/* Right: counter + send */}
             <div className="flex items-center gap-2">
               {value.length > 200 && (
-                <span className={`text-[9px] tabular-nums ${value.length > 500 ? "text-[var(--error)]" : "text-[var(--text-4)]"}`}>
+                <span className={`text-[9px] tabular-nums ${value.length > 500 ? "text-[var(--error)]" : "text-[var(--text-3)]"}`}>
                   {value.length}
                 </span>
               )}
@@ -132,8 +127,8 @@ export function ChatInput({
                 className={[
                   "w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-150",
                   canSend
-                    ? "gradient-brand text-white hover:scale-105 hover:shadow-md active:scale-95"
-                    : "bg-[var(--surface-3)] text-[var(--text-4)] cursor-not-allowed",
+                    ? "bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)] active:scale-95"
+                    : "bg-[var(--surface-3)] text-[var(--text-3)] cursor-not-allowed",
                 ].join(" ")}
               >
                 {isLoading ? (
@@ -149,7 +144,7 @@ export function ChatInput({
           </div>
         </div>
 
-        <p className="text-center text-[10px] text-[var(--text-4)] mt-2">
+        <p className="text-center text-[10px] text-[var(--text-3)] mt-2 opacity-70">
           Nexus puede cometer errores — verifica la información importante.
         </p>
       </div>

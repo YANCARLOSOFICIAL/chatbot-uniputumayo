@@ -45,34 +45,30 @@ const CARDS = [
 /* ── Welcome / empty state ── */
 function WelcomeState({ onSend }: { onSend?: (q: string) => void }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full px-6 py-12 select-none">
-      {/* Guacamaya grande + halo */}
-      <div className="relative mb-5">
-        {/* Halo pulsante detrás */}
-        <div className="absolute inset-0 rounded-full bg-[var(--brand)] blur-3xl opacity-15 scale-150 animate-pulse" />
-        {/* Anillo exterior */}
-        <div className="absolute inset-[-10px] rounded-full border-2 border-[var(--brand)] opacity-20 pulse-ring" />
-        <GuacamayaAvatar state="idle" size={120} className="relative z-10 drop-shadow-xl" />
+    <div className="flex flex-col items-center justify-center h-full px-6 py-16 select-none">
+      {/* Guacamaya — modest size, no halo effects */}
+      <div className="mb-6">
+        <GuacamayaAvatar state="idle" size={72} className="drop-shadow-lg" />
       </div>
 
-      <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text-1)] text-center mb-2 tracking-tight">
-        ¡Hola! Soy <span className="gradient-text-iup">Nexus</span>
+      <h1 className="text-display text-xl sm:text-2xl text-[var(--text-1)] text-center mb-2">
+        Pregúntale a <span className="gradient-text-iup">Nexus</span>
       </h1>
-      <p className="text-center text-[var(--text-3)] max-w-sm mb-8 text-sm leading-relaxed">
-        Tu asistente virtual de la IUP. Pregúntame sobre programas académicos, admisión, horarios y más.
+      <p className="text-center text-[var(--text-2)] max-w-sm mb-8 text-sm leading-relaxed">
+        Información sobre programas, admisión, horarios y más de la IUP.
       </p>
 
-      {/* Quick action cards */}
+      {/* Quick action chips — horizontal row */}
       {onSend && (
-        <div className="w-full max-w-lg grid grid-cols-2 sm:grid-cols-4 gap-2 mb-8">
+        <div className="flex flex-wrap justify-center gap-2 mb-8 max-w-lg">
           {CARDS.map(({ icon: Icon, label, query }) => (
             <button
               key={label}
               onClick={() => onSend(query)}
-              className="flex flex-col items-center gap-2 p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--brand)] hover:bg-[var(--brand-dim)] hover:-translate-y-0.5 transition-all duration-200 group text-center"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--brand)] hover:text-[var(--brand)] active:scale-[.97] transition-all text-[13px] text-[var(--text-2)]"
             >
-              <Icon size={18} className="text-[var(--brand)] group-hover:scale-110 transition-transform" strokeWidth={1.5} />
-              <span className="text-xs font-medium text-[var(--text-2)]">{label}</span>
+              <Icon size={14} strokeWidth={1.5} />
+              <span>{label}</span>
             </button>
           ))}
         </div>
@@ -87,9 +83,9 @@ function WelcomeState({ onSend }: { onSend?: (q: string) => void }) {
         ].map(({ icon: Icon, label }) => (
           <div
             key={label}
-            className="flex items-center gap-1.5 text-[11px] text-[var(--text-4)] px-3 py-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)]"
+            className="flex items-center gap-1 text-[11px] text-[var(--text-3)] px-2.5 py-1 rounded-full border border-[var(--border)] bg-[var(--surface)]"
           >
-            <Icon size={11} strokeWidth={1.5} /> {label}
+            <Icon size={10} strokeWidth={1.5} /> {label}
           </div>
         ))}
       </div>
@@ -140,7 +136,7 @@ export function MessageList({
         {isEmpty ? (
           <WelcomeState onSend={onQuickReply} />
         ) : (
-          <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+          <div className="max-w-2xl mx-auto px-4 sm:px-5 py-6 space-y-5">
             {messages.map((msg, i) => (
               <div
                 key={msg.id}
@@ -152,13 +148,13 @@ export function MessageList({
             ))}
 
             {sources.length > 0 && (
-              <div className="pl-10">
+              <div className="pl-8">
                 <SourceCard sources={sources} />
               </div>
             )}
 
             {isLoading && <TypingIndicator />}
-            <div className="h-4" />
+            <div className="h-3" />
           </div>
         )}
       </div>
@@ -167,10 +163,10 @@ export function MessageList({
       {showBtn && (
         <button
           onClick={() => scrollToBottom()}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-md)] text-xs text-[var(--text-3)] hover:text-[var(--brand)] hover:border-[var(--brand)] transition-all animate-fade-up"
+          className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 px-3 py-1.5 rounded-full bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-md)] text-[12px] text-[var(--text-2)] hover:text-[var(--brand)] hover:border-[var(--brand)] transition-all animate-fade-up"
           aria-label="Ir al final"
         >
-          <ChevronDown size={13} /> Ir al final
+          <ChevronDown size={12} /> Ir al final
         </button>
       )}
     </div>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   FileText, Settings, Users, Activity, CheckCircle2, XCircle,
-  Clock, Zap, ArrowRight, TrendingUp, MessageSquare
+  Clock, ArrowRight, MessageSquare
 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { getUser } from "@/lib/auth";
@@ -14,27 +14,18 @@ interface HealthData {
   services: Record<string, { status: string; latency_ms?: number }>;
 }
 
-function StatusDot({ ok }: { ok: boolean }) {
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${ok ? "text-[var(--success)]" : "text-[var(--error)]"}`}>
-      <span className={`w-2 h-2 rounded-full ${ok ? "bg-[var(--success)]" : "bg-[var(--error)]"} ${ok ? "animate-pulse" : ""}`} />
-      {ok ? "Activo" : "Error"}
-    </span>
-  );
-}
-
 function StatCard({ icon: Icon, label, value, sub, color }: {
   icon: React.ElementType; label: string; value: string; sub?: string; color: string;
 }) {
   return (
-    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 flex items-center gap-4 shadow-[var(--shadow-xs)]">
-      <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0" style={{ background: color + "20", color }}>
-        <Icon size={22} />
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 flex items-center gap-3">
+      <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: color + "14", color }}>
+        <Icon size={18} />
       </div>
       <div>
-        <p className="text-xs text-[var(--text-3)] mb-0.5">{label}</p>
-        <p className="text-xl font-bold text-[var(--text-1)]">{value}</p>
-        {sub && <p className="text-xs text-[var(--text-4)] mt-0.5">{sub}</p>}
+        <p className="text-[11px] text-[var(--text-3)] mb-0.5">{label}</p>
+        <p className="text-lg font-bold text-[var(--text-1)] leading-tight">{value}</p>
+        {sub && <p className="text-[10px] text-[var(--text-3)] mt-0.5">{sub}</p>}
       </div>
     </div>
   );
@@ -45,15 +36,15 @@ function NavCard({ href, icon: Icon, title, description, color }: {
 }) {
   return (
     <Link href={href}
-      className="group bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-6 hover:border-[var(--brand)] hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5 transition-all card-hover">
-      <div className="flex items-start justify-between mb-4">
-        <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: color + "20", color }}>
-          <Icon size={22} />
+      className="group bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 hover:border-[var(--border-2)] hover:shadow-[var(--shadow-md)] transition-all card-interactive">
+      <div className="flex items-start justify-between mb-3">
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: color + "14", color }}>
+          <Icon size={20} />
         </div>
-        <ArrowRight size={16} className="text-[var(--text-4)] group-hover:text-[var(--brand)] group-hover:translate-x-0.5 transition-all" />
+        <ArrowRight size={14} className="text-[var(--text-3)] opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
-      <h3 className="font-semibold text-[var(--text-1)] mb-1.5">{title}</h3>
-      <p className="text-sm text-[var(--text-3)] leading-relaxed">{description}</p>
+      <h3 className="font-semibold text-[var(--text-1)] text-sm mb-1">{title}</h3>
+      <p className="text-[13px] text-[var(--text-2)] leading-relaxed">{description}</p>
     </Link>
   );
 }
@@ -77,113 +68,104 @@ export default function AdminPage() {
   return (
     <div className="space-y-6">
 
-      {/* ── Welcome ── */}
-      <div className="relative rounded-2xl overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#031928] via-[#09618F] to-[#0a4f75]" />
-        <div className="absolute inset-0 opacity-10"
-          style={{ backgroundImage: "radial-gradient(circle at 2px 2px, white 1px, transparent 0)", backgroundSize: "24px 24px" }} />
-        <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-[#F7BF00] blur-3xl opacity-10" />
-        <div className="relative z-10 p-6 sm:p-8 flex items-center justify-between gap-4">
+      {/* Welcome — solid brand gradient, no dot patterns */}
+      <div className="rounded-xl overflow-hidden bg-gradient-to-r from-[#031928] via-[#09618F] to-[#0a5f88]">
+        <div className="p-5 sm:p-6 flex items-center justify-between gap-4">
           <div className="text-white">
-            <p className="text-sm text-white/70 mb-1">{greeting},</p>
-            <h1 className="text-2xl sm:text-3xl font-bold">
+            <p className="text-[13px] text-white/60 mb-0.5">{greeting},</p>
+            <h1 className="text-xl sm:text-2xl font-bold leading-tight">
               {user?.display_name || "Administrador"}
             </h1>
-            <p className="text-white/70 text-sm mt-1">Panel de control de Nexus</p>
-          </div>
-          <div className="hidden sm:flex w-16 h-16 rounded-2xl bg-white/10 border border-white/20 items-center justify-center">
-            <Activity size={28} className="text-white" />
+            <p className="text-white/50 text-[13px] mt-0.5">Panel de control de Nexus</p>
           </div>
         </div>
       </div>
 
-      {/* ── Quick stats ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Activity}      label="Estado sistema" value="Activo"    sub="Operando normalmente" color="#10b981" />
-        <StatCard icon={MessageSquare} label="Conversaciones" value="—"         sub="Hoy"                  color="#3b82f6" />
-        <StatCard icon={FileText}      label="Documentos"     value="—"         sub="En base de datos"     color="#f59e0b" />
-        <StatCard icon={TrendingUp}    label="Precisión RAG"  value="—"         sub="Promedio"             color="#8b5cf6" />
+      {/* Quick stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard icon={Activity}      label="Estado sistema" value={health?.status === "healthy" ? "Activo" : "—"} sub="Verificado ahora" color="#30a46c" />
+        <StatCard icon={MessageSquare} label="Conversaciones" value="—" sub="Sin datos aún" color="#0091ff" />
+        <StatCard icon={FileText}      label="Documentos"     value="—" sub="Sin datos aún" color="#e5a000" />
+        <StatCard icon={Users}         label="Usuarios"       value="—" sub="Sin datos aún" color="#8b5cf6" />
       </div>
 
-      {/* ── System health ── */}
-      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-5 shadow-[var(--shadow-xs)]">
-        <h2 className="text-sm font-semibold text-[var(--text-1)] mb-4 flex items-center gap-2">
-          <Activity size={15} className="text-[var(--brand)]" />
+      {/* System health */}
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
+        <h2 className="text-[13px] font-semibold text-[var(--text-1)] mb-3 flex items-center gap-1.5">
+          <Activity size={13} className="text-[var(--brand)]" />
           Estado del sistema
         </h2>
 
         {loadingHealth ? (
           <div className="flex gap-2">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-9 w-28 rounded-lg shimmer" />
+              <div key={i} className="h-8 w-24 rounded-md shimmer" />
             ))}
           </div>
         ) : health ? (
-          <div className="flex flex-wrap gap-2.5">
-            <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-[var(--surface-3)] border border-[var(--border)]">
-              {health.status === "healthy" ? <CheckCircle2 size={14} className="text-[var(--success)]" /> : <XCircle size={14} className="text-[var(--error)]" />}
-              <span className="text-xs font-medium text-[var(--text-1)]">Sistema: {health.status}</span>
+          <div className="flex flex-wrap gap-2">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)]">
+              {health.status === "healthy" ? <CheckCircle2 size={12} className="text-[var(--success)]" /> : <XCircle size={12} className="text-[var(--error)]" />}
+              <span className="text-[11px] font-medium text-[var(--text-1)]">Sistema: {health.status}</span>
             </div>
             {Object.entries(health.services).map(([name, svc]) => (
-              <div key={name} className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-[var(--surface-3)] border border-[var(--border)]">
+              <div key={name} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)]">
                 {svc.status === "healthy"
-                  ? <CheckCircle2 size={14} className="text-[var(--success)]" />
-                  : <XCircle size={14} className="text-[var(--error)]" />
+                  ? <CheckCircle2 size={12} className="text-[var(--success)]" />
+                  : <XCircle size={12} className="text-[var(--error)]" />
                 }
-                <span className="text-xs font-medium text-[var(--text-1)] capitalize">{name}</span>
+                <span className="text-[11px] font-medium text-[var(--text-1)] capitalize">{name}</span>
                 {svc.latency_ms != null && (
-                  <span className="flex items-center gap-1 text-[10px] text-[var(--text-4)]">
-                    <Clock size={10} /> {svc.latency_ms}ms
+                  <span className="flex items-center gap-0.5 text-[10px] text-[var(--text-3)]">
+                    <Clock size={9} /> {svc.latency_ms}ms
                   </span>
                 )}
               </div>
             ))}
           </div>
         ) : (
-          <div className="flex items-center gap-2 text-sm text-[var(--text-3)]">
-            <XCircle size={14} className="text-[var(--error)]" />
+          <div className="flex items-center gap-1.5 text-[13px] text-[var(--text-2)]">
+            <XCircle size={13} className="text-[var(--error)]" />
             No se pudo conectar con el servidor
           </div>
         )}
       </div>
 
-      {/* ── Navigation ── */}
+      {/* Navigation */}
       <div>
-        <h2 className="text-sm font-semibold text-[var(--text-1)] mb-4">Módulos de administración</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <h2 className="text-[13px] font-semibold text-[var(--text-1)] mb-3">Módulos</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <NavCard
             href="/admin/documents"
             icon={FileText}
-            title="Gestión de Documentos"
-            description="Subir y administrar documentos académicos para la base de conocimientos del chatbot."
-            color="#3b82f6"
+            title="Documentos"
+            description="Subir y administrar documentos académicos para la base de conocimientos."
+            color="#0091ff"
           />
           <NavCard
             href="/admin/config"
             icon={Settings}
             title="Configuración IA"
-            description="Configurar el proveedor de IA, modelos de lenguaje, embeddings y API keys."
+            description="Configurar proveedores de IA, modelos de lenguaje y API keys."
             color="#8b5cf6"
           />
           <NavCard
             href="/admin/users"
             icon={Users}
-            title="Gestión de Usuarios"
-            description="Ver usuarios registrados, gestionar roles y permisos de acceso al sistema."
-            color="#10b981"
+            title="Usuarios"
+            description="Gestionar usuarios registrados, roles y permisos de acceso."
+            color="#30a46c"
           />
         </div>
       </div>
 
-      {/* ── Quick links ── */}
-      <div className="flex flex-wrap gap-2">
-        <Link href="/chat"
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm text-[var(--text-2)] bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--brand)] hover:text-[var(--brand)] transition-all">
-          <MessageSquare size={14} /> Ir al chat
+      {/* Quick links — inline */}
+      <div className="flex gap-3 text-[13px]">
+        <Link href="/chat" className="text-[var(--text-2)] hover:text-[var(--brand)] transition-colors flex items-center gap-1">
+          <MessageSquare size={12} /> Ir al chat
         </Link>
-        <Link href="/"
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm text-[var(--text-2)] bg-[var(--surface)] border border-[var(--border)] hover:border-[var(--brand)] hover:text-[var(--brand)] transition-all">
-          <Zap size={14} /> Página principal
+        <Link href="/" className="text-[var(--text-2)] hover:text-[var(--brand)] transition-colors">
+          Página principal
         </Link>
       </div>
     </div>
