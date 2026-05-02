@@ -75,9 +75,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy with docker compose
+      - name: Cleanup old containers
         run: |
           docker compose -f docker-compose.prod.yml down --remove-orphans || true
+          docker rm -f $(docker ps -aq --filter "name=chatbotuniputumayo") 2>/dev/null || true
+          docker rm -f $(docker ps -aq --filter "name=iup-chatbot") 2>/dev/null || true
+
+      - name: Deploy with docker compose
+        run: |
           docker compose -f docker-compose.prod.yml pull
           docker compose -f docker-compose.prod.yml up -d
 
