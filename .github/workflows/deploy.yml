@@ -77,9 +77,57 @@ jobs:
 
       - name: Deploy with docker compose
         run: |
+          docker compose -f docker-compose.prod.yml down --remove-orphans || true
           docker compose -f docker-compose.prod.yml pull
           docker compose -f docker-compose.prod.yml up -d
 
+      - name: Wait for Ollama to be ready
+        run: |
+          echo "Esperando a que Ollama esté listo..."
+          for i in $(seq 1 30); do
+            if docker exec iup-chatbot-ollama ollama list > /dev/null 2>&1; then
+              echo "Ollama está listo!"
+              break
+            fi
+            echo "Intento $i/30... esperando 5s"
+            sleep 5
+          done
+
+      - name: Pull Ollama models (si no existen)
+        run: |
+          echo "Verificando modelos de Ollama..."
+
+          # Modelo de chat
+          CHAT_MODEL="${OLLAMA_DEFAULT_MODEL:-qwen2.5:7b}"
+          if ! docker exec iup-chatbot-ollama ollama list | grep -q "$CHAT_MODEL"; then
+            echo "Descargando modelo de chat: $CHAT_MODEL"
+            docker exec iup-chatbot-ollama ollama pull "$CHAT_MODEL"
+          else
+            echo "Modelo de chat ya existe: $CHAT_MODEL"
+          fi
+
+          # Modelo de embeddings
+          EMBED_MODEL="${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}"
+          if ! docker exec iup-chatbot-ollama ollama list | grep -q "$EMBED_MODEL"; then
+            echo "Descargando modelo de embeddings: $EMBED_MODEL"
+            docker exec iup-chatbot-ollama ollama pull "$EMBED_MODEL"
+          else
+            echo "Modelo de embeddings ya existe: $EMBED_MODEL"
+          fi
+
+          # Modelo de visión
+          VISION_MODEL="${OLLAMA_VISION_MODEL:-gemma3:4b}"
+          if ! docker exec iup-chatbot-ollama ollama list | grep -q "$VISION_MODEL"; then
+            echo "Descargando modelo de visión: $VISION_MODEL"
+            docker exec iup-chatbot-ollama ollama pull "$VISION_MODEL"
+          else
+            echo "Modelo de visión ya existe: $VISION_MODEL"
+          fi
+
+          echo "Modelos disponibles:"
+          docker exec iup-chatbot-ollama ollama list
+
       - name: Verify containers are running
         run: |
-          docker ps --filter "name=chatbotuniputumayo" --format "table {{.Names}}\t{{.Status}}"
+          echo "Estado de los contenedores:"
+          docker ps --filter "name=iup-chatbot" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
