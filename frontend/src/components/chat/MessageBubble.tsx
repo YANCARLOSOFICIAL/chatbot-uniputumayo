@@ -11,7 +11,6 @@ interface MessageBubbleProps {
   message: Message;
 }
 
-/* ─── User bubble ─── */
 function UserMessage({ message }: { message: Message }) {
   const timeStr = new Date(message.created_at).toLocaleTimeString("es-CO", {
     hour: "2-digit", minute: "2-digit",
@@ -25,7 +24,7 @@ function UserMessage({ message }: { message: Message }) {
             <Mic size={9} /> voz
           </span>
         )}
-        <div className="msg-user px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm">
+        <div className="msg-user px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words">
           {message.content}
         </div>
         <span className="text-[9px] text-[var(--text-3)] opacity-0 group-hover:opacity-100 transition-opacity">
@@ -36,7 +35,6 @@ function UserMessage({ message }: { message: Message }) {
   );
 }
 
-/* ─── Bot message — flat, no card ─── */
 function BotMessage({ message }: { message: Message }) {
   const [copied, setCopied] = useState(false);
   const timeStr = new Date(message.created_at).toLocaleTimeString("es-CO", {
@@ -52,28 +50,27 @@ function BotMessage({ message }: { message: Message }) {
   };
 
   return (
-    <div className="flex gap-2.5 group">
-      {/* Avatar — compact */}
-      <div className="shrink-0 mt-0.5">
+    <div className="flex gap-3 group" style={{ alignItems: "flex-start" }}>
+      <div className="shrink-0" style={{ marginTop: 2 }}>
         <GuacamayaAvatar
           state={isStreaming ? "speaking" : "idle"}
-          size={24}
+          size={28}
           className="drop-shadow-sm"
         />
       </div>
 
-      {/* Content */}
-      <div className="flex-1 min-w-0 pt-0.5">
-        {isStreaming && <span className="streaming-cursor" />}
-
-        <div className="prose-chat">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {message.content || " "}
-          </ReactMarkdown>
+      <div className="flex-1 min-w-0" style={{ maxWidth: "78%" }}>
+        <div className="msg-bot">
+          {isStreaming && <span className="streaming-cursor" />}
+          <div className="prose-chat">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {message.content || " "}
+            </ReactMarkdown>
+          </div>
         </div>
 
         {!isStreaming && (
-          <div className="flex items-center gap-3 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+          <div className="flex items-center gap-3 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
             <span className="flex items-center gap-1 text-[10px] text-[var(--text-3)]">
               <Clock size={9} /> {timeStr}
             </span>
@@ -89,7 +86,7 @@ function BotMessage({ message }: { message: Message }) {
             )}
             <button
               onClick={handleCopy}
-              className="flex items-center gap-1 text-[10px] text-[var(--text-3)] hover:text-[var(--brand)] transition-colors px-1 py-0.5 rounded hover:bg-[var(--surface-3)]"
+              className="flex items-center gap-1 text-[10px] text-[var(--text-3)] hover:text-[var(--brand)] transition-colors px-1.5 py-0.5 rounded hover:bg-[var(--surface-3)]"
             >
               {copied ? <><Check size={9} /> Copiado</> : <><Copy size={9} /> Copiar</>}
             </button>

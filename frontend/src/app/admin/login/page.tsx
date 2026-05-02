@@ -3,14 +3,9 @@
 import { useState, useId } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  Mail, Lock, User, Eye, EyeOff, AlertCircle,
-  ArrowRight, ArrowLeft
-} from "lucide-react";
+import { Mail, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { setToken, setUser } from "@/lib/auth";
-
-const IUP_LOGO = "https://itp.edu.co/ITP2022/wp-content/uploads/2026/03/Logo-UNIPUTUMAYO-500px-x-500px-01.png";
 
 type Tab = "login" | "register";
 
@@ -26,18 +21,19 @@ function InputField({
 
   return (
     <div>
-      <label htmlFor={id} className="block text-[13px] font-medium text-[var(--text-2)] mb-1.5">{label}</label>
-      <div className="relative">
-        <Icon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-3)]" />
+      <label htmlFor={id} style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-1)", marginBottom: 6 }}>{label}</label>
+      <div style={{ position: "relative" }}>
+        <Icon size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-3)" }} />
         <input
           id={id} type={inputType} value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder} required={required}
-          className="input-base pl-9 pr-9"
+          className="input"
+          style={{ paddingLeft: 36, paddingRight: showToggle ? 36 : undefined }}
         />
         {showToggle && (
           <button type="button" onClick={() => setShow(!show)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-3)] hover:text-[var(--text-1)] transition-colors">
+            style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-3)" }}>
             {show ? <EyeOff size={14} /> : <Eye size={14} />}
           </button>
         )}
@@ -86,85 +82,118 @@ export default function LoginPage() {
   const switchTab = (t: Tab) => { setTab(t); setError(null); };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--bg)] px-5 py-10">
-      <div className="w-full max-w-[380px]">
-
-        {/* Logo + branding */}
-        <div className="text-center mb-8 animate-fade-up">
-          <Link href="/" className="inline-flex items-center gap-2 mb-6 group">
-            <img
-              src={IUP_LOGO}
-              alt="UNIPUTUMAYO"
-              className="h-10 w-auto object-contain"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-            />
-          </Link>
-          <h1 className="text-display text-xl text-[var(--text-1)] mb-1">
-            {tab === "login" ? "Iniciar sesión en Nexus" : "Crear cuenta"}
+    <div style={{ minHeight: "100vh", display: "flex", position: "relative", overflow: "hidden" }}>
+      {/* Left panel — hero */}
+      <div className="campus-panel hidden md:flex" style={{ flex: 1, padding: "64px 48px", flexDirection: "column", justifyContent: "center" }}>
+        <div style={{ position: "relative", zIndex: 1 }}>
+          <img src="/logo-azul.png" alt="UniPutumayo" style={{ height: 48, filter: "brightness(0) invert(1)", objectFit: "contain", marginBottom: 40 }} />
+          <div className="eyebrow-band" style={{ color: "var(--accent)", marginBottom: 12 }}>NEXUS UNIPUTUMAYO</div>
+          <h1 style={{
+            fontFamily: "var(--font-display)", fontSize: "clamp(32px, 3.5vw, 44px)", fontWeight: 800,
+            color: "#fff", lineHeight: 1.1, marginTop: 0, marginBottom: 16, letterSpacing: "-0.02em"
+          }}>
+            Tu guía académica,<br />en cualquier momento.
           </h1>
-          <p className="text-[13px] text-[var(--text-3)]">
-            {tab === "login"
-              ? "Bienvenido de nuevo"
-              : "Únete a la comunidad universitaria"}
+          <p style={{ fontSize: 16, color: "rgba(255,255,255,0.85)", maxWidth: 420, lineHeight: 1.6, margin: 0 }}>
+            Conversa con Nexus, una guacamaya que conoce a fondo cada programa, sede y trámite de UniPutumayo.
           </p>
-        </div>
-
-        {/* Tab switcher — underline style */}
-        <div className="flex border-b border-[var(--border)] mb-6 animate-fade-up" style={{ animationDelay: ".05s" }}>
-          {(["login", "register"] as Tab[]).map((t) => (
-            <button key={t} onClick={() => switchTab(t)}
-              className={[
-                "flex-1 pb-2.5 text-[13px] font-medium transition-all relative",
-                tab === t
-                  ? "text-[var(--text-1)]"
-                  : "text-[var(--text-3)] hover:text-[var(--text-2)]",
-              ].join(" ")}
-            >
-              {t === "login" ? "Iniciar sesión" : "Registrarse"}
-              {tab === t && (
-                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[var(--brand)] rounded-full" />
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Error */}
-        {error && (
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-[var(--error-dim)] border border-[var(--error)]/20 text-[13px] text-[var(--error)] mb-5 animate-shake">
-            <AlertCircle size={14} className="shrink-0 mt-0.5" /> {error}
+          <div style={{ marginTop: 40, display: "flex", gap: 16 }}>
+            <img src="/logo-vigilada.png" alt="Vigilada Mineducación" style={{ height: 48, objectFit: "contain" }} />
           </div>
-        )}
+        </div>
+      </div>
 
-        {/* Login form */}
-        <div className="animate-fade-up" style={{ animationDelay: ".1s" }}>
+      {/* Right panel — login card */}
+      <div style={{
+        width: "100%", maxWidth: 480,
+        background: "#fff",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "40px 36px",
+        boxShadow: "-8px 0 40px rgba(11,52,71,0.12)",
+        position: "relative", zIndex: 1,
+      }}>
+        <div style={{ width: "100%", maxWidth: 380 }}>
+          {/* Mobile logo */}
+          <div className="md:hidden" style={{ textAlign: "center", marginBottom: 24 }}>
+            <img src="/logo-azul.png" alt="UniPutumayo" style={{ height: 44, objectFit: "contain" }} />
+          </div>
+
+          <h2 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, margin: "0 0 6px", color: "var(--text-1)" }}>
+            Inicia sesión en Nexus
+          </h2>
+          <p style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 24 }}>
+            Acceso para estudiantes, aspirantes y administradores
+          </p>
+
+          {/* Tabs */}
+          <div style={{ display: "flex", borderBottom: "1px solid var(--border)", marginBottom: 24 }}>
+            {(["login", "register"] as Tab[]).map((t) => (
+              <button key={t} onClick={() => switchTab(t)} style={{
+                flex: 1, paddingBottom: 10, fontSize: 13, fontWeight: 500, cursor: "pointer",
+                background: "none", border: "none", color: tab === t ? "var(--text-1)" : "var(--text-3)",
+                borderBottom: tab === t ? "2px solid var(--brand-primary)" : "2px solid transparent",
+                transition: "all 0.15s",
+              }}>
+                {t === "login" ? "Iniciar sesión" : "Registrarse"}
+              </button>
+            ))}
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="animate-shake" style={{
+              display: "flex", alignItems: "flex-start", gap: 8,
+              padding: "10px 12px", borderRadius: "var(--r)", marginBottom: 18,
+              background: "#FBE7E5", border: "1px solid rgba(200,54,44,0.2)", color: "#C8362C", fontSize: 13
+            }}>
+              <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} /> {error}
+            </div>
+          )}
+
           {tab === "login" ? (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <InputField id={`${uid}_email`} label="Correo electrónico" type="email"
-                value={email} onChange={setEmail} placeholder="correo@ejemplo.com"
+            <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <InputField id={`${uid}_email`} label="Correo o documento" type="email"
+                value={email} onChange={setEmail} placeholder="estudiante@itp.edu.co"
                 required icon={Mail} />
-              <InputField id={`${uid}_pass`} label="Contraseña" type="password"
-                value={password} onChange={setPassword} placeholder="Tu contraseña"
-                required icon={Lock} showToggle />
-
-              <button type="submit" disabled={loading}
-                className="btn btn-primary w-full py-2.5 text-sm mt-3">
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)" }}>Contraseña</label>
+                  <a href="#" style={{ fontSize: 12, color: "var(--brand-primary)" }}>¿La olvidaste?</a>
+                </div>
+                <InputField id={`${uid}_pass`} label="" type="password"
+                  value={password} onChange={setPassword} placeholder="••••••••"
+                  required icon={Lock} showToggle />
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-2)" }}>
+                <input type="checkbox" style={{ accentColor: "var(--brand-primary)" }} /> Mantener mi sesión iniciada
+              </label>
+              <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: "100%", padding: "12px 18px", marginTop: 4, justifyContent: "center" }}>
                 {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <svg style={{ width: 14, height: 14, animation: "spin 0.8s linear infinite" }} fill="none" viewBox="0 0 24 24">
+                      <circle style={{ opacity: 0.25 }} cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                      <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                     </svg>
                     Ingresando…
                   </span>
                 ) : (
-                  <span className="flex items-center justify-center gap-2">
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     Iniciar sesión <ArrowRight size={14} />
                   </span>
                 )}
               </button>
+
+              <div style={{ textAlign: "center", margin: "4px 0", fontSize: 12, color: "var(--text-3)", position: "relative" }}>
+                <span style={{ background: "#fff", padding: "0 12px", position: "relative", zIndex: 1 }}>o continúa con</span>
+                <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 1, background: "var(--border)" }} />
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button type="button" className="btn btn-secondary" style={{ flex: 1, justifyContent: "center" }}>SIGEDIN</button>
+                <button type="button" className="btn btn-secondary" style={{ flex: 1, justifyContent: "center" }}>Microsoft 365</button>
+              </div>
             </form>
           ) : (
-            <form onSubmit={handleRegister} className="space-y-4">
+            <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <InputField id={`${uid}_name`} label="Nombre completo" type="text"
                 value={displayName} onChange={setDisplayName} placeholder="Tu nombre completo"
                 required icon={User} />
@@ -177,42 +206,35 @@ export default function LoginPage() {
               <InputField id={`${uid}_conf`} label="Confirmar contraseña" type="password"
                 value={confirmPassword} onChange={setConfirmPassword} placeholder="Repite tu contraseña"
                 required icon={Lock} showToggle />
-
-              <button type="submit" disabled={loading}
-                className="btn btn-primary w-full py-2.5 text-sm mt-3">
+              <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: "100%", padding: "12px 18px", justifyContent: "center" }}>
                 {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <svg style={{ width: 14, height: 14, animation: "spin 0.8s linear infinite" }} fill="none" viewBox="0 0 24 24">
+                      <circle style={{ opacity: 0.25 }} cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                      <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                     </svg>
                     Registrando…
                   </span>
                 ) : (
-                  <span className="flex items-center justify-center gap-2">
+                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     Crear cuenta <ArrowRight size={14} />
                   </span>
                 )}
               </button>
             </form>
           )}
-        </div>
 
-        {/* Footer links */}
-        <div className="mt-6 text-center space-y-3">
-          <p className="text-[12px] text-[var(--text-3)]">
+          <p style={{ textAlign: "center", fontSize: 13, color: "var(--text-2)", marginTop: 20 }}>
             {tab === "login" ? "¿No tienes cuenta?" : "¿Ya tienes cuenta?"}{" "}
             <button onClick={() => switchTab(tab === "login" ? "register" : "login")}
-              className="text-[var(--brand)] hover:text-[var(--brand-hover)] font-medium transition-colors">
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--brand-primary)", fontWeight: 600, fontSize: 13 }}>
               {tab === "login" ? "Regístrate" : "Inicia sesión"}
             </button>
           </p>
-          <div className="flex items-center justify-center gap-4 text-[12px] text-[var(--text-3)]">
-            <Link href="/" className="hover:text-[var(--text-1)] transition-colors flex items-center gap-1">
-              <ArrowLeft size={11} /> Inicio
-            </Link>
-            <Link href="/chat" className="hover:text-[var(--text-1)] transition-colors">
-              Ir al chat
+          <div style={{ textAlign: "center", marginTop: 8 }}>
+            <Link href="/" style={{ fontSize: 12, color: "var(--text-3)", textDecoration: "none" }}
+              className="hover:text-[var(--text-1)] transition-colors">
+              ← Volver al inicio
             </Link>
           </div>
         </div>

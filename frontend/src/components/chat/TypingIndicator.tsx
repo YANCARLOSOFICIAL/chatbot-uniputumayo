@@ -4,18 +4,17 @@ import { GuacamayaAvatar } from "./GuacamayaAvatar";
 
 export function TypingIndicator() {
   return (
-    <div className="flex gap-3 animate-fade-up">
-      {/* Guacamaya pensando */}
-      <div className="shrink-0 mt-0.5">
-        <GuacamayaAvatar state="thinking" size={32} className="drop-shadow-sm" />
+    <div className="flex gap-3" style={{ alignItems: "flex-start" }}>
+      <div className="shrink-0" style={{ marginTop: 2 }}>
+        <GuacamayaAvatar state="thinking" size={28} className="drop-shadow-sm" />
       </div>
-      <div className="pt-1">
-        <p className="text-[11px] font-semibold text-[var(--text-4)] mb-2 uppercase tracking-wider">Nexus</p>
-        <div className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand)] typing-dot-1" />
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand)] typing-dot-2" />
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand)] typing-dot-3" />
-        </div>
+      <div className="msg-bot" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "12px 16px" }}>
+        <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}>
+          <span className="typing-dot-1" style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block" }} />
+          <span className="typing-dot-2" style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block" }} />
+          <span className="typing-dot-3" style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block" }} />
+        </span>
+        <span style={{ fontSize: 13, color: "var(--text-3)" }}>Buscando en el catálogo…</span>
       </div>
     </div>
   );

@@ -59,17 +59,17 @@ export function ChatInput({
         {isListening && (
           <div className="flex items-center justify-center gap-2 mb-2">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--error)] opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--error)]" />
             </span>
-            <span className="text-[11px] text-red-500 font-medium">Escuchando…</span>
+            <span className="text-[11px] text-[var(--error)] font-medium">Escuchando…</span>
           </div>
         )}
 
         {/* Input card */}
         <div className={[
           "chat-input-area transition-all",
-          isListening ? "border-red-400/30 shadow-lg shadow-red-500/5" : "",
+          isListening ? "border-[var(--error)]/30 shadow-lg shadow-[var(--error)]/5" : "",
         ].join(" ")}>
           <textarea
             ref={textareaRef}
@@ -78,8 +78,8 @@ export function ChatInput({
             onKeyDown={handleKey}
             placeholder={
               isListening ? "Escuchando…"
-              : isLoading  ? "Nexus está respondiendo…"
-              : "Pregunta algo sobre la IUP…"
+              : isLoading  ? "Buscando en el catálogo…"
+              : "Pregúntale a Nexus sobre programas, sedes, requisitos…"
             }
             rows={1}
             disabled={isLoading || isListening}
@@ -145,7 +145,7 @@ export function ChatInput({
         </div>
 
         <p className="text-center text-[10px] text-[var(--text-3)] mt-2 opacity-70">
-          Nexus puede cometer errores — verifica la información importante.
+          Nexus puede equivocarse. Verifica información crítica con la oficina de admisiones.
         </p>
       </div>
     </div>

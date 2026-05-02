@@ -22,23 +22,23 @@ interface MessageListProps {
 const CARDS = [
   {
     icon: GraduationCap,
-    label: "Programas",
-    query: "¿Cuáles son los programas académicos de la Institución Universitaria del Putumayo?",
+    label: "¿Qué pregrados hay en Mocoa?",
+    query: "¿Qué pregrados hay en la sede Mocoa de UniPutumayo?",
   },
   {
-    icon: BookOpen,
-    label: "Admisión",
-    query: "¿Cuáles son los requisitos de admisión para ingresar a la IUP?",
+    icon: Globe,
+    label: "Programas en Sibundoy y Puerto Asís",
+    query: "¿Qué programas académicos hay en las sedes de Sibundoy y Puerto Asís?",
   },
   {
     icon: FileText,
-    label: "Pensum",
-    query: "¿Cuál es el pensum de la carrera de Ingeniería de Sistemas?",
+    label: "Requisitos de inscripción 2026-1",
+    query: "¿Cuáles son los requisitos de inscripción para el período 2026-1 en UniPutumayo?",
   },
   {
-    icon: Clock,
-    label: "Horarios",
-    query: "¿Cuáles son los horarios de atención de la Institución Universitaria del Putumayo?",
+    icon: BookOpen,
+    label: "¿Cuáles son los costos académicos?",
+    query: "¿Cuáles son los costos académicos y derechos de matrícula en UniPutumayo?",
   },
 ];
 
@@ -46,39 +46,46 @@ const CARDS = [
 function WelcomeState({ onSend }: { onSend?: (q: string) => void }) {
   return (
     <div className="flex flex-col items-center justify-center h-full px-6 py-16 select-none">
-      {/* Guacamaya — modest size, no halo effects */}
-      <div className="mb-6">
-        <GuacamayaAvatar state="idle" size={72} className="drop-shadow-lg" />
+      <div className="mb-5">
+        <GuacamayaAvatar state="idle" size={64} className="drop-shadow-md" />
       </div>
 
-      <h1 className="text-display text-xl sm:text-2xl text-[var(--text-1)] text-center mb-2">
-        Pregúntale a <span className="gradient-text-iup">Nexus</span>
+      <div className="eyebrow-band mb-2" style={{ textAlign: "center" }}>NEXUS UNIPUTUMAYO</div>
+      <h1 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(20px, 3vw, 26px)", fontWeight: 700, textAlign: "center", marginBottom: 8, color: "var(--text-1)", letterSpacing: "-0.015em" }}>
+        ¡Hola! ¿En qué te puedo ayudar?
       </h1>
-      <p className="text-center text-[var(--text-2)] max-w-sm mb-8 text-sm leading-relaxed">
-        Información sobre programas, admisión, horarios y más de la IUP.
+      <p className="text-center text-[var(--text-2)] max-w-xs mb-8 text-sm leading-relaxed">
+        Pregúntame sobre programas, sedes, costos y trámites de UniPutumayo.
       </p>
 
-      {/* Quick action chips — horizontal row */}
       {onSend && (
-        <div className="flex flex-wrap justify-center gap-2 mb-8 max-w-lg">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, maxWidth: 560, width: "100%" }}>
           {CARDS.map(({ icon: Icon, label, query }) => (
             <button
               key={label}
               onClick={() => onSend(query)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--brand)] hover:text-[var(--brand)] active:scale-[.97] transition-all text-[13px] text-[var(--text-2)]"
+              style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "13px 14px",
+                background: "var(--surface)", border: "1px solid var(--border)",
+                borderRadius: "var(--r-lg)", cursor: "pointer",
+                fontFamily: "var(--font-body)", fontSize: 13,
+                color: "var(--text-1)", textAlign: "left",
+                transition: "all 120ms ease",
+              }}
+              className="hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)] active:scale-[.98]"
             >
-              <Icon size={14} strokeWidth={1.5} />
+              <Icon size={16} style={{ color: "var(--brand-primary)", flexShrink: 0 }} />
               <span>{label}</span>
             </button>
           ))}
         </div>
       )}
 
-      {/* Capabilities */}
-      <div className="flex flex-wrap justify-center gap-2">
+      <div className="flex flex-wrap justify-center gap-2 mt-6">
         {[
           { icon: Mic, label: "Voz y texto" },
-          { icon: Globe, label: "Español colombiano" },
+          { icon: Clock, label: "Disponible 24/7" },
           { icon: FileText, label: "Fuentes citadas" },
         ].map(({ icon: Icon, label }) => (
           <div
@@ -164,7 +171,7 @@ export function MessageList({
         <button
           onClick={() => scrollToBottom()}
           className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 px-3 py-1.5 rounded-full bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-md)] text-[12px] text-[var(--text-2)] hover:text-[var(--brand)] hover:border-[var(--brand)] transition-all animate-fade-up"
-          aria-label="Ir al final"
+          aria-label="Ir al final" style={{ textDecoration: "none" }}
         >
           <ChevronDown size={12} /> Ir al final
         </button>

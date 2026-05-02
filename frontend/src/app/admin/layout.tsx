@@ -2,56 +2,38 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Header } from "@/components/layout/Header";
+import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { isAuthenticated, getUser } from "@/lib/auth";
 
-export default function AdminLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
+  const router   = useRouter();
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    // Login page doesn't need auth check
-    if (pathname === "/admin/login") {
-      setChecked(true);
-      return;
-    }
-
-    if (!isAuthenticated()) {
-      router.replace("/admin/login");
-      return;
-    }
-
+    if (pathname === "/admin/login") { setChecked(true); return; }
+    if (!isAuthenticated())          { router.replace("/admin/login"); return; }
     const user = getUser();
-    if (!user || user.role !== "admin") {
-      router.replace("/chat");
-      return;
-    }
-
+    if (!user || user.role !== "admin") { router.replace("/chat"); return; }
     setChecked(true);
   }, [pathname, router]);
 
-  // Login page renders without header/padding
-  if (pathname === "/admin/login") {
-    return <>{children}</>;
-  }
+  if (pathname === "/admin/login") return <>{children}</>;
 
   if (!checked) {
     return (
-      <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-[var(--brand)] border-t-transparent rounded-full animate-spin" />
+      <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: 32, height: 32, border: "3px solid var(--brand-primary)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin .8s linear infinite" }} />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[var(--bg-2)]">
-      <Header />
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">{children}</div>
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "var(--bg)" }}>
+      <AdminSidebar />
+      <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "auto" }}>
+        {children}
+      </main>
     </div>
   );
 }

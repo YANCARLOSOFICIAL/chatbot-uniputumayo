@@ -95,19 +95,15 @@ export default function ConfigPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex justify-center py-14">
-        <Spinner size="lg" />
-      </div>
-    );
+    return <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}><Spinner size="lg" /></div>;
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" style={{ padding: "28px 32px 48px" }}>
       {/* Breadcrumb + Header */}
       <div>
         <div className="flex items-center gap-1 text-[11px] text-[var(--text-3)] mb-2">
-          <Link href="/admin" className="hover:text-[var(--brand)] transition-colors">Admin</Link>
+          <Link href="/admin" className="hover:text-[var(--brand-primary)] transition-colors">Admin</Link>
           <ChevronRight size={10} />
           <span className="text-[var(--text-1)]">Configuración IA</span>
         </div>
@@ -123,7 +119,7 @@ export default function ConfigPage() {
         </div>
       )}
       {success && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-[var(--brand-dim)] border border-[var(--brand)]/20 text-[13px] text-[var(--brand-text)]">
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-[var(--brand-dim)] border border-[var(--brand-primary)]/20 text-[13px] text-[var(--brand-text)]">
           <Check size={14} className="shrink-0" /> {success}
           <button onClick={() => setSuccess(null)} className="ml-auto"><X size={13} /></button>
         </div>
@@ -139,13 +135,13 @@ export default function ConfigPage() {
               className={[
                 "bg-[var(--surface)] rounded-xl border-2 p-5 transition-all",
                 provider.is_default
-                  ? "border-[var(--brand)] shadow-[var(--glow-brand)]"
+                  ? "border-[var(--brand-primary)] shadow-[var(--glow-brand)]"
                   : "border-[var(--border)] hover:border-[var(--border-2)]",
               ].join(" ")}
             >
               {/* Active badge */}
               {provider.is_default && (
-                <div className="inline-flex items-center gap-1 bg-[var(--brand)] text-white text-[11px] font-medium px-2.5 py-0.5 rounded-full mb-3">
+                <div className="inline-flex items-center gap-1 bg-[var(--brand-primary)] text-white text-[11px] font-medium px-2.5 py-0.5 rounded-full mb-3">
                   <Zap size={10} /> Activo
                 </div>
               )}
@@ -197,7 +193,7 @@ export default function ConfigPage() {
                       </span>
                     </div>
                     <button onClick={() => setShowKeyModal(true)}
-                      className="text-[11px] text-[var(--brand)] hover:text-[var(--brand-hover)] font-medium transition-colors">
+                      className="text-[11px] text-[var(--brand-primary)] hover:text-[var(--brand-hover)] font-medium transition-colors">
                       {keyStatus.has_key ? "Cambiar" : "Configurar"}
                     </button>
                   </div>
@@ -207,7 +203,7 @@ export default function ConfigPage() {
               {/* Action button */}
               {!provider.is_default && (
                 <button
-                  className="w-full py-2 rounded-lg text-[13px] font-medium border border-[var(--border)] text-[var(--text-2)] bg-[var(--surface-2)] hover:border-[var(--brand)] hover:text-[var(--brand)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                  className="w-full py-2 rounded-lg text-[13px] font-medium border border-[var(--border)] text-[var(--text-2)] bg-[var(--surface-2)] hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                   disabled={!!switching}
                   onClick={() => handleUseProvider(provider)}
                 >
@@ -224,13 +220,13 @@ export default function ConfigPage() {
       {/* Instructions */}
       <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] p-5">
         <h2 className="text-[13px] font-semibold text-[var(--text-1)] mb-3 flex items-center gap-1.5">
-          <Server size={13} className="text-[var(--brand)]" /> Instrucciones
+          <Server size={13} className="text-[var(--brand-primary)]" /> Instrucciones
         </h2>
         <div className="space-y-3 text-[13px] text-[var(--text-2)]">
           <div>
             <p className="font-medium text-[var(--text-1)] mb-1">Ollama (Local)</p>
             <ol className="list-decimal ml-5 space-y-0.5 text-[var(--text-2)]">
-              <li>Ejecutar <code className="bg-[var(--surface-3)] border border-[var(--border)] px-1 py-0.5 rounded text-[11px] font-mono text-[var(--brand)]">docker compose up</code> en el directorio raíz</li>
+              <li>Ejecutar <code className="bg-[var(--surface-3)] border border-[var(--border)] px-1 py-0.5 rounded text-[11px] font-mono text-[var(--brand-primary)]">docker compose up</code> en el directorio raíz</li>
               <li>Los modelos se descargan automáticamente al iniciar</li>
             </ol>
           </div>
@@ -258,7 +254,7 @@ export default function ConfigPage() {
 
             <p className="text-[13px] text-[var(--text-2)] mb-4">
               Ingresa tu API key. Puedes obtener una en{" "}
-              <span className="text-[var(--brand)] font-medium">platform.openai.com</span>
+              <span className="text-[var(--brand-primary)] font-medium">platform.openai.com</span>
             </p>
 
             {keyError && (
@@ -267,7 +263,7 @@ export default function ConfigPage() {
               </div>
             )}
             {keySuccess && (
-              <div className="flex items-center gap-1.5 p-2.5 rounded-lg bg-[var(--brand-dim)] border border-[var(--brand)]/20 text-[13px] text-[var(--brand-text)] mb-3">
+              <div className="flex items-center gap-1.5 p-2.5 rounded-lg bg-[var(--brand-dim)] border border-[var(--brand-primary)]/20 text-[13px] text-[var(--brand-text)] mb-3">
                 <Check size={12} /> {keySuccess}
               </div>
             )}
@@ -290,7 +286,7 @@ export default function ConfigPage() {
               <button
                 disabled={!apiKey.trim() || savingKey}
                 onClick={handleSaveApiKey}
-                className="flex-1 py-2 rounded-lg text-[13px] font-medium bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
+                className="flex-1 py-2 rounded-lg text-[13px] font-medium bg-[var(--brand-primary)] text-white hover:bg-[var(--brand-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
                 {savingKey ? <><Spinner size="sm" /> Verificando...</> : "Guardar y Verificar"}
               </button>
             </div>

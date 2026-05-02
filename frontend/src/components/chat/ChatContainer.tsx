@@ -123,7 +123,7 @@ export function ChatContainer() {
                 >
                   <LogOut size={11} /> Salir
                 </button>
-                <div className="w-6 h-6 rounded-full gradient-brand flex items-center justify-center text-white text-[9px] font-bold uppercase flex-shrink-0">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold uppercase flex-shrink-0" style={{ background: "var(--brand-accent)" }}>
                   {user.display_name?.[0] ?? "U"}
                 </div>
               </>

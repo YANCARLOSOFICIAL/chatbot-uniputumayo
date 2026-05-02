@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
-  MessageSquare, Trash2, Search, Sparkles,
+  MessageSquare, Trash2, Search,
   LogOut, Settings, Home, PenSquare
 } from "lucide-react";
 import { isAuthenticated, getUser, logout, type AuthUser } from "@/lib/auth";
@@ -71,7 +71,7 @@ export function ConversationSidebar({
   return (
     <aside
       className={[
-        "w-[220px] flex flex-col h-full",
+        "w-[260px] flex flex-col h-full",
         "bg-[var(--sb-bg)] border-r border-[var(--sb-border)]",
         "md:relative md:translate-x-0 md:flex",
         "fixed inset-y-0 left-0 z-40 transition-transform duration-200 ease-out",
@@ -82,18 +82,19 @@ export function ConversationSidebar({
       {/* Header */}
       <div className="px-3 pt-3.5 pb-2.5 flex-shrink-0">
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-1.5">
-            <div className="w-5 h-5 rounded bg-[var(--brand)] flex items-center justify-center">
-              <Sparkles size={10} className="text-white" strokeWidth={2} />
+          <div className="flex items-center gap-2">
+            <img src="/isotipo.webp" alt="UniPutumayo" style={{ height: 28, objectFit: "contain" }} />
+            <div>
+              <div className="text-[13px] font-bold text-[var(--sb-text)]" style={{ fontFamily: "var(--font-display)" }}>Nexus</div>
+              <div className="text-[10px] text-[var(--sb-muted)]">UniPutumayo</div>
             </div>
-            <span className="text-[11px] font-bold text-[var(--sb-text)] tracking-tight">NEXUS</span>
           </div>
           <button
             onClick={() => { onNew(); onClose(); }}
-            className="w-6 h-6 rounded-md flex items-center justify-center text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors"
             title="Nueva conversación"
           >
-            <PenSquare size={12} strokeWidth={1.5} />
+            <PenSquare size={13} strokeWidth={1.5} />
           </button>
         </div>
 
@@ -105,7 +106,7 @@ export function ConversationSidebar({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar…"
-            className="w-full pl-6 pr-2.5 py-1.5 text-[11px] rounded-md bg-[var(--sb-hover)] border border-[var(--sb-border)] text-[var(--sb-text)] placeholder-[var(--sb-muted)] outline-none focus:border-[var(--brand)]/30 transition-colors"
+            className="w-full pl-6 pr-2.5 py-1.5 text-[11px] rounded-md bg-[var(--sb-hover)] border border-[var(--sb-border)] text-[var(--sb-text)] placeholder-[var(--sb-muted)] outline-none focus:border-[var(--sb-active)]/50 transition-colors"
           />
         </div>
       </div>
@@ -140,14 +141,14 @@ export function ConversationSidebar({
                     className={[
                       "group w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-left mb-0.5 transition-all duration-100 relative",
                       isActive
-                        ? "bg-[var(--brand)]/8 text-[var(--sb-text)] active-left-border"
+                        ? "bg-[var(--sb-hover)] text-[var(--sb-text)] active-left-border"
                         : "text-[var(--sb-muted)] hover:bg-[var(--sb-hover)] hover:text-[var(--sb-text)]",
                     ].join(" ")}
                   >
                     <MessageSquare
                       size={10}
                       strokeWidth={1.5}
-                      className={`shrink-0 ${isActive ? "text-[var(--brand)]" : "text-[var(--sb-muted)]"}`}
+                      className={`shrink-0 ${isActive ? "text-[var(--sb-active)]" : "text-[var(--sb-muted)]"}`}
                     />
                     <span className="flex-1 text-[11px] truncate">{conv.title ?? "Conversación"}</span>
                     <button
@@ -189,7 +190,7 @@ export function ConversationSidebar({
         <div className="pt-1 mt-0.5 border-t border-[var(--sb-border)]">
           {user ? (
             <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md group cursor-default">
-              <div className="w-5 h-5 rounded-full gradient-brand flex items-center justify-center text-white text-[8px] font-bold uppercase shrink-0">
+              <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[8px] font-bold uppercase shrink-0" style={{ background: "var(--brand-accent)" }}>
                 {user.display_name?.[0] ?? "U"}
               </div>
               <div className="flex-1 min-w-0">
@@ -209,7 +210,7 @@ export function ConversationSidebar({
           ) : (
             <Link
               href="/admin/login"
-              className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-md bg-[var(--brand)]/8 border border-[var(--brand)]/15 text-[var(--brand)] hover:bg-[var(--brand)]/12 transition-colors text-[11px] font-medium"
+              className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-md bg-[var(--sb-hover)] border border-[var(--sb-border)] text-[var(--sb-text)] hover:bg-white/10 transition-colors text-[11px] font-medium"
             >
               Iniciar sesión
             </Link>

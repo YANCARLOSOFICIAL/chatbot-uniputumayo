@@ -31,7 +31,7 @@ export function Header() {
     <header className="h-12 bg-[var(--bg)] border-b border-[var(--border)] flex items-center px-4 sm:px-6 z-20 flex-shrink-0">
       {/* Logo */}
       <Link href="/" className="flex items-center gap-2 group mr-6">
-        <div className="w-7 h-7 rounded-lg bg-[var(--brand)] flex items-center justify-center">
+        <div className="w-7 h-7 rounded-lg bg-[var(--brand-primary)] flex items-center justify-center">
           <span className="text-white text-[11px] font-extrabold">N</span>
         </div>
         <div className="hidden sm:flex items-baseline gap-1">
@@ -53,7 +53,7 @@ export function Header() {
               onClick={() => setDropdownOpen(!dropdownOpen)}
               className="flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-lg hover:bg-[var(--surface-3)] transition-colors"
             >
-              <div className="w-6 h-6 rounded-full gradient-brand flex items-center justify-center text-white text-[10px] font-bold uppercase">
+              <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold uppercase" style={{ background: "var(--brand-accent)" }}>
                 {user.display_name?.[0] ?? "U"}
               </div>
               <span className="hidden md:block text-[13px] text-[var(--text-2)] max-w-[100px] truncate">
@@ -91,7 +91,7 @@ export function Header() {
           </div>
         ) : mounted ? (
           <Link href="/admin/login"
-            className="px-3 py-1.5 rounded-md text-[13px] font-medium bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)] transition-colors">
+            className="px-3 py-1.5 rounded-md text-[13px] font-medium bg-[var(--brand-primary)] text-white hover:bg-[var(--brand-primary-dark)] transition-colors">
             Iniciar sesión
           </Link>
         ) : null}

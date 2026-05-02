@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, ChevronDown, ChevronUp } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp } from "lucide-react";
 import type { SourceInfo } from "@/types/chat";
 
 interface SourceCardProps {
@@ -13,12 +13,19 @@ export function SourceCard({ sources }: SourceCardProps) {
   if (!sources.length) return null;
 
   return (
-    <div className="mt-2">
+    <div style={{ marginTop: 10 }}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 text-[11px] text-[var(--text-4)] hover:text-[var(--brand)] transition-colors font-medium"
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          fontSize: 11, color: "var(--text-3)", fontWeight: 500,
+          background: "none", border: "none", cursor: "pointer", padding: 0,
+          transition: "color 120ms",
+        }}
+        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--brand-primary)")}
+        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--text-3)")}
       >
-        <FileText size={11} strokeWidth={1.5} />
+        <BookOpen size={11} strokeWidth={1.5} />
         <span>
           {sources.length} fuente{sources.length !== 1 ? "s" : ""} consultada{sources.length !== 1 ? "s" : ""}
         </span>
@@ -26,31 +33,31 @@ export function SourceCard({ sources }: SourceCardProps) {
       </button>
 
       {open && (
-        <div className="mt-3 space-y-2 animate-fade-down">
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
           {sources.map((source) => {
-            const pct = Math.round(source.score * 100);
+            const score = source.score;
+            const dotColor = score >= 0.6 ? "var(--success)" : score >= 0.4 ? "var(--warning)" : "var(--text-3)";
             return (
-              <div
-                key={source.chunk_id}
-                className="flex items-start gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:border-[var(--brand)]/30 transition-colors"
-              >
-                <FileText size={12} strokeWidth={1.5} className="text-[var(--text-4)] shrink-0 mt-0.5" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold text-[var(--text-2)] truncate">
-                    {source.document_title}
-                  </p>
-                  {source.program && (
-                    <p className="text-[10px] text-[var(--text-4)] truncate mt-0.5">{source.program}</p>
-                  )}
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <div className="flex-1 h-0.5 rounded-full bg-[var(--surface-3)]">
-                      <div
-                        className="h-full rounded-full bg-[var(--brand)] transition-all duration-300"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="text-[9px] text-[var(--text-4)] tabular-nums">{pct}%</span>
+              <div key={source.chunk_id} className="citation-card">
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: "var(--r)",
+                    background: "var(--brand-primary-lighter)",
+                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                  }}>
+                    <BookOpen size={13} style={{ color: "var(--brand-primary)" }} />
                   </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {source.document_title}
+                    </div>
+                    {source.program && (
+                      <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {source.program}
+                      </div>
+                    )}
+                  </div>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor, flexShrink: 0, marginTop: 4 }} />
                 </div>
               </div>
             );

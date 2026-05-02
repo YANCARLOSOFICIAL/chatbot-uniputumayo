@@ -36,15 +36,15 @@ export default function UsersPage() {
   };
 
   if (loading) {
-    return <div className="flex justify-center py-14"><Spinner size="lg" /></div>;
+    return <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}><Spinner size="lg" /></div>;
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" style={{ padding: "28px 32px 48px" }}>
       {/* Breadcrumb + Header */}
       <div>
         <div className="flex items-center gap-1 text-[11px] text-[var(--text-3)] mb-2">
-          <Link href="/admin" className="hover:text-[var(--brand)] transition-colors">Admin</Link>
+          <Link href="/admin" className="hover:text-[var(--brand-primary)] transition-colors">Admin</Link>
           <ChevronRight size={10} />
           <span className="text-[var(--text-1)]">Usuarios</span>
         </div>
@@ -82,7 +82,7 @@ export default function UsersPage() {
       <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] overflow-hidden">
         <div className="px-5 py-3 border-b border-[var(--border)]">
           <h2 className="text-[13px] font-semibold text-[var(--text-1)] flex items-center gap-1.5">
-            <Users size={13} className="text-[var(--brand)]" />
+            <Users size={13} className="text-[var(--brand-primary)]" />
             Usuarios registrados
             <span className="text-[11px] font-normal text-[var(--text-3)]">({users.length})</span>
           </h2>
@@ -110,7 +110,7 @@ export default function UsersPage() {
                   <tr key={user.id} className="hover:bg-[var(--surface-2)] transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full gradient-brand flex items-center justify-center text-white text-[10px] font-bold uppercase shrink-0">
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold uppercase shrink-0" style={{ background: "var(--brand-accent)" }}>
                           {user.display_name?.[0] ?? "U"}
                         </div>
                         <span className="text-sm font-medium text-[var(--text-1)]">{user.display_name || "—"}</span>
@@ -138,7 +138,7 @@ export default function UsersPage() {
                         <select
                           value={user.role}
                           onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                          className="text-[11px] border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-2)] rounded-md px-2 py-1 focus:border-[var(--brand)] focus:outline-none transition-colors"
+                          className="text-[11px] border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-2)] rounded-md px-2 py-1 focus:border-[var(--brand-primary)] focus:outline-none transition-colors"
                         >
                           <option value="user">user</option>
                           <option value="admin">admin</option>

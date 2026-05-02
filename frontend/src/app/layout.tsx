@@ -1,16 +1,29 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Be_Vietnam_Pro, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ui/ThemeProvider";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+const beVietnam = Be_Vietnam_Pro({
+  variable: "--font-display",
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800"],
+});
+const inter = Inter({
+  variable: "--font-body",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+  weight: ["400", "500"],
+});
 
 export const metadata: Metadata = {
   title: "Nexus — Asistente IA · UniPutumayo",
   description:
     "Nexus, el asistente virtual inteligente de la Institución Universitaria del Putumayo. Consulta programas académicos, requisitos de admisión y más.",
-  keywords: ["chatbot", "IUP", "UniPutumayo", "asistente virtual", "educación"],
+  keywords: ["chatbot", "UniPutumayo", "asistente virtual", "educación", "Putumayo"],
 };
 
 export const viewport: Viewport = {
@@ -22,7 +35,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased transition-theme`}>
+      <body className={`${beVietnam.variable} ${inter.variable} ${jetbrainsMono.variable} antialiased transition-theme`}>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
