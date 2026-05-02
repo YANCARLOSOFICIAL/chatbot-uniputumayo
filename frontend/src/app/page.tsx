@@ -38,9 +38,9 @@ export default function LandingPage() {
 
       {/* ── NAVBAR ── */}
       <nav style={{
-        background: scrolled ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.60)",
+        background: scrolled ? "var(--surface)" : "rgba(var(--surface-rgb, 255,255,255), 0.05)",
         backdropFilter: "blur(14px)",
-        borderBottom: scrolled ? "1px solid var(--border)" : "1px solid rgba(255,255,255,0.15)",
+        borderBottom: scrolled ? "1px solid var(--border)" : "1px solid transparent",
         position: "sticky", top: 0, zIndex: 50,
         transition: "background 0.25s ease, border-color 0.25s ease",
         boxShadow: scrolled ? "var(--shadow-sm)" : "none",
