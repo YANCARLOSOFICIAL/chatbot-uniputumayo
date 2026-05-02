@@ -21,7 +21,7 @@ function InputField({
 
   return (
     <div>
-      <label htmlFor={id} style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-1)", marginBottom: 6 }}>{label}</label>
+      {label && <label htmlFor={id} style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-1)", marginBottom: 6 }}>{label}</label>}
       <div style={{ position: "relative" }}>
         <Icon size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-3)" }} />
         <input
@@ -33,8 +33,8 @@ function InputField({
         />
         {showToggle && (
           <button type="button" onClick={() => setShow(!show)}
-            style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-3)" }}>
-            {show ? <EyeOff size={14} /> : <Eye size={14} />}
+            className="absolute right-1 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-[var(--text-3)] flex items-center justify-center w-9 h-9 hover:text-[var(--brand-primary)] transition-colors">
+            {show ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         )}
       </div>
@@ -79,7 +79,7 @@ export default function LoginPage() {
     } finally { setLoading(false); }
   };
 
-  const switchTab = (t: Tab) => { setTab(t); setError(null); };
+  const switchTab = (t: Tab) => { setTab(t); setError(null); setEmail(""); setPassword(""); setConfirmPassword(""); setDisplayName(""); };
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", position: "relative", overflow: "hidden" }}>
@@ -104,14 +104,7 @@ export default function LoginPage() {
       </div>
 
       {/* Right panel — login card */}
-      <div style={{
-        width: "100%", maxWidth: 480,
-        background: "#fff",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: "40px 36px",
-        boxShadow: "-8px 0 40px rgba(11,52,71,0.12)",
-        position: "relative", zIndex: 1,
-      }}>
+      <div className="w-full md:max-w-[480px] bg-[var(--surface)] flex items-center justify-center p-6 sm:p-9 relative z-10 shadow-[-8px_0_40px_rgba(11,52,71,0.12)]">
         <div style={{ width: "100%", maxWidth: 380 }}>
           {/* Mobile logo */}
           <div className="md:hidden" style={{ textAlign: "center", marginBottom: 24 }}>
@@ -187,9 +180,9 @@ export default function LoginPage() {
                 <span style={{ background: "#fff", padding: "0 12px", position: "relative", zIndex: 1 }}>o continúa con</span>
                 <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 1, background: "var(--border)" }} />
               </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                <button type="button" className="btn btn-secondary" style={{ flex: 1, justifyContent: "center" }}>SIGEDIN</button>
-                <button type="button" className="btn btn-secondary" style={{ flex: 1, justifyContent: "center" }}>Microsoft 365</button>
+              <div className="flex flex-col sm:flex-row gap-2.5">
+                <button type="button" className="btn btn-secondary flex-1 justify-center">SIGEDIN</button>
+                <button type="button" className="btn btn-secondary flex-1 justify-center">Microsoft 365</button>
               </div>
             </form>
           ) : (
@@ -231,9 +224,9 @@ export default function LoginPage() {
               {tab === "login" ? "Regístrate" : "Inicia sesión"}
             </button>
           </p>
-          <div style={{ textAlign: "center", marginTop: 8 }}>
-            <Link href="/" style={{ fontSize: 12, color: "var(--text-3)", textDecoration: "none" }}
-              className="hover:text-[var(--text-1)] transition-colors">
+          <div style={{ textAlign: "center", marginTop: 12 }}>
+            <Link href="/" style={{ fontSize: 12, textDecoration: "none" }}
+              className="text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--surface-3)] transition-colors inline-flex items-center gap-1.5 px-3 py-2 rounded-md">
               ← Volver al inicio
             </Link>
           </div>

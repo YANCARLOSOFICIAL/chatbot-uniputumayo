@@ -59,7 +59,7 @@ function WelcomeState({ onSend }: { onSend?: (q: string) => void }) {
       </p>
 
       {onSend && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, maxWidth: 560, width: "100%" }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-[560px]">
           {CARDS.map(({ icon: Icon, label, query }) => (
             <button
               key={label}

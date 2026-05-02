@@ -50,7 +50,7 @@ export default function LandingPage() {
             <img src="/logo-azul.png" alt="UniPutumayo" style={{ height: 40, objectFit: "contain" }} />
           </Link>
 
-          <div style={{ display: "flex", gap: 28, alignItems: "center" }} className="hidden md:flex">
+          <div className="hidden md:flex gap-7 items-center">
             {[
               { label: "Conoce a Nexus", href: "#features" },
               { label: "Programas", href: "#programs" },
@@ -77,15 +77,16 @@ export default function LandingPage() {
         </div>
 
         {menuOpen && (
-          <div className="md:hidden" style={{ borderTop: "1px solid var(--border)", padding: "12px 24px 16px" }}>
+          <div className="md:hidden" style={{ background: "var(--surface)", borderTop: "1px solid var(--border)", padding: "16px 24px" }}>
             {[
               { label: "Conoce a Nexus", href: "#features" },
               { label: "Programas", href: "#programs" },
+              { label: "Ayuda", href: "#cta" },
               { label: "Iniciar sesión", href: "/admin/login" },
               { label: "Habla con Nexus", href: "/chat" },
             ].map((item) => (
               <a key={item.href} href={item.href} onClick={() => setMenuOpen(false)}
-                style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 0", fontSize: 14, color: "var(--text-1)", textDecoration: "none", fontWeight: 500 }}>
+                style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 0", fontSize: 14, color: "var(--text-1)", textDecoration: "none", fontWeight: 500 }}>
                 <ChevronRight size={12} style={{ color: "var(--accent)" }} /> {item.label}
               </a>
             ))}
@@ -95,8 +96,8 @@ export default function LandingPage() {
 
       {/* ── HERO ── */}
       <section className="hero-campus" style={{ minHeight: 580 }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "80px 24px", display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 48, alignItems: "center" }}
-          className="flex-col md:grid">
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "80px 24px" }}
+          className="flex flex-col md:grid md:grid-cols-[1.4fr_1fr] gap-12 items-center">
           <div style={{ maxWidth: 620 }}>
             <div className="eyebrow-band" style={{ color: "var(--accent)", marginBottom: 16 }}>
               NEXUS UNIPUTUMAYO
@@ -134,7 +135,7 @@ export default function LandingPage() {
                 display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600,
                 color: "var(--text-1)", boxShadow: "var(--shadow-md)", whiteSpace: "nowrap"
               }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)", display: "inline-block" }} />
+                <span className="animate-pulse" style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--accent)", display: "inline-block" }} />
                 En línea
               </div>
             </div>
@@ -151,7 +152,7 @@ export default function LandingPage() {
           </h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20 }}>
             {features.map((f, i) => (
-              <div key={i} className="card" style={{ padding: 24 }}>
+              <div key={i} className="card card-interactive" style={{ padding: 24 }}>
                 <div style={{ width: 44, height: 44, borderRadius: "var(--r)", background: "var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
                   <f.icon size={22} style={{ color: "var(--brand-primary)" }} />
                 </div>
@@ -179,7 +180,7 @@ export default function LandingPage() {
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
             {programs.map((p, i) => (
-              <div key={i} className="card" style={{
+              <div key={i} className="card card-interactive" style={{
                 padding: 24,
                 borderTop: p.featured ? "3px solid var(--accent)" : "1px solid var(--border)"
               }}>
@@ -220,8 +221,8 @@ export default function LandingPage() {
 
       {/* ── FOOTER ── */}
       <footer style={{ background: "#0B3447", borderTop: "1px solid rgba(255,255,255,0.08)", padding: "48px 0 32px" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1fr", gap: 32 }}
-          className="grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", gap: 32 }}
+          className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
             <img src="/logo-azul.png" alt="UniPutumayo" style={{ height: 36, filter: "brightness(0) invert(1)", objectFit: "contain" }} />
             <p style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 14, lineHeight: 1.6 }}>
@@ -232,7 +233,7 @@ export default function LandingPage() {
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#fff", marginBottom: 14 }}>Nexus</div>
             {["Habla con Nexus", "Cómo funciona", "Privacidad"].map((l) => (
-              <Link key={l} href="/chat" style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,0.65)", textDecoration: "none", padding: "4px 0" }}
+              <Link key={l} href="/chat" style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,0.65)", textDecoration: "none", padding: "8px 0" }}
                 className="hover:text-white transition-colors">{l}</Link>
             ))}
           </div>
@@ -240,7 +241,7 @@ export default function LandingPage() {
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#fff", marginBottom: 14 }}>Académico</div>
             {["Pregrados", "Posgrados", "Inscripciones", "Costos"].map((l) => (
               <a key={l} href="https://itp.edu.co/ITP2022/" target="_blank" rel="noopener noreferrer"
-                style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,0.65)", textDecoration: "none", padding: "4px 0" }}
+                style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,0.65)", textDecoration: "none", padding: "8px 0" }}
                 className="hover:text-white transition-colors">{l}</a>
             ))}
           </div>
@@ -248,7 +249,7 @@ export default function LandingPage() {
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "#fff", marginBottom: 14 }}>Institucional</div>
             {["SIGEDIN", "Biblioteca", "Bienestar"].map((l) => (
               <a key={l} href="https://itp.edu.co/ITP2022/" target="_blank" rel="noopener noreferrer"
-                style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,0.65)", textDecoration: "none", padding: "4px 0" }}
+                style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,0.65)", textDecoration: "none", padding: "8px 0" }}
                 className="hover:text-white transition-colors">{l}</a>
             ))}
             <img src="/logo-vigilada.png" alt="Vigilada Mineducación" style={{ height: 52, marginTop: 14, objectFit: "contain" }} />

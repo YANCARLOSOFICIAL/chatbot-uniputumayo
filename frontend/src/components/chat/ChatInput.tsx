@@ -62,7 +62,7 @@ export function ChatInput({
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--error)] opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--error)]" />
             </span>
-            <span className="text-[11px] text-[var(--error)] font-medium">Escuchando…</span>
+            <span className="text-[13px] text-[var(--error)] font-medium">Escuchando…</span>
           </div>
         )}
 
@@ -98,7 +98,7 @@ export function ChatInput({
                   disabled={isLoading}
                   aria-label={isListening ? "Detener" : "Micrófono"}
                   className={[
-                    "w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-150",
+                    "w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-150",
                     isListening
                       ? "bg-red-500 text-white shadow-sm"
                       : "text-[var(--text-3)] hover:text-[var(--brand)] hover:bg-[var(--surface-3)]",
@@ -106,8 +106,8 @@ export function ChatInput({
                   ].join(" ")}
                 >
                   {isListening
-                    ? <Square size={10} fill="currentColor" strokeWidth={2} />
-                    : <Mic size={13} strokeWidth={1.5} />
+                    ? <Square size={14} fill="currentColor" strokeWidth={2} />
+                    : <Mic size={16} strokeWidth={1.5} />
                   }
                 </button>
               )}
@@ -116,7 +116,7 @@ export function ChatInput({
             {/* Right: counter + send */}
             <div className="flex items-center gap-2">
               {value.length > 200 && (
-                <span className={`text-[9px] tabular-nums ${value.length > 500 ? "text-[var(--error)]" : "text-[var(--text-3)]"}`}>
+                <span className={`text-[11px] tabular-nums ${value.length > 500 ? "text-[var(--error)]" : "text-[var(--text-3)]"}`}>
                   {value.length}
                 </span>
               )}
@@ -125,26 +125,26 @@ export function ChatInput({
                 disabled={!canSend}
                 aria-label="Enviar"
                 className={[
-                  "w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-150",
+                  "w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-150",
                   canSend
                     ? "bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)] active:scale-95"
                     : "bg-[var(--surface-3)] text-[var(--text-3)] cursor-not-allowed",
                 ].join(" ")}
               >
                 {isLoading ? (
-                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
                 ) : (
-                  <ArrowUp size={13} strokeWidth={2.5} />
+                  <ArrowUp size={16} strokeWidth={2.5} />
                 )}
               </button>
             </div>
           </div>
         </div>
 
-        <p className="text-center text-[10px] text-[var(--text-3)] mt-2 opacity-70">
+        <p className="text-center text-[12px] text-[var(--text-3)] mt-2 opacity-70">
           Nexus puede equivocarse. Verifica información crítica con la oficina de admisiones.
         </p>
       </div>

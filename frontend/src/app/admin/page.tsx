@@ -118,7 +118,7 @@ export default function AdminPage() {
           <div style={{ position: "relative", zIndex: 1 }}>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,.6)", marginBottom: 2 }}>{greeting},</div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, color: "#fff" }}>{user?.display_name ?? "Administrador"}</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,.5)", marginTop: 2 }}>Panel de control de Nexus · UniPutumayo</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,.8)", marginTop: 2 }}>Panel de control de Nexus · UniPutumayo</div>
           </div>
           <div style={{ position: "relative", zIndex: 1, display: "flex", gap: 8, flexWrap: "wrap" }}>
             {loading ? (
@@ -139,7 +139,7 @@ export default function AdminPage() {
         </div>
 
         {/* Stats grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
           <StatCard label="Conversaciones" value="2,418" delta="+12%"  icon={MessageSquare} color="var(--brand-primary)" />
           <StatCard label="Usuarios únicos" value="1,082"  delta="+8%"  icon={Users}         color="#8B5CF6" />
           <StatCard label="Tasa resolución"  value="92.4%" delta="+1.2%" icon={Activity}      color="var(--success)" />
@@ -147,7 +147,7 @@ export default function AdminPage() {
         </div>
 
         {/* Two-col grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 24 }}>
+        <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6">
           {/* Knowledge base */}
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -155,6 +155,7 @@ export default function AdminPage() {
               <Link href="/admin/documents" className="btn btn-secondary btn-sm" style={{ textDecoration: "none" }}>Ver todo</Link>
             </div>
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+              <div className="overflow-x-auto w-full">
               <table className="admin-table" style={{ width: "100%" }}>
                 <thead>
                   <tr>
@@ -180,6 +181,7 @@ export default function AdminPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
             </div>
           </div>
 
@@ -238,7 +240,7 @@ export default function AdminPage() {
         {/* Navigation cards */}
         <div style={{ marginTop: 24 }}>
           <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, margin: "0 0 12px", color: "var(--text-1)" }}>Módulos</h3>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {[
               { href: "/admin/documents", icon: FileText,  title: "Documentos",      desc: "Gestionar base de conocimiento RAG.",    color: "var(--brand-primary)" },
               { href: "/admin/config",    icon: Settings,   title: "Configuración IA", desc: "Proveedores, modelos y API keys.",        color: "#8B5CF6" },

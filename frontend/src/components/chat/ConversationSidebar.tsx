@@ -85,8 +85,8 @@ export function ConversationSidebar({
           <div className="flex items-center gap-2">
             <img src="/isotipo.webp" alt="UniPutumayo" style={{ height: 28, objectFit: "contain" }} />
             <div>
-              <div className="text-[13px] font-bold text-[var(--sb-text)]" style={{ fontFamily: "var(--font-display)" }}>Nexus</div>
-              <div className="text-[10px] text-[var(--sb-muted)]">UniPutumayo</div>
+              <div className="text-[15px] font-bold text-[var(--sb-text)]" style={{ fontFamily: "var(--font-display)" }}>Nexus</div>
+              <div className="text-[11px] text-[var(--sb-muted)]">UniPutumayo</div>
             </div>
           </div>
           <button
@@ -106,7 +106,7 @@ export function ConversationSidebar({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar…"
-            className="w-full pl-6 pr-2.5 py-1.5 text-[11px] rounded-md bg-[var(--sb-hover)] border border-[var(--sb-border)] text-[var(--sb-text)] placeholder-[var(--sb-muted)] outline-none focus:border-[var(--sb-active)]/50 transition-colors"
+            className="w-full pl-6 pr-2.5 py-2 text-[13px] rounded-md bg-[var(--sb-hover)] border border-[var(--sb-border)] text-[var(--sb-text)] placeholder-[var(--sb-muted)] outline-none focus:border-[var(--sb-active)]/50 transition-colors"
           />
         </div>
       </div>
@@ -118,17 +118,17 @@ export function ConversationSidebar({
             <div className="w-8 h-8 rounded-lg bg-[var(--sb-hover)] flex items-center justify-center mb-2.5">
               <MessageSquare size={15} className="text-[var(--sb-muted)]" strokeWidth={1.5} />
             </div>
-            <p className="text-[11px] text-[var(--sb-muted)] font-medium">Sin conversaciones</p>
-            <p className="text-[9px] text-[var(--sb-muted)] opacity-50 mt-0.5">
+            <p className="text-[13px] text-[var(--sb-muted)] font-medium">Sin conversaciones</p>
+            <p className="text-[11px] text-[var(--sb-muted)] opacity-50 mt-0.5">
               Empieza una nueva arriba
             </p>
           </div>
         ) : grouped.length === 0 ? (
-          <p className="text-[11px] text-[var(--sb-muted)] text-center py-8">Sin resultados</p>
+          <p className="text-[13px] text-[var(--sb-muted)] text-center py-8">Sin resultados</p>
         ) : (
           grouped.map(([label, items]) => (
             <div key={label} className="mb-4">
-              <p className="text-[9px] font-semibold text-[var(--sb-muted)] uppercase tracking-wider px-2 py-1">
+              <p className="text-[11px] font-semibold text-[var(--sb-muted)] uppercase tracking-wider px-2 py-1">
                 {label}
               </p>
               {items.map((conv) => {
@@ -139,7 +139,7 @@ export function ConversationSidebar({
                     key={conv.id}
                     onClick={() => handleSelect(conv.id)}
                     className={[
-                      "group w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-left mb-0.5 transition-all duration-100 relative",
+                      "group w-full flex items-center gap-1.5 px-2 py-2 rounded-md text-left mb-0.5 transition-all duration-100 relative",
                       isActive
                         ? "bg-[var(--sb-hover)] text-[var(--sb-text)] active-left-border"
                         : "text-[var(--sb-muted)] hover:bg-[var(--sb-hover)] hover:text-[var(--sb-text)]",
@@ -150,7 +150,7 @@ export function ConversationSidebar({
                       strokeWidth={1.5}
                       className={`shrink-0 ${isActive ? "text-[var(--sb-active)]" : "text-[var(--sb-muted)]"}`}
                     />
-                    <span className="flex-1 text-[11px] truncate">{conv.title ?? "Conversación"}</span>
+                    <span className="flex-1 text-[13px] truncate">{conv.title ?? "Conversación"}</span>
                     <button
                       onClick={(e) => handleDeleteClick(e, conv.id)}
                       className={[
@@ -174,30 +174,30 @@ export function ConversationSidebar({
       {/* Footer */}
       <div className="p-1.5 border-t border-[var(--sb-border)] flex-shrink-0 space-y-0.5">
         <Link href="/"
-          className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors text-[11px]"
+          className="flex items-center gap-1.5 px-2 py-2 rounded-md text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors text-[13px]"
         >
-          <Home size={11} strokeWidth={1.5} /> Inicio
+          <Home size={13} strokeWidth={1.5} /> Inicio
         </Link>
 
         {user?.role === "admin" && (
           <Link href="/admin"
-            className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors text-[11px]"
+            className="flex items-center gap-1.5 px-2 py-2 rounded-md text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors text-[13px]"
           >
-            <Settings size={11} strokeWidth={1.5} /> Admin
+            <Settings size={13} strokeWidth={1.5} /> Admin
           </Link>
         )}
 
         <div className="pt-1 mt-0.5 border-t border-[var(--sb-border)]">
           {user ? (
-            <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md group cursor-default">
-              <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[8px] font-bold uppercase shrink-0" style={{ background: "var(--brand-accent)" }}>
+            <div className="flex items-center gap-1.5 px-2 py-2 rounded-md group cursor-default">
+              <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold uppercase shrink-0" style={{ background: "var(--brand-accent)" }}>
                 {user.display_name?.[0] ?? "U"}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-medium text-[var(--sb-text)] truncate leading-tight">
+                <p className="text-[13px] font-medium text-[var(--sb-text)] truncate leading-tight">
                   {user.display_name ?? "Usuario"}
                 </p>
-                <p className="text-[8px] text-[var(--sb-muted)] capitalize">{user.role}</p>
+                <p className="text-[10px] text-[var(--sb-muted)] capitalize">{user.role}</p>
               </div>
               <button
                 onClick={handleLogout}
@@ -210,7 +210,7 @@ export function ConversationSidebar({
           ) : (
             <Link
               href="/admin/login"
-              className="flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-md bg-[var(--sb-hover)] border border-[var(--sb-border)] text-[var(--sb-text)] hover:bg-white/10 transition-colors text-[11px] font-medium"
+              className="flex items-center justify-center gap-1 px-2.5 py-2 rounded-md bg-[var(--sb-hover)] border border-[var(--sb-border)] text-[var(--sb-text)] hover:bg-white/10 transition-colors text-[13px] font-medium"
             >
               Iniciar sesión
             </Link>

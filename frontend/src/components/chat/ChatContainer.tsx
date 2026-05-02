@@ -94,22 +94,22 @@ export function ChatContainer() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         {/* Top bar — compact, clean */}
-        <header className="flex-shrink-0 h-11 px-3 border-b border-[var(--border)] bg-[var(--bg)] flex items-center gap-2">
+        <header className="flex-shrink-0 h-14 px-4 border-b border-[var(--border)] bg-[var(--bg)] flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="md:hidden w-7 h-7 rounded-md flex items-center justify-center text-[var(--text-3)] hover:bg-[var(--surface-3)] hover:text-[var(--text-1)] transition-colors"
+            className="md:hidden w-9 h-9 rounded-md flex items-center justify-center text-[var(--text-3)] hover:bg-[var(--surface-3)] hover:text-[var(--text-1)] transition-colors"
             aria-label="Abrir menú"
           >
-            <PanelLeft size={15} strokeWidth={1.5} />
+            <PanelLeft size={20} strokeWidth={1.5} />
           </button>
 
           <div className="flex items-center gap-1.5 min-w-0">
             <GuacamayaAvatar
               state={(avatarState as GuacamayaState) ?? "idle"}
-              size={24}
+              size={28}
               className="flex-shrink-0"
             />
-            <span className="text-[13px] font-semibold text-[var(--text-1)] truncate">Nexus</span>
+            <span className="text-[15px] font-semibold text-[var(--text-1)] truncate">Nexus</span>
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)] flex-shrink-0" />
           </div>
 
@@ -118,12 +118,12 @@ export function ChatContainer() {
               <>
                 <button
                   onClick={() => { logout(); window.location.href = "/"; }}
-                  className="hidden sm:flex items-center gap-1 text-[11px] text-[var(--text-3)] hover:text-[var(--error)] transition-colors px-1.5 py-1 rounded-md hover:bg-[var(--error-dim)]"
+                  className="hidden sm:flex items-center gap-1.5 text-[13px] text-[var(--text-3)] hover:text-[var(--error)] transition-colors px-2.5 py-1.5 rounded-md hover:bg-[var(--error-dim)]"
                   title="Cerrar sesión"
                 >
-                  <LogOut size={11} /> Salir
+                  <LogOut size={13} /> Salir
                 </button>
-                <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold uppercase flex-shrink-0" style={{ background: "var(--brand-accent)" }}>
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold uppercase flex-shrink-0" style={{ background: "var(--brand-accent)" }}>
                   {user.display_name?.[0] ?? "U"}
                 </div>
               </>

@@ -60,11 +60,11 @@ function BotMessage({ message }: { message: Message }) {
       </div>
 
       <div className="flex-1 min-w-0" style={{ maxWidth: "78%" }}>
-        <div className="msg-bot">
-          {isStreaming && <span className="streaming-cursor" />}
-          <div className="prose-chat">
+        <div className="msg-bot relative">
+          <div className="prose-chat text-[var(--text-1)]">
+            {isStreaming && !message.content && <span className="streaming-cursor" />}
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {message.content || " "}
+              {message.content + (isStreaming && message.content ? " █" : "")}
             </ReactMarkdown>
           </div>
         </div>

@@ -49,8 +49,8 @@
 
   --text-1:    #0F1A22;
   --text-2:    #4A5360;
-  --text-3:    #6B7682;
-  --text-4:    #6B7682;    /* alias for legacy */
+  --text-3:    #5A6370;
+  --text-4:    #5A6370;    /* alias for legacy */
   --text-link: #1B6E94;
 
   /* Brand shorthand aliases */
@@ -466,7 +466,7 @@ body::before {
 
 /* ════════ CARD ════════ */
 .card {
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg); /* 12px */
   box-shadow: var(--shadow-sm);
@@ -551,11 +551,15 @@ body::before {
   font-family: var(--font-body), system-ui, sans-serif;
 }
 .msg-bot {
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 4px 16px 16px 16px;
   padding: 12px 16px;
   box-shadow: var(--shadow-sm);
+}
+.msg-bot .prose-chat {
+  color: var(--text-1);
+  font-size: 0.9375rem;
 }
 .chat-input-area {
   background: var(--surface);
