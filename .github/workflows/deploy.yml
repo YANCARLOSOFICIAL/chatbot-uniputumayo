@@ -83,6 +83,11 @@ jobs:
           docker container prune -f || true
 
       - name: Deploy with docker compose
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: |
           docker compose -f docker-compose.prod.yml pull
           docker compose -f docker-compose.prod.yml up -d --force-recreate
@@ -92,7 +97,7 @@ jobs:
           echo "Esperando a que Ollama esté listo..."
           for i in $(seq 1 30); do
             if docker exec iup-chatbot-ollama ollama list > /dev/null 2>&1; then
-              echo "Ollama está listo!"
+              echo "Ollama listo!"
               break
             fi
             echo "Intento $i/30... esperando 5s"
@@ -103,33 +108,22 @@ jobs:
         run: |
           echo "Verificando modelos de Ollama..."
 
-          # Modelo de chat
-          CHAT_MODEL="${OLLAMA_DEFAULT_MODEL:-qwen2.5:7b}"
-          if ! docker exec iup-chatbot-ollama ollama list | grep -q "$CHAT_MODEL"; then
-            echo "Descargando modelo de chat: $CHAT_MODEL"
-            docker exec iup-chatbot-ollama ollama pull "$CHAT_MODEL"
-          else
-            echo "Modelo de chat ya existe: $CHAT_MODEL"
-          fi
+          pull_if_missing() {
+            local model="$1"
+            local label="$2"
+            if docker exec iup-chatbot-ollama ollama list | grep -q "^${model}"; then
+              echo "✓ $label ya existe: $model"
+            else
+              echo "⬇ Descargando $label: $model"
+              docker exec iup-chatbot-ollama ollama pull "$model"
+            fi
+          }
 
-          # Modelo de embeddings
-          EMBED_MODEL="${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}"
-          if ! docker exec iup-chatbot-ollama ollama list | grep -q "$EMBED_MODEL"; then
-            echo "Descargando modelo de embeddings: $EMBED_MODEL"
-            docker exec iup-chatbot-ollama ollama pull "$EMBED_MODEL"
-          else
-            echo "Modelo de embeddings ya existe: $EMBED_MODEL"
-          fi
+          pull_if_missing "qwen3:8b"          "chat"
+          pull_if_missing "nomic-embed-text"  "embeddings"
+          pull_if_missing "gemma4:e4b"        "visión"
 
-          # Modelo de visión
-          VISION_MODEL="${OLLAMA_VISION_MODEL:-gemma3:4b}"
-          if ! docker exec iup-chatbot-ollama ollama list | grep -q "$VISION_MODEL"; then
-            echo "Descargando modelo de visión: $VISION_MODEL"
-            docker exec iup-chatbot-ollama ollama pull "$VISION_MODEL"
-          else
-            echo "Modelo de visión ya existe: $VISION_MODEL"
-          fi
-
+          echo ""
           echo "Modelos disponibles:"
           docker exec iup-chatbot-ollama ollama list
 

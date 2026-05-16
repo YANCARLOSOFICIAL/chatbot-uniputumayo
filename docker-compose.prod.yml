@@ -61,28 +61,31 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://chatbot_user:chatbot_password@postgres:5432/chatbot_db
       OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_DEFAULT_MODEL: qwen2.5:7b
+      OLLAMA_DEFAULT_MODEL: qwen3:8b
       OLLAMA_EMBEDDING_MODEL: nomic-embed-text
-      OLLAMA_VISION_MODEL: gemma3:4b
-      OPENAI_API_KEY: ""
-      OPENAI_DEFAULT_MODEL: gpt-4o-mini
+      OLLAMA_VISION_MODEL: gemma4:e4b
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_DEFAULT_MODEL: gpt-5.4-mini
       OPENAI_EMBEDDING_MODEL: text-embedding-3-small
       DEFAULT_LLM_PROVIDER: ollama
-      DEFAULT_TEMPERATURE: "0.1"
+      DEFAULT_TEMPERATURE: "0.05"
       DEFAULT_MAX_TOKENS: "2048"
       CHUNK_SIZE: "512"
       CHUNK_OVERLAP: "77"
       RAG_TOP_K: "5"
       RAG_SCORE_THRESHOLD: "0.35"
+      RAG_HYDE_ENABLED: "true"
+      RAG_DIVERSITY_ENABLED: "true"
+      RAG_CANDIDATES_MULTIPLIER: "3"
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_DIMENSIONS: "768"
       CORS_ORIGINS: "*"
       MAX_UPLOAD_SIZE_MB: "50"
       UPLOAD_DIR: /app/uploads
       LOG_LEVEL: info
-      JWT_SECRET: super-secret-change-me
-      ADMIN_EMAIL: admin@iup.edu.co
-      ADMIN_PASSWORD: admin123
+      JWT_SECRET: ${JWT_SECRET:-super-secret-change-me}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@iup.edu.co}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
     ports:
       - "8001:8000"
     volumes:

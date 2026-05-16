@@ -18,8 +18,26 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def _pull_single_model(model: str) -> None:
+    """Pull one Ollama model; each runs in its own task so failures are independent."""
+    try:
+        async with httpx.AsyncClient(timeout=1800.0) as client:
+            resp = await client.post(
+                f"{settings.ollama_base_url}/api/pull",
+                json={"name": model, "stream": False},
+            )
+            if resp.status_code == 200:
+                logger.info(f"Modelo '{model}' descargado correctamente")
+            else:
+                logger.warning(f"Error descargando modelo '{model}': {resp.status_code}")
+    except Exception as e:
+        logger.warning(f"No se pudo descargar '{model}': {e}")
+
+
 async def _ensure_ollama_models():
-    """Pull required Ollama models if not already present."""
+    """Pull required Ollama models concurrently if not already present."""
+    import asyncio
+
     models_needed = [
         m for m in [
             settings.ollama_default_model,
@@ -34,24 +52,17 @@ async def _ensure_ollama_models():
                 logger.warning("Ollama no disponible, omitiendo descarga de modelos")
                 return
             existing = {m["name"] for m in resp.json().get("models", [])}
-
-        for model in models_needed:
-            # Check both exact name and name:latest
-            if model in existing or f"{model}:latest" in existing:
-                logger.info(f"Modelo Ollama '{model}' ya disponible")
-                continue
-            logger.info(f"Descargando modelo Ollama '{model}'...")
-            async with httpx.AsyncClient(timeout=600.0) as client:
-                resp = await client.post(
-                    f"{settings.ollama_base_url}/api/pull",
-                    json={"name": model, "stream": False},
-                )
-                if resp.status_code == 200:
-                    logger.info(f"Modelo '{model}' descargado correctamente")
-                else:
-                    logger.warning(f"Error descargando modelo '{model}': {resp.status_code}")
     except Exception as e:
         logger.warning(f"No se pudo conectar con Ollama: {e}")
+        return
+
+    # Launch each missing model as an independent concurrent task
+    for model in models_needed:
+        if model in existing or f"{model}:latest" in existing:
+            logger.info(f"Modelo Ollama '{model}' ya disponible")
+        else:
+            logger.info(f"Descargando modelo Ollama '{model}'...")
+            asyncio.create_task(_pull_single_model(model))
 
 
 async def _seed_admin():
