@@ -116,7 +116,7 @@ class ChatService:
         provider = data.llm_provider or runtime_config.default_llm_provider
         llm_service = LLMService()
         llm_response = await llm_service.generate(
-            GenerateRequest(messages=messages, provider=provider)
+            GenerateRequest(messages=messages, provider=provider, model=data.llm_model)
         )
 
         response_time = int((time.time() - start_time) * 1000)
@@ -219,12 +219,7 @@ class ChatService:
             # 6. Stream LLM response token by token
             provider_name = data.llm_provider or runtime_config.default_llm_provider
             provider = ProviderFactory.get_provider(provider_name)
-
-            model = (
-                runtime_config.ollama_default_model
-                if provider_name == "ollama"
-                else runtime_config.openai_default_model
-            )
+            model = data.llm_model or runtime_config.resolve_model(provider_name)
             temperature = runtime_config.default_temperature
             max_tokens = runtime_config.default_max_tokens
             messages_dicts = [{"role": m.role, "content": m.content} for m in messages]

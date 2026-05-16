@@ -5,7 +5,7 @@ from typing import AsyncIterator
 import httpx
 
 from app.providers.base import BaseLLMProvider
-from app.config import settings
+from app.config import settings, OLLAMA_EMBEDDING_KEYWORDS
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +97,22 @@ class OllamaProvider(BaseLLMProvider):
                 data = response.json()
                 embeddings.append(data["embedding"])
         return {"embeddings": embeddings}
+
+    async def get_installed_models(self) -> list[str]:
+        """Devuelve los modelos de chat instalados en Ollama (excluye modelos de embedding)."""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{self.base_url}/api/tags")
+                if response.status_code != 200:
+                    return []
+                data = response.json()
+                all_names = [m["name"] for m in data.get("models", [])]
+                return [
+                    name for name in all_names
+                    if not any(kw in name.lower() for kw in OLLAMA_EMBEDDING_KEYWORDS)
+                ]
+        except Exception:
+            return []
 
     async def is_available(self) -> bool:
         try:

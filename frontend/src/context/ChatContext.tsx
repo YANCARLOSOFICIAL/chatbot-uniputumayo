@@ -76,20 +76,13 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case "SET_ERROR":
       return { ...state, error: action.payload };
     case "ADD_CONVERSATION":
-      return {
-        ...state,
-        conversations: [action.payload, ...state.conversations],
-      };
+      return { ...state, conversations: [action.payload, ...state.conversations] };
     case "REMOVE_CONVERSATION":
       return {
         ...state,
-        conversations: state.conversations.filter(
-          (c) => c.id !== action.payload
-        ),
+        conversations: state.conversations.filter((c) => c.id !== action.payload),
         activeConversationId:
-          state.activeConversationId === action.payload
-            ? null
-            : state.activeConversationId,
+          state.activeConversationId === action.payload ? null : state.activeConversationId,
       };
     default:
       return state;
@@ -113,8 +106,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
 export function useChatContext() {
   const context = useContext(ChatContext);
-  if (!context) {
-    throw new Error("useChatContext must be used within a ChatProvider");
-  }
+  if (!context) throw new Error("useChatContext must be used within a ChatProvider");
   return context;
 }

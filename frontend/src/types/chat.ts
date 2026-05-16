@@ -36,6 +36,14 @@ export interface ChatResponse {
   sources: SourceInfo[];
 }
 
+export interface ProviderOption {
+  name: string;
+  models: string[];
+  is_available: boolean;
+  is_default: boolean;
+  default_model: string;
+}
+
 export interface DocumentInfo {
   id: string;
   title: string;

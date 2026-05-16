@@ -137,8 +137,7 @@ export const apiClient = {
     conversationId: string,
     content: string,
     inputType: string = "text",
-    onEvent: (event: Record<string, unknown>) => void,
-    llmProvider?: string
+    onEvent: (event: Record<string, unknown>) => void
   ): Promise<void> => {
     const url = `${API_BASE}/api/v1/chat/conversations/${conversationId}/messages/stream`;
     const token = getStoredToken();
@@ -150,7 +149,7 @@ export const apiClient = {
     const response = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify({ content, input_type: inputType, llm_provider: llmProvider }),
+      body: JSON.stringify({ content, input_type: inputType }),
     });
 
     if (!response.ok) {
@@ -223,10 +222,16 @@ export const apiClient = {
   // ── LLM Config ──
   getProviders: () =>
     request<{
-      providers: Array<{ name: string; models: string[]; is_available: boolean; is_default: boolean }>;
+      providers: Array<{
+        name: string;
+        models: string[];
+        is_available: boolean;
+        is_default: boolean;
+        default_model: string;
+      }>;
     }>("/api/v1/llm/providers"),
 
-  updateLLMConfig: (config: { default_provider?: string; temperature?: number; max_tokens?: number }) =>
+  updateLLMConfig: (config: { default_provider?: string; default_model?: string; temperature?: number; max_tokens?: number }) =>
     request<{ success: boolean; config: Record<string, unknown> }>("/api/v1/llm/config", {
       method: "PUT",
       body: JSON.stringify(config),

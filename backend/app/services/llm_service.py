@@ -11,6 +11,7 @@ from app.schemas.llm import (
 )
 from app.providers.provider_factory import ProviderFactory
 from app.runtime_config import runtime_config
+from app.config import OPENAI_CHAT_MODELS
 
 
 class LLMService:
@@ -79,29 +80,39 @@ class LLMService:
 
     async def get_providers(self) -> ProvidersResponse:
         providers = []
-        for name in ["ollama", "openai"]:
-            try:
-                provider = ProviderFactory.get_provider(name)
-                is_available = await provider.is_available()
-            except ValueError:
-                # OpenAI not configured, mark as unavailable
-                is_available = False
-                provider = None
-            
-            models = []
-            if name == "ollama":
-                models = [runtime_config.ollama_default_model]
-            else:
-                models = [runtime_config.openai_default_model]
 
-            providers.append(
-                ProviderInfo(
-                    name=name,
-                    models=models,
-                    is_available=is_available,
-                    is_default=(name == runtime_config.default_llm_provider and is_available),
-                )
-            )
+        # --- Ollama: consulta modelos instalados dinámicamente ---
+        try:
+            ollama = ProviderFactory.get_provider("ollama")
+            is_available = await ollama.is_available()
+            installed_models = await ollama.get_installed_models() if is_available else []
+        except Exception:
+            is_available = False
+            installed_models = []
+
+        providers.append(ProviderInfo(
+            name="ollama",
+            models=installed_models,
+            is_available=is_available,
+            is_default=(runtime_config.default_llm_provider == "ollama"),
+            default_model=runtime_config.ollama_default_model,
+        ))
+
+        # --- OpenAI: lista curada de modelos actuales ---
+        try:
+            openai_p = ProviderFactory.get_provider("openai")
+            openai_available = await openai_p.is_available()
+        except ValueError:
+            openai_available = False
+
+        providers.append(ProviderInfo(
+            name="openai",
+            models=OPENAI_CHAT_MODELS,
+            is_available=openai_available,
+            is_default=(runtime_config.default_llm_provider == "openai"),
+            default_model=runtime_config.openai_default_model,
+        ))
+
         return ProvidersResponse(providers=providers)
 
     async def update_config(self, config: LLMConfigUpdate) -> dict:
@@ -114,7 +125,11 @@ class LLMService:
         if config.max_tokens is not None:
             runtime_config.default_max_tokens = config.max_tokens
 
-        # Reset provider if it changed
+        # Actualizar el modelo por defecto del proveedor indicado
+        if config.default_model is not None:
+            target = config.default_provider or runtime_config.default_llm_provider
+            runtime_config.set_model(target, config.default_model)
+
         if config.default_provider and config.default_provider != old_provider:
             ProviderFactory.reset_provider(old_provider)
             ProviderFactory.reset_provider(config.default_provider)

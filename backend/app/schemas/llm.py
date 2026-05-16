@@ -45,6 +45,7 @@ class ProviderInfo(BaseModel):
     models: list[str]
     is_available: bool
     is_default: bool
+    default_model: str   # Modelo actualmente seleccionado por defecto para este proveedor
 
 
 class ProvidersResponse(BaseModel):

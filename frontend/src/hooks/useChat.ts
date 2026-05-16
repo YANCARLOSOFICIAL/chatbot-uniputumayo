@@ -63,10 +63,7 @@ export function useChat() {
       dispatch({ type: "SET_ERROR", payload: null });
       try {
         const messages = await apiClient.getMessages(conversationId);
-        dispatch({
-          type: "SET_MESSAGES",
-          payload: messages as unknown as Message[],
-        });
+        dispatch({ type: "SET_MESSAGES", payload: messages as unknown as Message[] });
       } catch (error) {
         dispatch({
           type: "SET_ERROR",
@@ -102,7 +99,7 @@ export function useChat() {
       };
       dispatch({ type: "ADD_MESSAGE", payload: tempUserMessage });
 
-      // Add placeholder streaming assistant message
+      // Placeholder para el mensaje del asistente mientras llega el stream
       const streamingId = `streaming-${Date.now()}`;
       const streamingMessage: Message = {
         id: streamingId,
@@ -126,11 +123,25 @@ export function useChat() {
           content,
           inputType,
           (event) => {
-            const e = event as { type: string; sources?: unknown[]; content?: string; user_message?: unknown; assistant_message?: unknown; message?: string };
+            const e = event as {
+              type: string;
+              sources?: unknown[];
+              content?: string;
+              user_message?: unknown;
+              assistant_message?: unknown;
+              message?: string;
+            };
             if (e.type === "sources" && e.sources) {
               dispatch({
                 type: "SET_SOURCES",
-                payload: (e.sources as Array<{ chunk_id: string; document_title: string; content_preview: string; score: number; program: string | null; faculty: string | null }>).map((s) => ({
+                payload: (e.sources as Array<{
+                  chunk_id: string;
+                  document_title: string;
+                  content_preview: string;
+                  score: number;
+                  program: string | null;
+                  faculty: string | null;
+                }>).map((s) => ({
                   chunk_id: s.chunk_id,
                   document_title: s.document_title,
                   content_preview: s.content_preview,
@@ -146,7 +157,6 @@ export function useChat() {
                 payload: { id: streamingId, append: e.content },
               });
             } else if (e.type === "done") {
-              // Replace temp messages with persisted DB messages
               const currentMessages = messagesRef.current.filter(
                 (m) => m.id !== tempUserId && m.id !== streamingId
               );
@@ -167,7 +177,6 @@ export function useChat() {
 
         return assistantContent;
       } catch (error) {
-        // Remove optimistic messages on error
         dispatch({
           type: "SET_MESSAGES",
           payload: messagesRef.current.filter(

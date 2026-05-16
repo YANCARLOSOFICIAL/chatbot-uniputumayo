@@ -24,6 +24,7 @@ class MessageCreate(BaseModel):
     content: str
     input_type: str = "text"
     llm_provider: str | None = None
+    llm_model: str | None = None   # Modelo específico elegido por el usuario en la UI
 
 
 class MessageResponse(BaseModel):
