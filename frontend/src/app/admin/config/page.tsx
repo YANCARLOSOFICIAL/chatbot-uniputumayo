@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useState, useEffect, useCallback } from "react";
 import {
   CheckCircle2, XCircle, Key, Server, Cloud,
-  Zap, X, AlertCircle, Check, ChevronRight, RefreshCw
+  Zap, X, AlertCircle, Check, RefreshCw
 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { Spinner } from "@/components/ui/Spinner";
+import { AdminHeader } from "@/components/admin/AdminHeader";
 
 interface ProviderInfo {
   name: string;
@@ -49,7 +49,7 @@ export default function ConfigPage() {
   // Proveedor y modelo activos globalmente
   const activeProvider = providers.find((p) => p.is_default);
 
-  const loadProviders = async () => {
+  const loadProviders = useCallback(async () => {
     try {
       const data = await apiClient.getProviders();
       setProviders(data.providers as ProviderInfo[]);
@@ -58,16 +58,16 @@ export default function ConfigPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadKeyStatus = async () => {
+  const loadKeyStatus = useCallback(async () => {
     try {
       const status = await apiClient.getApiKeyStatus();
       setKeyStatus(status);
     } catch { /* ignore */ }
-  };
+  }, []);
 
-  useEffect(() => { loadProviders(); loadKeyStatus(); }, []);
+  useEffect(() => { loadProviders(); loadKeyStatus(); }, [loadProviders, loadKeyStatus]);
 
   // Cambia proveedor Y modelo en una sola llamada
   const handleSelectModel = async (providerName: string, model: string) => {
@@ -111,22 +111,11 @@ export default function ConfigPage() {
   }
 
   return (
-    <div className="space-y-5" style={{ padding: "28px 32px 48px" }}>
-
-      {/* Breadcrumb + Header */}
-      <div>
-        <div className="flex items-center gap-1 text-[11px] text-[var(--text-3)] mb-2">
-          <Link href="/admin" className="hover:text-[var(--brand-primary)] transition-colors">Admin</Link>
-          <ChevronRight size={10} />
-          <span className="text-[var(--text-1)]">Configuración IA</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-display text-xl text-[var(--text-1)]">Configuración del Modelo IA</h1>
-            <p className="text-[13px] text-[var(--text-2)] mt-0.5">
-              El modelo seleccionado orquesta todo el flujo del sistema: chat, RAG y extracción de documentos.
-            </p>
-          </div>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
+      <AdminHeader
+        title="Configuración IA"
+        subtitle="El modelo seleccionado orquesta el chat, RAG y extracción de documentos."
+        action={
           <button
             onClick={() => { setLoading(true); loadProviders(); }}
             disabled={loading}
@@ -136,8 +125,10 @@ export default function ConfigPage() {
             <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
             Actualizar
           </button>
-        </div>
-      </div>
+        }
+      />
+
+    <div className="space-y-5" style={{ padding: "28px 32px 48px", flex: 1 }}>
 
       {/* Modelo activo (banner) */}
       {activeProvider && (
@@ -394,6 +385,7 @@ export default function ConfigPage() {
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }

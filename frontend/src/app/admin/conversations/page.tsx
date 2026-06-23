@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { MessageCircle, Search, CheckCircle2, Clock, AlertTriangle, User } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { Spinner } from "@/components/ui/Spinner";
+import { toast } from "@/components/ui/Toast";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 
 interface ConvItem {
@@ -32,8 +33,9 @@ export default function ConversationsPage() {
       setLoading(true);
       const data = await apiClient.getConversations();
       setConversations(data as unknown as ConvItem[]);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error cargando conversaciones");
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);

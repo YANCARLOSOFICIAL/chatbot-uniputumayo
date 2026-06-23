@@ -247,4 +247,18 @@ export const apiClient = {
 
   getApiKeyStatus: () =>
     request<{ has_key: boolean; masked_key: string | null }>("/api/v1/llm/api-key-status"),
+
+  // ── Analytics ──
+  getAnalytics: () =>
+    request<{
+      total_conversations: number;
+      total_messages: number;
+      unique_users: number;
+      avg_response_time_s: number | null;
+      resolution_rate: number;
+      this_week_conversations: number;
+      last_week_conversations: number;
+      conversations_per_day: Array<{ date: string; label: string; count: number }>;
+      top_queries: Array<{ label: string; count: number }>;
+    }>("/api/v1/analytics/overview"),
 };

@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
 from app.config import settings
-from app.routers import health, chat, rag, llm, documents, config, auth, audio
+from app.routers import health, chat, rag, llm, documents, config, auth, audio, analytics
 from app.middleware.error_handler import global_exception_handler
 
 # Configure logging
@@ -159,6 +159,7 @@ app.include_router(llm.router, prefix="/api/v1/llm", tags=["llm"])
 app.include_router(documents.router, prefix="/api/v1/documents", tags=["documents"])
 app.include_router(config.router, prefix="/api/v1/config", tags=["config"])
 app.include_router(audio.router, prefix="/api/v1/audio", tags=["audio"])
+app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
 
 
 @app.get("/")

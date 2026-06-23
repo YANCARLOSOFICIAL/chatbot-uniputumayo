@@ -1,7 +1,8 @@
+import re
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +26,21 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     display_name: str
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", v):
+            raise ValueError("Formato de email inválido")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 6:
+            raise ValueError("La contraseña debe tener al menos 6 caracteres")
+        return v
 
 
 class LoginRequest(BaseModel):
@@ -162,6 +178,9 @@ async def update_user_role(
 ):
     if data.role not in ("user", "admin"):
         raise HTTPException(status_code=400, detail="Rol inválido. Usa 'user' o 'admin'")
+
+    if user_id == admin.id:
+        raise HTTPException(status_code=400, detail="No puedes modificar tu propio rol")
 
     result = await db.execute(select(User).where(User.id == user_id))
     target_user = result.scalar_one_or_none()
