@@ -50,13 +50,8 @@ async function request<T>(
   return response.json();
 }
 
-export interface AuthUser {
-  id: string;
-  email: string;
-  display_name: string;
-  role: string;
-  created_at: string;
-}
+import type { AuthUser } from "@/lib/auth";
+export type { AuthUser };
 
 export interface AuthResponse {
   access_token: string;
@@ -157,32 +152,38 @@ export const apiClient = {
       throw new Error(error.detail || `Error ${response.status}`);
     }
 
-    const reader = response.body!.getReader();
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("Sin cuerpo de respuesta del stream");
+
     const decoder = new TextDecoder();
     let buffer = "";
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
 
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr) {
-            let event: Record<string, unknown>;
-            try {
-              event = JSON.parse(jsonStr);
-            } catch {
-              continue; // ignore malformed JSON lines
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr) {
+              let event: Record<string, unknown>;
+              try {
+                event = JSON.parse(jsonStr);
+              } catch {
+                continue; // ignore malformed JSON lines
+              }
+              onEvent(event); // outside try/catch so event handler errors propagate
             }
-            onEvent(event); // outside try/catch so event handler errors propagate
           }
         }
       }
+    } finally {
+      reader.cancel().catch(() => {});
     }
   },
 

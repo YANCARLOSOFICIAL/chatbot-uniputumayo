@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import {
-  MessageCircle, BookOpen, Image, History,
+  MessageCircle, BookOpen, Image as ImageIcon, History,
   MapPin, Menu, X, ChevronRight
 } from "lucide-react";
 
@@ -27,10 +28,10 @@ export default function LandingPage() {
   ];
 
   const features = [
-    { icon: MessageCircle, title: "Conversación natural", body: "Pregúntale en español, como le preguntarías a un asesor académico. Nexus entiende contexto y matices." },
-    { icon: BookOpen, title: "Citas verificadas (RAG)", body: "Cada respuesta cita el catálogo, resoluciones y el PEI. Nada inventado." },
-    { icon: Image, title: "Multimodal", body: "Comparte fotos, PDFs o audios. Nexus los lee y los responde." },
-    { icon: History, title: "Historial seguro", body: "Todas tus conversaciones quedan guardadas en tu cuenta y puedes retomarlas cuando quieras." },
+    { id: "chat", icon: MessageCircle, title: "Conversación natural", body: "Pregúntale en español, como le preguntarías a un asesor académico. Nexus entiende contexto y matices." },
+    { id: "rag",  icon: BookOpen,     title: "Citas verificadas (RAG)", body: "Cada respuesta cita el catálogo, resoluciones y el PEI. Nada inventado." },
+    { id: "mm",   icon: ImageIcon,    title: "Multimodal", body: "Comparte fotos, PDFs o audios. Nexus los lee y los responde." },
+    { id: "hist", icon: History,      title: "Historial seguro", body: "Todas tus conversaciones quedan guardadas en tu cuenta y puedes retomarlas cuando quieras." },
   ];
 
   return (
@@ -47,7 +48,7 @@ export default function LandingPage() {
       }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", height: 72, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-            <img src="/logo-azul.png" alt="UniPutumayo" style={{ height: 40, objectFit: "contain" }} />
+            <Image src="/logo-azul.png" alt="UniPutumayo" width={140} height={40} style={{ objectFit: "contain" }} />
           </Link>
 
           <div className="hidden md:flex gap-7 items-center">
@@ -69,9 +70,13 @@ export default function LandingPage() {
             </Link>
           </div>
 
-          <button className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg"
+          <button
+            className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg"
             style={{ color: "var(--text-1)" }}
-            onClick={() => setMenuOpen(!menuOpen)}>
+            aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(!menuOpen)}
+          >
             {menuOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
         </div>
@@ -151,8 +156,8 @@ export default function LandingPage() {
             Información académica clara, verificada y siempre disponible.
           </h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20 }}>
-            {features.map((f, i) => (
-              <div key={i} className="card card-interactive" style={{ padding: 24 }}>
+            {features.map((f) => (
+              <div key={f.id} className="card card-interactive" style={{ padding: 24 }}>
                 <div style={{ width: 44, height: 44, borderRadius: "var(--r)", background: "var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
                   <f.icon size={22} style={{ color: "var(--brand-primary)" }} />
                 </div>
@@ -179,8 +184,8 @@ export default function LandingPage() {
             </a>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
-            {programs.map((p, i) => (
-              <div key={i} className="card card-interactive" style={{
+            {programs.map((p) => (
+              <div key={p.snies + p.name} className="card card-interactive" style={{
                 padding: 24,
                 borderTop: p.featured ? "3px solid var(--accent)" : "1px solid var(--border)"
               }}>
@@ -224,7 +229,7 @@ export default function LandingPage() {
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", gap: 32 }}
           className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
-            <img src="/logo-azul.png" alt="UniPutumayo" style={{ height: 36, filter: "brightness(0) invert(1)", objectFit: "contain" }} />
+            <Image src="/logo-azul.png" alt="UniPutumayo" width={130} height={36} style={{ filter: "brightness(0) invert(1)", objectFit: "contain" }} />
             <p style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 14, lineHeight: 1.6 }}>
               Sede Principal: "Aire Libre" Barrio Luis Carlos Galán, Mocoa, Putumayo.<br />
               +57 313 805 2807 · atencionalusuario@itp.edu.co
@@ -252,7 +257,7 @@ export default function LandingPage() {
                 style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,0.65)", textDecoration: "none", padding: "8px 0" }}
                 className="hover:text-white transition-colors">{l}</a>
             ))}
-            <img src="/logo-vigilada.png" alt="Vigilada Mineducación" style={{ height: 52, marginTop: 14, objectFit: "contain" }} />
+            <Image src="/logo-vigilada.png" alt="Vigilada Mineducación" width={90} height={52} style={{ marginTop: 14, objectFit: "contain" }} />
           </div>
         </div>
         <div style={{ maxWidth: 1200, margin: "24px auto 0", padding: "0 24px", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 20 }}>

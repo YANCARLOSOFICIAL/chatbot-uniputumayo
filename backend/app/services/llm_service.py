@@ -28,8 +28,8 @@ class LLMService:
                 else:
                     model = runtime_config.openai_default_model
 
-            temperature = request.temperature or runtime_config.default_temperature
-            max_tokens = request.max_tokens or runtime_config.default_max_tokens
+            temperature = request.temperature if request.temperature is not None else runtime_config.default_temperature
+            max_tokens = request.max_tokens if request.max_tokens is not None else runtime_config.default_max_tokens
 
             start_time = time.time()
             result = await provider.generate(

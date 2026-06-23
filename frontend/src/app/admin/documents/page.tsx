@@ -3,10 +3,12 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Upload, FileText, CheckCircle2, Clock, XCircle, AlertCircle,
-  Trash2, Check, X, CloudUpload,
+  Trash2, X, CloudUpload,
 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { Spinner } from "@/components/ui/Spinner";
+import { toast } from "@/components/ui/Toast";
+import { AdminHeader } from "@/components/admin/AdminHeader";
 
 interface DocumentItem {
   id: string;
@@ -36,8 +38,8 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [faculty, setFaculty] = useState("");
@@ -72,7 +74,7 @@ export default function DocumentsPage() {
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file || !title) return;
-    setUploading(true); setError(null); setSuccess(null);
+    setUploading(true); setError(null);
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -81,42 +83,45 @@ export default function DocumentsPage() {
       if (program) formData.append("program", program);
       if (docType) formData.append("document_type", docType);
       const result = await apiClient.uploadDocument(formData);
-      setSuccess(result.message);
+      toast.success(result.message || "Documento subido correctamente");
       setFile(null); setTitle(""); setFaculty(""); setProgram(""); setDocType("");
       await loadDocuments();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error subiendo documento");
+      const msg = err instanceof Error ? err.message : "Error subiendo documento";
+      setError(msg);
+      toast.error(msg);
     } finally { setUploading(false); }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("¿Estás seguro de eliminar este documento?")) return;
+  const handleDeleteClick = (id: string) => {
+    if (confirmDeleteId === id) {
+      handleDeleteConfirm(id);
+    } else {
+      setConfirmDeleteId(id);
+      setTimeout(() => setConfirmDeleteId(null), 3000);
+    }
+  };
+
+  const handleDeleteConfirm = async (id: string) => {
+    setConfirmDeleteId(null);
     try {
       await apiClient.deleteDocument(id);
+      toast.success("Documento eliminado");
       await loadDocuments();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error eliminando documento");
+      const msg = err instanceof Error ? err.message : "Error eliminando documento";
+      setError(msg);
+      toast.error(msg);
     }
   };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
-      {/* Header */}
-      <header style={{
-        padding: "20px 32px", borderBottom: "1px solid var(--border)",
-        background: "#fff", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexShrink: 0,
-      }}>
-        <div>
-          <h2 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>Base de conocimiento</h2>
-          <div style={{ fontSize: 13, color: "var(--text-2)", marginTop: 4 }}>Sube y gestiona documentos académicos para el RAG.</div>
-        </div>
-        <button
-          onClick={() => loadDocuments()}
-          className="btn btn-secondary btn-sm"
-        >
-          Actualizar
-        </button>
-      </header>
+      <AdminHeader
+        title="Base de conocimiento"
+        subtitle="Sube y gestiona documentos académicos para el RAG."
+        action={<button onClick={() => loadDocuments()} className="btn btn-secondary btn-sm">Actualizar</button>}
+      />
 
       <div style={{ padding: "28px 32px 48px", flex: 1 }}>
 
@@ -125,12 +130,6 @@ export default function DocumentsPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: "var(--r)", background: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626", fontSize: 13, marginBottom: 20 }}>
             <AlertCircle size={14} style={{ flexShrink: 0 }} /> {error}
             <button onClick={() => setError(null)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={13} /></button>
-          </div>
-        )}
-        {success && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: "var(--r)", background: "#F0FDF4", border: "1px solid #BBF7D0", color: "#16A34A", fontSize: 13, marginBottom: 20 }}>
-            <Check size={14} style={{ flexShrink: 0 }} /> {success}
-            <button onClick={() => setSuccess(null)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={13} /></button>
           </div>
         )}
 
@@ -255,11 +254,18 @@ export default function DocumentsPage() {
                       <td style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{doc.total_chunks}</td>
                       <td style={{ color: "var(--text-3)", fontSize: 12 }}>{new Date(doc.created_at).toLocaleDateString("es-CO")}</td>
                       <td style={{ textAlign: "right" }}>
-                        <button onClick={() => handleDelete(doc.id)}
-                          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer", padding: "4px 8px", borderRadius: "var(--r)" }}
-                          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--danger)"; (e.currentTarget as HTMLElement).style.background = "#FEF2F2"; }}
-                          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-3)"; (e.currentTarget as HTMLElement).style.background = "none"; }}>
-                          <Trash2 size={11} /> Eliminar
+                        <button
+                          onClick={() => handleDeleteClick(doc.id)}
+                          className={[
+                            "inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded transition-all duration-100",
+                            confirmDeleteId === doc.id
+                              ? "bg-[var(--danger-bg)] text-[var(--danger)] border border-[var(--danger)]/30"
+                              : "text-[var(--text-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-bg)]",
+                          ].join(" ")}
+                          style={{ border: "none", cursor: "pointer" }}
+                        >
+                          <Trash2 size={11} />
+                          {confirmDeleteId === doc.id ? "¿Confirmar?" : "Eliminar"}
                         </button>
                       </td>
                     </tr>

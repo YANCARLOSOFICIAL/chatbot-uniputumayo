@@ -16,7 +16,6 @@ interface MessageListProps {
   sources: SourceInfo[];
   isLoading: boolean;
   onQuickReply?: (text: string) => void;
-  avatarState?: "idle" | "listening" | "thinking" | "speaking";
 }
 
 const CARDS = [
@@ -101,9 +100,7 @@ function WelcomeState({ onSend }: { onSend?: (q: string) => void }) {
 }
 
 /* ── Main ── */
-export function MessageList({
-  messages, sources, isLoading, onQuickReply,
-}: MessageListProps) {
+export function MessageList({ messages, sources, isLoading, onQuickReply }: MessageListProps) {
   const scrollRef       = useRef<HTMLDivElement>(null);
   const [showBtn, setShowBtn] = useState(false);
   const isAtBottomRef   = useRef(true);

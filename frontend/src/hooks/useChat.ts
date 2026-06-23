@@ -183,6 +183,7 @@ export function useChat() {
             (m) => m.id !== tempUserId && m.id !== streamingId
           ),
         });
+        dispatch({ type: "SET_AVATAR_STATE", payload: "idle" });
         dispatch({
           type: "SET_ERROR",
           payload: error instanceof Error ? error.message : "Error enviando mensaje",

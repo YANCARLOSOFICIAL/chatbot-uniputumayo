@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, memo } from "react";
+import dynamic from "next/dynamic";
 import { Check, Copy, Mic, Clock, Zap } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import type { Message } from "@/types/chat";
 import { GuacamayaAvatar } from "./GuacamayaAvatar";
+
+// Carga diferida: react-markdown + remark-gfm se excluyen del bundle inicial (~80 KB)
+const MarkdownContent = dynamic(
+  () => import("./MarkdownContent").then((m) => ({ default: m.MarkdownContent })),
+  { ssr: false, loading: () => <span className="text-[var(--text-2)] text-sm opacity-50">…</span> }
+);
 
 interface MessageBubbleProps {
   message: Message;
@@ -62,10 +67,14 @@ function BotMessage({ message }: { message: Message }) {
       <div className="flex-1 min-w-0" style={{ maxWidth: "78%" }}>
         <div className="msg-bot relative">
           <div className="prose-chat text-[var(--text-1)]">
-            {isStreaming && !message.content && <span className="streaming-cursor" />}
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {message.content + (isStreaming && message.content ? " █" : "")}
-            </ReactMarkdown>
+            {isStreaming && !message.content ? (
+              <span className="streaming-cursor" />
+            ) : (
+              <MarkdownContent content={message.content} />
+            )}
+            {isStreaming && message.content && (
+              <span className="streaming-cursor" />
+            )}
           </div>
         </div>
 
@@ -97,7 +106,7 @@ function BotMessage({ message }: { message: Message }) {
   );
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export const MessageBubble = memo(function MessageBubble({ message }: MessageBubbleProps) {
   if (message.role === "user") return <UserMessage message={message} />;
   return <BotMessage message={message} />;
-}
+});

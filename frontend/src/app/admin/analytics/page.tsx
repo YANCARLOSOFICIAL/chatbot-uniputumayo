@@ -1,6 +1,7 @@
 "use client";
 
 import { BarChart3, TrendingUp, MessageSquare, Users, Activity, Clock } from "lucide-react";
+import { AdminHeader } from "@/components/admin/AdminHeader";
 
 const WEEK_BARS = [42, 67, 55, 89, 103, 78, 61];
 const DAYS = ["L", "M", "X", "J", "V", "S", "D"];
@@ -19,16 +20,11 @@ export default function AnalyticsPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
-      <header style={{
-        padding: "20px 32px", borderBottom: "1px solid var(--border)",
-        background: "#fff", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexShrink: 0,
-      }}>
-        <div>
-          <h2 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>Métricas</h2>
-          <div style={{ fontSize: 13, color: "var(--text-2)", marginTop: 4 }}>Última semana · datos de muestra</div>
-        </div>
-        <span className="badge badge-warn" style={{ alignSelf: "center" }}>Vista previa</span>
-      </header>
+      <AdminHeader
+        title="Métricas"
+        subtitle="Última semana · datos de muestra"
+        action={<span className="badge badge-warn" style={{ alignSelf: "center" }}>Vista previa</span>}
+      />
 
       <div style={{ padding: "28px 32px 48px", flex: 1 }}>
 
@@ -46,7 +42,7 @@ export default function AnalyticsPage() {
               </div>
               <div style={{ fontSize: 11, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 600, marginBottom: 6 }}>{label}</div>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 30, fontWeight: 700, color: "var(--text-1)", lineHeight: 1 }}>{value}</div>
-              <div style={{ fontSize: 12, fontWeight: 600, marginTop: 6, color: delta.startsWith("+") || delta.startsWith("−") && delta.includes("s") ? "var(--success)" : delta.startsWith("+") ? "var(--success)" : "var(--danger)" }}>
+              <div style={{ fontSize: 12, fontWeight: 600, marginTop: 6, color: delta.startsWith("+") ? "var(--success)" : "var(--danger)" }}>
                 {delta} vs. semana pasada
               </div>
             </div>

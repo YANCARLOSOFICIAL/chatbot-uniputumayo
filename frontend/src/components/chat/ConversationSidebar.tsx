@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   MessageSquare, Trash2, Search,
   LogOut, Settings, Home, PenSquare
@@ -40,7 +41,7 @@ function groupByDate(convs: Conversation[]) {
   return Object.entries(groups).filter(([, items]) => items.length > 0);
 }
 
-export function ConversationSidebar({
+export const ConversationSidebar = memo(function ConversationSidebar({
   conversations, activeId, onSelect, onNew, onDelete, isOpen, onClose,
 }: ConversationSidebarProps) {
   const [search, setSearch]       = useState("");
@@ -83,7 +84,7 @@ export function ConversationSidebar({
       <div className="px-3 pt-3.5 pb-2.5 flex-shrink-0">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <img src="/isotipo.webp" alt="UniPutumayo" style={{ height: 28, objectFit: "contain" }} />
+            <Image src="/isotipo.webp" alt="UniPutumayo" width={28} height={28} style={{ objectFit: "contain" }} />
             <div>
               <div className="text-[15px] font-bold text-[var(--sb-text)]" style={{ fontFamily: "var(--font-display)" }}>Nexus</div>
               <div className="text-[11px] text-[var(--sb-muted)]">UniPutumayo</div>
@@ -219,4 +220,4 @@ export function ConversationSidebar({
       </div>
     </aside>
   );
-}
+});

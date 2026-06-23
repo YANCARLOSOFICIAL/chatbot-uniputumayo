@@ -3,7 +3,7 @@ export interface AuthUser {
   email: string;
   display_name: string;
   role: string;
-  created_at?: string;
+  created_at: string;
 }
 
 export function getToken(): string | null {

@@ -1,8 +1,9 @@
 "use client";
 
+import { memo } from "react";
 import { GuacamayaAvatar } from "./GuacamayaAvatar";
 
-export function TypingIndicator() {
+export const TypingIndicator = memo(function TypingIndicator() {
   return (
     <div className="flex gap-3" style={{ alignItems: "flex-start" }}>
       <div className="shrink-0" style={{ marginTop: 2 }}>
@@ -18,4 +19,4 @@ export function TypingIndicator() {
       </div>
     </div>
   );
-}
+});

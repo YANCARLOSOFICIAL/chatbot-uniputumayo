@@ -1,92 +1,101 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   FileText, Settings, Users, Activity,
   CheckCircle2, XCircle, Clock, MessageSquare,
-  Upload, BarChart3, Download
+  Upload, Download, BarChart3,
 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { getUser } from "@/lib/auth";
+import { AdminHeader } from "@/components/admin/AdminHeader";
 
 interface HealthData {
   status: string;
   services: Record<string, { status: string; latency_ms?: number }>;
 }
 
-function AdminHeader({ title, subtitle, actions }: {
-  title: string; subtitle?: string; actions?: React.ReactNode;
-}) {
-  return (
-    <header style={{
-      padding: "20px 32px", borderBottom: "1px solid var(--border)",
-      background: "#fff", display: "flex", justifyContent: "space-between", alignItems: "flex-end",
-      flexShrink: 0,
-    }}>
-      <div>
-        <h2 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>{title}</h2>
-        {subtitle && <div style={{ fontSize: 13, color: "var(--text-2)", marginTop: 4 }}>{subtitle}</div>}
-      </div>
-      {actions && <div style={{ display: "flex", gap: 8 }}>{actions}</div>}
-    </header>
-  );
+interface DocumentItem {
+  id: string;
+  title: string;
+  ingestion_status: string;
+  total_chunks: number;
+  created_at?: string;
 }
 
-function StatCard({ label, value, delta, color, icon: Icon }: {
-  label: string; value: string; delta?: string; color?: string; icon: React.ElementType;
+interface ConvItem {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+
+function StatCard({ label, value, color, icon: Icon }: {
+  label: string; value: string | number; color?: string; icon: React.ElementType;
 }) {
   return (
     <div className="card" style={{ padding: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-        <div style={{ width: 40, height: 40, borderRadius: "var(--r)", background: (color ?? "var(--brand-primary)") + "18", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: "var(--r)",
+          background: (color ?? "var(--brand-primary)") + "18",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
           <Icon size={20} style={{ color: color ?? "var(--brand-primary)" }} />
         </div>
       </div>
       <div style={{ fontSize: 12, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 600, marginBottom: 6 }}>{label}</div>
       <div style={{ fontFamily: "var(--font-display)", fontSize: 32, fontWeight: 700, color: color ?? "var(--text-1)", lineHeight: 1 }}>{value}</div>
-      {delta && (
-        <div style={{ fontSize: 12, fontWeight: 600, marginTop: 6, color: delta.startsWith("+") ? "var(--success)" : "var(--danger)" }}>
-          {delta} vs. semana pasada
-        </div>
-      )}
     </div>
   );
 }
 
-const MOCK_DOCS = [
-  { name: "Catálogo Académico 2026-1.pdf", type: "PDF", size: "4.2 MB", chunks: 312, status: "indexed", updated: "hoy" },
-  { name: "PEI 2025 — Acuerdo 009.pdf",    type: "PDF", size: "1.8 MB", chunks: 156, status: "indexed", updated: "3d" },
-  { name: "Resolución 0398.pdf",           type: "PDF", size: "420 KB", chunks: 28,  status: "indexed", updated: "5d" },
-  { name: "Costos académicos 2026.xlsx",   type: "XLSX",size: "180 KB", chunks: 64,  status: "processing",updated: "12m" },
-  { name: "Reglamento estudiantil.docx",   type: "DOCX",size: "720 KB", chunks: 92,  status: "indexed", updated: "1sem" },
-];
-
-const MOCK_CONVS = [
-  { user: "Juliana M.", q: "¿Qué pregrados hay en Mocoa?",          when: "2 min", resolved: true,  msgs: 6 },
-  { user: "Carlos A.", q: "Costos de Ingeniería Ambiental 2026",     when: "14 min",resolved: true,  msgs: 4 },
-  { user: "Sofía P.",  q: "Requisitos de homologación",              when: "1 h",   resolved: false, msgs: 12, escalated: true },
-  { user: "Daniel R.", q: "Especialización Gestión Ambiental — fechas",when: "3 h", resolved: true,  msgs: 5 },
-  { user: "Anónimo",   q: "¿Hay clases nocturnas?",                  when: "5 h",   resolved: true,  msgs: 3 },
-];
-
 function StatusBadge({ status }: { status: string }) {
-  if (status === "indexed")    return <span className="badge badge-suc">● Indexado</span>;
-  if (status === "processing") return <span className="badge badge-pri">● Procesando</span>;
+  if (status === "completed" || status === "indexed")
+    return <span className="badge badge-suc">● Indexado</span>;
+  if (status === "processing")
+    return <span className="badge badge-pri">● Procesando</span>;
   return <span className="badge badge-err">● Falló</span>;
 }
 
-export default function AdminPage() {
-  const [health, setHealth] = useState<HealthData | null>(null);
-  const [user, setUser]     = useState<{ display_name?: string } | null>(null);
-  const [loading, setLoading] = useState(true);
+function timeAgo(iso: string) {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 60) return "ahora";
+  if (diff < 3600) return `${Math.floor(diff / 60)} min`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} h`;
+  return `${Math.floor(diff / 86400)} d`;
+}
 
-  useEffect(() => {
+export default function AdminPage() {
+  const [health, setHealth]         = useState<HealthData | null>(null);
+  const [documents, setDocuments]   = useState<DocumentItem[]>([]);
+  const [conversations, setConvs]   = useState<ConvItem[]>([]);
+  const [userCount, setUserCount]   = useState<number | null>(null);
+  const [user, setUser]             = useState<{ display_name?: string } | null>(null);
+  const [loading, setLoading]       = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
     setUser(getUser());
-    apiClient.checkHealth()
-      .then(setHealth).catch(() => setHealth(null))
-      .finally(() => setLoading(false));
+    try {
+      const [healthData, docs, convs, users] = await Promise.allSettled([
+        apiClient.checkHealth(),
+        apiClient.getDocuments(1, 5),
+        apiClient.getConversations(5, 0),
+        apiClient.getUsers(),
+      ]);
+      if (healthData.status === "fulfilled") setHealth(healthData.value);
+      if (docs.status === "fulfilled")       setDocuments(docs.value as unknown as DocumentItem[]);
+      if (convs.status === "fulfilled")      setConvs(convs.value as unknown as ConvItem[]);
+      if (users.status === "fulfilled")      setUserCount(users.value.length);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Buenos días" : hour < 18 ? "Buenas tardes" : "Buenas noches";
@@ -95,18 +104,22 @@ export default function AdminPage() {
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
       <AdminHeader
         title="Resumen"
-        subtitle="Última semana · panel de control Nexus"
-        actions={
-          <>
-            <button className="btn btn-secondary btn-sm"><Download size={13} /> Exportar</button>
-            <Link href="/admin/documents" className="btn btn-primary btn-sm" style={{ textDecoration: "none" }}><Upload size={13} /> Subir documento</Link>
-          </>
+        subtitle="Panel de control · Nexus UniPutumayo"
+        action={
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => load()}>
+              <Download size={13} /> Actualizar
+            </button>
+            <Link href="/admin/documents" className="btn btn-primary btn-sm" style={{ textDecoration: "none" }}>
+              <Upload size={13} /> Subir documento
+            </Link>
+          </div>
         }
       />
 
       <div style={{ padding: "28px 32px 48px", flex: 1 }}>
 
-        {/* Welcome */}
+        {/* Welcome banner */}
         <div style={{
           borderRadius: "var(--r-lg)", overflow: "hidden",
           background: "var(--brand-primary-darker)",
@@ -117,10 +130,14 @@ export default function AdminPage() {
           <div style={{ position: "absolute", inset: 0, backgroundImage: "url('/hero-fondo.png')", backgroundSize: "cover", backgroundPosition: "center", opacity: .12 }} />
           <div style={{ position: "relative", zIndex: 1 }}>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,.6)", marginBottom: 2 }}>{greeting},</div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, color: "#fff" }}>{user?.display_name ?? "Administrador"}</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,.8)", marginTop: 2 }}>Panel de control de Nexus · UniPutumayo</div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, color: "#fff" }}>
+              {user?.display_name ?? "Administrador"}
+            </div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,.8)", marginTop: 2 }}>
+              Panel de control de Nexus · UniPutumayo
+            </div>
           </div>
-          <div style={{ position: "relative", zIndex: 1, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ position: "relative", zIndex: 1 }}>
             {loading ? (
               <div style={{ width: 80, height: 28, borderRadius: 6, background: "rgba(255,255,255,.1)" }} />
             ) : health ? (
@@ -140,77 +157,107 @@ export default function AdminPage() {
 
         {/* Stats grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
-          <StatCard label="Conversaciones" value="2,418" delta="+12%"  icon={MessageSquare} color="var(--brand-primary)" />
-          <StatCard label="Usuarios únicos" value="1,082"  delta="+8%"  icon={Users}         color="#8B5CF6" />
-          <StatCard label="Tasa resolución"  value="92.4%" delta="+1.2%" icon={Activity}      color="var(--success)" />
-          <StatCard label="Docs en RAG"      value="187"   delta="+6"   icon={FileText}      color="var(--warning)" />
+          <StatCard label="Conversaciones" value={loading ? "…" : conversations.length > 0 ? `${conversations.length}+` : "0"} icon={MessageSquare} color="var(--brand-primary)" />
+          <StatCard label="Usuarios"       value={loading ? "…" : userCount ?? "—"}    icon={Users}         color="#8B5CF6" />
+          <StatCard label="Documentos RAG" value={loading ? "…" : documents.length > 0 ? `${documents.length}+` : "0"} icon={FileText} color="var(--warning)" />
+          <StatCard label="Sistema"        value={loading ? "…" : health?.status === "healthy" ? "OK" : "—"} icon={Activity}  color="var(--success)" />
         </div>
 
         {/* Two-col grid */}
         <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6">
-          {/* Knowledge base */}
+          {/* Knowledge base — real data */}
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>Base de conocimiento</h3>
+              <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>
+                Base de conocimiento
+              </h3>
               <Link href="/admin/documents" className="btn btn-secondary btn-sm" style={{ textDecoration: "none" }}>Ver todo</Link>
             </div>
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-              <div className="overflow-x-auto w-full">
-              <table className="admin-table" style={{ width: "100%" }}>
-                <thead>
-                  <tr>
-                    <th>Documento</th>
-                    <th>Chunks</th>
-                    <th>Estado</th>
-                    <th>Actualizado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {MOCK_DOCS.map((d, i) => (
-                    <tr key={i}>
-                      <td>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <FileText size={14} style={{ color: "var(--brand-primary)", flexShrink: 0 }} />
-                          <span style={{ fontWeight: 500, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200 }}>{d.name}</span>
-                        </div>
-                      </td>
-                      <td><span style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{d.chunks}</span></td>
-                      <td><StatusBadge status={d.status} /></td>
-                      <td style={{ color: "var(--text-3)", fontSize: 12 }}>{d.updated}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+              {loading ? (
+                <div style={{ padding: "40px 0", textAlign: "center" }}>
+                  <div className="shimmer" style={{ height: 14, borderRadius: 6, width: "60%", margin: "0 auto" }} />
+                </div>
+              ) : documents.length === 0 ? (
+                <div style={{ padding: "40px 0", textAlign: "center", fontSize: 13, color: "var(--text-3)" }}>
+                  Sin documentos. <Link href="/admin/documents" style={{ color: "var(--brand-primary)" }}>Sube el primero →</Link>
+                </div>
+              ) : (
+                <div className="overflow-x-auto w-full">
+                  <table className="admin-table" style={{ width: "100%" }}>
+                    <thead>
+                      <tr>
+                        <th>Documento</th>
+                        <th>Chunks</th>
+                        <th>Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {documents.map((d) => (
+                        <tr key={d.id}>
+                          <td>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <FileText size={14} style={{ color: "var(--brand-primary)", flexShrink: 0 }} />
+                              <span style={{ fontWeight: 500, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200 }}>
+                                {d.title}
+                              </span>
+                            </div>
+                          </td>
+                          <td><span style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{d.total_chunks}</span></td>
+                          <td><StatusBadge status={d.ingestion_status} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Recent conversations */}
+          {/* Recent conversations — real data */}
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>Conversaciones recientes</h3>
-              <button className="btn btn-ghost btn-sm">Ver todas</button>
+              <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>
+                Conversaciones recientes
+              </h3>
+              <Link href="/admin/conversations" className="btn btn-ghost btn-sm" style={{ textDecoration: "none" }}>Ver todas</Link>
             </div>
             <div className="card" style={{ padding: 0 }}>
-              {MOCK_CONVS.map((c, i) => (
-                <div key={i} style={{ padding: "13px 18px", borderBottom: i < MOCK_CONVS.length - 1 ? "1px solid var(--border)" : "none", display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 34, height: 34, borderRadius: "50%", background: "var(--surface-2)", color: "var(--text-1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
-                    {c.user.split(" ").map(s => s[0]).join("").slice(0, 2)}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontWeight: 600, fontSize: 13 }}>{c.user}</span>
-                      <span style={{ fontSize: 11, color: "var(--text-3)" }}>{c.when} · {c.msgs} msgs</span>
-                    </div>
-                    <div style={{ fontSize: 12, color: "var(--text-2)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.q}</div>
-                  </div>
-                  {c.escalated
-                    ? <span className="badge badge-warn">Escalado</span>
-                    : c.resolved
-                      ? <span className="badge badge-suc">Resuelto</span>
-                      : <span className="badge badge-pri">Abierto</span>}
+              {loading ? (
+                <div style={{ padding: "40px 0", textAlign: "center" }}>
+                  <div className="shimmer" style={{ height: 14, borderRadius: 6, width: "60%", margin: "0 auto" }} />
                 </div>
-              ))}
+              ) : conversations.length === 0 ? (
+                <div style={{ padding: "40px 0", textAlign: "center", fontSize: 13, color: "var(--text-3)" }}>
+                  Sin conversaciones aún.
+                </div>
+              ) : (
+                conversations.map((c, i) => (
+                  <div key={c.id} style={{
+                    padding: "13px 18px",
+                    borderBottom: i < conversations.length - 1 ? "1px solid var(--border)" : "none",
+                    display: "flex", alignItems: "center", gap: 12,
+                  }}>
+                    <div style={{
+                      width: 34, height: 34, borderRadius: "50%",
+                      background: "var(--surface-2)", color: "var(--text-1)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 11, fontWeight: 700, flexShrink: 0,
+                    }}>
+                      <MessageSquare size={14} style={{ color: "var(--brand-primary)" }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {c.title ?? "Sin título"}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--text-3)", display: "flex", alignItems: "center", gap: 4 }}>
+                        <Clock size={9} /> {timeAgo(c.updated_at)}
+                      </div>
+                    </div>
+                    <span className="badge badge-suc">Activa</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -218,10 +265,16 @@ export default function AdminPage() {
         {/* Service status */}
         {health && (
           <div style={{ marginTop: 24 }}>
-            <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, margin: "0 0 12px", color: "var(--text-1)" }}>Estado del sistema</h3>
+            <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, margin: "0 0 12px", color: "var(--text-1)" }}>
+              Estado del sistema
+            </h3>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {Object.entries(health.services).map(([name, svc]) => (
-                <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--r)", fontSize: 13 }}>
+                <div key={name} style={{
+                  display: "flex", alignItems: "center", gap: 8, padding: "8px 14px",
+                  background: "var(--surface)", border: "1px solid var(--border)",
+                  borderRadius: "var(--r)", fontSize: 13,
+                }}>
                   {svc.status === "healthy"
                     ? <CheckCircle2 size={13} style={{ color: "var(--success)" }} />
                     : <XCircle size={13} style={{ color: "var(--danger)" }} />}
@@ -237,14 +290,16 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Navigation cards */}
+        {/* Module nav cards */}
         <div style={{ marginTop: 24 }}>
           <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, margin: "0 0 12px", color: "var(--text-1)" }}>Módulos</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {[
-              { href: "/admin/documents", icon: FileText,  title: "Documentos",      desc: "Gestionar base de conocimiento RAG.",    color: "var(--brand-primary)" },
-              { href: "/admin/config",    icon: Settings,   title: "Configuración IA", desc: "Proveedores, modelos y API keys.",        color: "#8B5CF6" },
-              { href: "/admin/users",     icon: Users,      title: "Usuarios",         desc: "Roles y permisos de acceso.",             color: "var(--success)" },
+              { href: "/admin/documents",    icon: FileText,  title: "Documentos",       desc: "Gestionar base de conocimiento RAG.", color: "var(--brand-primary)" },
+              { href: "/admin/config",       icon: Settings,  title: "Configuración IA",  desc: "Proveedores, modelos y API keys.",    color: "#8B5CF6" },
+              { href: "/admin/users",        icon: Users,     title: "Usuarios",           desc: "Roles y permisos de acceso.",          color: "var(--success)" },
+              { href: "/admin/conversations",icon: MessageSquare, title: "Conversaciones", desc: "Historial de interacciones.",          color: "var(--warning)" },
+              { href: "/admin/analytics",    icon: BarChart3, title: "Métricas",           desc: "Estadísticas de uso.",                  color: "var(--brand-primary)" },
             ].map(({ href, icon: Icon, title, desc, color }) => (
               <Link key={href} href={href} style={{ textDecoration: "none" }}>
                 <div className="card card-interactive" style={{ padding: 20 }}>
@@ -259,7 +314,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Quick links */}
         <div style={{ marginTop: 20, display: "flex", gap: 16 }}>
           <Link href="/chat" style={{ fontSize: 13, color: "var(--text-2)", textDecoration: "none", display: "flex", alignItems: "center", gap: 6 }}
             className="hover:text-[var(--brand-primary)] transition-colors">

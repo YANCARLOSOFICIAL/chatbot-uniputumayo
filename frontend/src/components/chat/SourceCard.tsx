@@ -16,14 +16,7 @@ export function SourceCard({ sources }: SourceCardProps) {
     <div style={{ marginTop: 10 }}>
       <button
         onClick={() => setOpen(!open)}
-        style={{
-          display: "flex", alignItems: "center", gap: 6,
-          fontSize: 11, color: "var(--text-3)", fontWeight: 500,
-          background: "none", border: "none", cursor: "pointer", padding: 0,
-          transition: "color 120ms",
-        }}
-        onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--brand-primary)")}
-        onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--text-3)")}
+        className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-3)] hover:text-[var(--brand-primary)] bg-transparent border-none cursor-pointer p-0 transition-colors duration-100"
       >
         <BookOpen size={11} strokeWidth={1.5} />
         <span>

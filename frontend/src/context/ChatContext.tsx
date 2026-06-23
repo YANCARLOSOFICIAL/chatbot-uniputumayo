@@ -77,13 +77,16 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, error: action.payload };
     case "ADD_CONVERSATION":
       return { ...state, conversations: [action.payload, ...state.conversations] };
-    case "REMOVE_CONVERSATION":
+    case "REMOVE_CONVERSATION": {
+      const isActive = state.activeConversationId === action.payload;
       return {
         ...state,
         conversations: state.conversations.filter((c) => c.id !== action.payload),
-        activeConversationId:
-          state.activeConversationId === action.payload ? null : state.activeConversationId,
+        activeConversationId: isActive ? null : state.activeConversationId,
+        messages: isActive ? [] : state.messages,
+        sources: isActive ? [] : state.sources,
       };
+    }
     default:
       return state;
   }

@@ -2,6 +2,7 @@
 
 import { useState, useRef, type FormEvent, type KeyboardEvent } from "react";
 import { ArrowUp, Mic, Square } from "lucide-react";
+import { Spinner } from "@/components/ui/Spinner";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -131,14 +132,7 @@ export function ChatInput({
                     : "bg-[var(--surface-3)] text-[var(--text-3)] cursor-not-allowed",
                 ].join(" ")}
               >
-                {isLoading ? (
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                ) : (
-                  <ArrowUp size={16} strokeWidth={2.5} />
-                )}
+                {isLoading ? <Spinner size="sm" /> : <ArrowUp size={16} strokeWidth={2.5} />}
               </button>
             </div>
           </div>

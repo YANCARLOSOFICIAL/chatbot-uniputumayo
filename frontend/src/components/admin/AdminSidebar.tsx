@@ -51,18 +51,16 @@ export function AdminSidebar() {
         {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href));
           return (
-            <Link key={item.id} href={item.href} style={{
-              display: "flex", alignItems: "center", gap: 10,
-              padding: "10px 12px", borderRadius: "var(--r)",
-              marginBottom: 2, textDecoration: "none",
-              fontSize: 13, fontWeight: 500,
-              color: isActive ? "#fff" : "rgba(255,255,255,0.75)",
-              background: isActive ? "rgba(255,255,255,0.10)" : "transparent",
-              transition: "all 120ms ease",
-            }}
-              className={isActive ? "active-left-border" : ""}
-              onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.06)"; }}
-              onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+            <Link
+              key={item.id}
+              href={item.href}
+              className={[
+                "flex items-center gap-2.5 px-3 py-2.5 rounded-md mb-0.5 text-[13px] font-medium transition-all duration-100 no-underline",
+                isActive
+                  ? "bg-white/10 text-white active-left-border"
+                  : "text-white/75 hover:bg-white/[0.06] hover:text-white",
+              ].join(" ")}
+              style={{ textDecoration: "none" }}
             >
               <item.icon size={16} strokeWidth={1.75} />
               {item.label}

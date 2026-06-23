@@ -1,16 +1,24 @@
 "use client";
 
 import { useEffect, useCallback, useRef, useState } from "react";
-import { AlertCircle, X, PanelLeft, LogOut } from "lucide-react";
+import dynamic from "next/dynamic";
+import { PanelLeft, LogOut } from "lucide-react";
 import { useChat } from "@/hooks/useChat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useSpeechSynthesis } from "@/hooks/useSpeechSynthesis";
 import { isAuthenticated, getUser, logout, type AuthUser } from "@/lib/auth";
+import { toast } from "@/components/ui/Toast";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { QuickReplies } from "./QuickReplies";
-import { ConversationSidebar } from "./ConversationSidebar";
 import { GuacamayaAvatar, type GuacamayaState } from "./GuacamayaAvatar";
+
+// Carga diferida: el sidebar es pesado y no bloquea el primer paint del chat
+const ConversationSidebar = dynamic(
+  () => import("./ConversationSidebar").then((m) => ({ default: m.ConversationSidebar })),
+  { ssr: false }
+);
 
 export function ChatContainer() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -29,6 +37,14 @@ export function ChatContainer() {
   const { speak, isSpeaking } = useSpeechSynthesis();
 
   const handleSendRef = useRef<((content: string, inputType: "text" | "voice") => Promise<void>) | null>(null);
+
+  // Show error as toast and clear from state
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+      dispatch({ type: "SET_ERROR", payload: null });
+    }
+  }, [error, dispatch]);
 
   useEffect(() => {
     loadConversations();
@@ -113,7 +129,8 @@ export function ChatContainer() {
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)] flex-shrink-0" />
           </div>
 
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ml-auto flex items-center gap-1">
+            <ThemeToggle />
             {mounted && user && (
               <>
                 <button
@@ -131,28 +148,12 @@ export function ChatContainer() {
           </div>
         </header>
 
-        {/* Error banner */}
-        {error && (
-          <div className="flex items-center justify-between gap-3 px-3 py-1.5 bg-[var(--error-dim)] border-b border-[var(--error)]/20 flex-shrink-0 animate-slide-down">
-            <span className="flex items-center gap-1.5 text-[12px] text-[var(--error)] font-medium">
-              <AlertCircle size={12} strokeWidth={2} /> {error}
-            </span>
-            <button
-              onClick={() => dispatch({ type: "SET_ERROR", payload: null })}
-              className="w-5 h-5 rounded flex items-center justify-center text-[var(--error)] hover:bg-[var(--error)]/10"
-            >
-              <X size={10} strokeWidth={2} />
-            </button>
-          </div>
-        )}
-
         {/* Messages */}
         <MessageList
           messages={messages}
           sources={sources}
           isLoading={isLoading}
           onQuickReply={(msg) => handleSend(msg, "text")}
-          avatarState={avatarState}
         />
 
         {/* Quick replies */}

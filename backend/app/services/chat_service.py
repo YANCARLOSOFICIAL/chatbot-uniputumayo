@@ -253,7 +253,34 @@ class ChatService:
             await self.db.refresh(assistant_message)
 
             # 9. Done event with persisted message IDs
-            yield f"data: {json.dumps({'type': 'done', 'user_message': {'id': str(user_message.id), 'conversation_id': str(conversation_id), 'role': 'user', 'content': user_message.content, 'input_type': user_message.input_type, 'tokens_used': None, 'llm_provider': None, 'llm_model': None, 'response_time_ms': None, 'created_at': user_message.created_at.isoformat()}, 'assistant_message': {'id': str(assistant_message.id), 'conversation_id': str(conversation_id), 'role': 'assistant', 'content': full_content, 'input_type': 'text', 'tokens_used': None, 'llm_provider': provider_name, 'llm_model': model, 'response_time_ms': response_time, 'created_at': assistant_message.created_at.isoformat()}})}\n\n"
+            done_payload = {
+                "type": "done",
+                "user_message": {
+                    "id": str(user_message.id),
+                    "conversation_id": str(conversation_id),
+                    "role": "user",
+                    "content": user_message.content,
+                    "input_type": user_message.input_type,
+                    "tokens_used": None,
+                    "llm_provider": None,
+                    "llm_model": None,
+                    "response_time_ms": None,
+                    "created_at": user_message.created_at.isoformat(),
+                },
+                "assistant_message": {
+                    "id": str(assistant_message.id),
+                    "conversation_id": str(conversation_id),
+                    "role": "assistant",
+                    "content": full_content,
+                    "input_type": "text",
+                    "tokens_used": None,
+                    "llm_provider": provider_name,
+                    "llm_model": model,
+                    "response_time_ms": response_time,
+                    "created_at": assistant_message.created_at.isoformat(),
+                },
+            }
+            yield f"data: {json.dumps(done_payload)}\n\n"
 
         except Exception as e:
             await self.db.rollback()

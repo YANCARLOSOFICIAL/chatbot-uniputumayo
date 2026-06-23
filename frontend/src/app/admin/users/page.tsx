@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { Users, AlertCircle, X, Shield, User, ChevronRight } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Users, AlertCircle, X, Shield, User } from "lucide-react";
 import { apiClient, type AuthUser } from "@/lib/api/client";
 import { Spinner } from "@/components/ui/Spinner";
+import { AdminHeader } from "@/components/admin/AdminHeader";
 
 export default function UsersPage() {
   const [users, setUsers] = useState<AuthUser[]>([]);
@@ -12,8 +12,9 @@ export default function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
+      setLoading(true);
       const data = await apiClient.getUsers();
       setUsers(data);
     } catch (err) {
@@ -21,9 +22,9 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { loadUsers(); }, []);
+  useEffect(() => { loadUsers(); }, [loadUsers]);
 
   const handleRoleChange = async (userId: string, newRole: string) => {
     setUpdating(userId); setError(null);
@@ -40,17 +41,13 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="space-y-5" style={{ padding: "28px 32px 48px" }}>
-      {/* Breadcrumb + Header */}
-      <div>
-        <div className="flex items-center gap-1 text-[11px] text-[var(--text-3)] mb-2">
-          <Link href="/admin" className="hover:text-[var(--brand-primary)] transition-colors">Admin</Link>
-          <ChevronRight size={10} />
-          <span className="text-[var(--text-1)]">Usuarios</span>
-        </div>
-        <h1 className="text-display text-xl text-[var(--text-1)]">Gestión de Usuarios</h1>
-        <p className="text-[13px] text-[var(--text-2)] mt-0.5">Administra los usuarios y sus roles de acceso.</p>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
+      <AdminHeader
+        title="Usuarios"
+        subtitle="Administra los usuarios y sus roles de acceso."
+        action={<button onClick={loadUsers} className="btn btn-secondary btn-sm">Actualizar</button>}
+      />
+    <div className="space-y-5" style={{ padding: "28px 32px 48px", flex: 1 }}>
 
       {error && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-[var(--error-dim)] border border-[var(--error)]/20 text-[13px] text-[var(--error)]">
@@ -152,6 +149,7 @@ export default function UsersPage() {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }

@@ -92,7 +92,7 @@ def _extract_docx(file_path: str) -> str:
             cells = [cell.text.strip() for cell in row.cells]
             non_empty = [c for c in cells if c]
             if len(non_empty) >= 2:
-                text_parts.append(" | ".join(cells))
+                text_parts.append(" | ".join(non_empty))
 
     return "\n\n".join(text_parts)
 

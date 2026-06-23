@@ -7,7 +7,7 @@ from uuid import UUID
 import httpx
 
 from fastapi import UploadFile
-from sqlalchemy import select, desc
+from sqlalchemy import select, delete, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.document import Document
@@ -27,6 +27,8 @@ class DocumentService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    # ── Private helpers ──────────────────────────────────────────────────────
+
     async def _extract_pdf_with_vision(self, file_path: str) -> str:
         """Render PDF pages as images and send them to the vision model for structured extraction."""
         if not settings.ollama_vision_model:
@@ -38,7 +40,6 @@ class DocumentService:
             with fitz.open(file_path) as doc:
                 for page_num in range(min(4, len(doc))):
                     page = doc[page_num]
-                    # 2x zoom → better resolution for table reading
                     pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0))
                     img_b64 = base64.b64encode(pix.tobytes("png")).decode()
                     images_b64.append(img_b64)
@@ -125,6 +126,42 @@ class DocumentService:
             logger.warning(f"Could not enrich curriculum text: {e}")
             return ""
 
+    async def _build_enriched_text(self, file_path: str, file_type: str) -> str:
+        """Extract, clean, and optionally enrich document text with a structured summary."""
+        raw_text = extract_text(file_path, file_type)
+        cleaned_text = clean_text(raw_text)
+
+        structured_summary = ""
+        if file_type == "pdf":
+            structured_summary = await self._extract_pdf_with_vision(file_path)
+        if not structured_summary:
+            structured_summary = await self._enrich_curriculum_text(cleaned_text)
+
+        if structured_summary:
+            logger.info("Prepending structured curriculum summary to document text")
+            cleaned_text = (
+                "=== RESUMEN DE MATERIAS POR SEMESTRE ===\n"
+                + structured_summary
+                + "\n=== FIN DEL RESUMEN ===\n\n"
+                + cleaned_text
+            )
+        return cleaned_text
+
+    async def _embed_chunks(self, chunks: list[dict]) -> list:
+        """Batch-embed chunks and return the embedding list in order."""
+        llm_service = LLMService()
+        batch_size = 20
+        all_embeddings = []
+        for i in range(0, len(chunks), batch_size):
+            batch = chunks[i : i + batch_size]
+            embed_response = await llm_service.embed(
+                EmbedRequest(texts=[c["content"] for c in batch])
+            )
+            all_embeddings.extend(embed_response.embeddings)
+        return all_embeddings
+
+    # ── Public API ───────────────────────────────────────────────────────────
+
     async def upload_and_process(
         self,
         file: UploadFile,
@@ -133,18 +170,12 @@ class DocumentService:
         program: str | None = None,
         document_type: str | None = None,
     ) -> DocumentUploadResponse:
-        # 1. Read file content
         content_bytes = await file.read()
         file_type = file.filename.rsplit(".", 1)[-1].lower() if file.filename else "txt"
         content_hash = hashlib.sha256(content_bytes).hexdigest()
 
-        # 2. Save file to disk
         os.makedirs(settings.upload_dir, exist_ok=True)
-        file_path = os.path.join(settings.upload_dir, file.filename or "document.txt")
-        with open(file_path, "wb") as f:
-            f.write(content_bytes)
 
-        # 3. Create document record
         document = Document(
             title=title,
             file_name=file.filename or "document.txt",
@@ -159,62 +190,35 @@ class DocumentService:
         self.db.add(document)
         await self.db.flush()
 
+        # Use document ID as filename prefix to avoid collisions
+        safe_name = f"{document.id}_{file.filename or 'document.txt'}"
+        file_path = os.path.join(settings.upload_dir, safe_name)
+        with open(file_path, "wb") as f:
+            f.write(content_bytes)
+
         try:
-            # 4. Extract text
-            raw_text = extract_text(file_path, file_type)
-            cleaned_text = clean_text(raw_text)
-
-            # 4b. Vision-based extraction for PDFs (most accurate for tables)
-            structured_summary = ""
-            if file_type == "pdf":
-                structured_summary = await self._extract_pdf_with_vision(file_path)
-
-            # 4c. Fall back to LLM text enrichment if vision failed/unavailable
-            if not structured_summary:
-                structured_summary = await self._enrich_curriculum_text(cleaned_text)
-
-            if structured_summary:
-                logger.info("Prepending structured curriculum summary to document text")
-                cleaned_text = (
-                    "=== RESUMEN DE MATERIAS POR SEMESTRE ===\n"
-                    + structured_summary
-                    + "\n=== FIN DEL RESUMEN ===\n\n"
-                    + cleaned_text
-                )
-
-            # 5. Chunk text
+            cleaned_text = await self._build_enriched_text(file_path, file_type)
             chunks = chunk_text(
                 cleaned_text,
                 chunk_size=settings.chunk_size,
                 chunk_overlap=settings.chunk_overlap,
             )
+            all_embeddings = await self._embed_chunks(chunks)
 
-            # 6. Generate embeddings
-            llm_service = LLMService()
-            batch_size = 20
-            all_embeddings = []
-
-            for i in range(0, len(chunks), batch_size):
-                batch = chunks[i : i + batch_size]
-                embed_response = await llm_service.embed(
-                    EmbedRequest(texts=[c["content"] for c in batch])
-                )
-                all_embeddings.extend(embed_response.embeddings)
-
-            # 7. Store chunks with embeddings
             for idx, (chunk, embedding) in enumerate(zip(chunks, all_embeddings)):
-                db_chunk = DocumentChunk(
+                self.db.add(DocumentChunk(
                     document_id=document.id,
                     chunk_index=idx,
                     content=chunk["content"],
                     token_count=chunk.get("token_count"),
                     embedding=embedding,
                     metadata_=chunk.get("metadata", {}),
-                )
-                self.db.add(db_chunk)
+                ))
 
             document.ingestion_status = "completed"
             document.total_chunks = len(chunks)
+            # Store actual saved path for reindex
+            document.file_name = safe_name
             await self.db.commit()
 
             return DocumentUploadResponse(
@@ -246,7 +250,6 @@ class DocumentService:
             query = query.where(Document.program == program)
         query = query.order_by(desc(Document.created_at))
         query = query.limit(per_page).offset((page - 1) * per_page)
-
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -285,13 +288,6 @@ class DocumentService:
                 message="Document not found",
             )
 
-        # Delete existing chunks
-        existing_chunks = await self.get_chunks(document_id, per_page=10000)
-        for chunk in existing_chunks:
-            await self.db.delete(chunk)
-        await self.db.flush()
-
-        # Re-process
         file_path = os.path.join(settings.upload_dir, doc.file_name)
         if not os.path.exists(file_path):
             return DocumentUploadResponse(
@@ -300,52 +296,27 @@ class DocumentService:
                 message="Original file not found on disk",
             )
 
+        # Bulk delete existing chunks
+        await self.db.execute(
+            delete(DocumentChunk).where(DocumentChunk.document_id == document_id)
+        )
         doc.ingestion_status = "processing"
         await self.db.flush()
 
         try:
-            raw_text = extract_text(file_path, doc.file_type)
-            cleaned_text = clean_text(raw_text)
-
-            structured_summary = ""
-            if doc.file_type == "pdf":
-                structured_summary = await self._extract_pdf_with_vision(file_path)
-
-            if not structured_summary:
-                structured_summary = await self._enrich_curriculum_text(cleaned_text)
-
-            if structured_summary:
-                logger.info("Prepending structured curriculum summary (reindex)")
-                cleaned_text = (
-                    "=== RESUMEN DE MATERIAS POR SEMESTRE ===\n"
-                    + structured_summary
-                    + "\n=== FIN DEL RESUMEN ===\n\n"
-                    + cleaned_text
-                )
-
+            cleaned_text = await self._build_enriched_text(file_path, doc.file_type)
             chunks = chunk_text(cleaned_text)
-
-            llm_service = LLMService()
-            all_embeddings = []
-            batch_size = 20
-
-            for i in range(0, len(chunks), batch_size):
-                batch = chunks[i : i + batch_size]
-                embed_response = await llm_service.embed(
-                    EmbedRequest(texts=[c["content"] for c in batch])
-                )
-                all_embeddings.extend(embed_response.embeddings)
+            all_embeddings = await self._embed_chunks(chunks)
 
             for idx, (chunk, embedding) in enumerate(zip(chunks, all_embeddings)):
-                db_chunk = DocumentChunk(
+                self.db.add(DocumentChunk(
                     document_id=doc.id,
                     chunk_index=idx,
                     content=chunk["content"],
                     token_count=chunk.get("token_count"),
                     embedding=embedding,
                     metadata_=chunk.get("metadata", {}),
-                )
-                self.db.add(db_chunk)
+                ))
 
             doc.ingestion_status = "completed"
             doc.total_chunks = len(chunks)

@@ -2,10 +2,12 @@
 
 import { useState, useId } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, AlertCircle } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { setToken, setUser } from "@/lib/auth";
+import { Spinner } from "@/components/ui/Spinner";
 
 type Tab = "login" | "register";
 
@@ -102,7 +104,7 @@ export default function LoginPage() {
         <div className="w-full md:w-[440px] bg-white rounded-[1.25rem] p-8 shadow-2xl relative flex-shrink-0">
           
           <div style={{ textAlign: "center", marginBottom: 20 }}>
-            <img src="/logo-azul.png" alt="UniPutumayo" style={{ height: 40, objectFit: "contain", margin: "0 auto" }} />
+            <Image src="/logo-azul.png" alt="UniPutumayo" width={140} height={40} style={{ objectFit: "contain", margin: "0 auto" }} />
           </div>
 
           <h2 style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, margin: "0 0 6px", color: "#111827", textAlign: "center", letterSpacing: "-0.01em" }}>
@@ -138,22 +140,8 @@ export default function LoginPage() {
                   required showToggle />
               </div>
               
-              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-2)", marginTop: -2 }}>
-                <input type="checkbox" style={{ accentColor: "var(--brand-primary)" }} /> Mantener mi sesión iniciada
-              </label>
-
               <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: "100%", padding: "12px 18px", marginTop: 4, justifyContent: "center", borderRadius: "8px" }}>
-                {loading ? (
-                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <svg style={{ width: 14, height: 14, animation: "spin 0.8s linear infinite" }} fill="none" viewBox="0 0 24 24">
-                      <circle style={{ opacity: 0.25 }} cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                      <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
-                    Ingresando…
-                  </span>
-                ) : (
-                  <span>Iniciar sesión</span>
-                )}
+                {loading ? <><Spinner size="sm" /> Ingresando…</> : "Iniciar sesión"}
               </button>
 
 
@@ -174,17 +162,7 @@ export default function LoginPage() {
                 required showToggle />
               
               <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: "100%", padding: "12px 18px", marginTop: 4, justifyContent: "center", borderRadius: "8px" }}>
-                {loading ? (
-                  <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <svg style={{ width: 14, height: 14, animation: "spin 0.8s linear infinite" }} fill="none" viewBox="0 0 24 24">
-                      <circle style={{ opacity: 0.25 }} cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                      <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
-                    Registrando…
-                  </span>
-                ) : (
-                  <span>Crear cuenta</span>
-                )}
+                {loading ? <><Spinner size="sm" /> Registrando…</> : "Crear cuenta"}
               </button>
             </form>
           )}

@@ -89,7 +89,7 @@ async def speech_to_text(audio: UploadFile = File(...)):
             temp_path = f.name
 
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
 
             def do_transcribe():
                 segments_gen, _ = model.transcribe(temp_path, language="es")

@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { MessageCircle, Search, CheckCircle2, Clock, AlertTriangle, User } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
+import { Spinner } from "@/components/ui/Spinner";
+import { AdminHeader } from "@/components/admin/AdminHeader";
 
 interface ConvItem {
   id: string;
@@ -42,18 +44,11 @@ export default function ConversationsPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
-      <header style={{
-        padding: "20px 32px", borderBottom: "1px solid var(--border)",
-        background: "#fff", display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexShrink: 0,
-      }}>
-        <div>
-          <h2 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>Conversaciones</h2>
-          <div style={{ fontSize: 13, color: "var(--text-2)", marginTop: 4 }}>
-            {loading ? "Cargando…" : `${conversations.length} conversación${conversations.length !== 1 ? "es" : ""} en total`}
-          </div>
-        </div>
-        <button onClick={load} className="btn btn-secondary btn-sm">Actualizar</button>
-      </header>
+      <AdminHeader
+        title="Conversaciones"
+        subtitle={loading ? "Cargando…" : `${conversations.length} conversación${conversations.length !== 1 ? "es" : ""} en total`}
+        action={<button onClick={load} className="btn btn-secondary btn-sm">Actualizar</button>}
+      />
 
       <div style={{ padding: "28px 32px 48px", flex: 1 }}>
 
@@ -72,10 +67,7 @@ export default function ConversationsPage() {
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
           {loading ? (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "56px 0", gap: 10, color: "var(--text-3)" }}>
-              <svg style={{ width: 18, height: 18, animation: "spin .8s linear infinite" }} fill="none" viewBox="0 0 24 24">
-                <circle style={{ opacity: 0.25 }} cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                <path style={{ opacity: 0.75 }} fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
+              <Spinner size="md" />
               Cargando conversaciones…
             </div>
           ) : filtered.length === 0 ? (
