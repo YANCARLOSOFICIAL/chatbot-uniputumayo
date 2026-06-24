@@ -1,12 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import {
-  Upload, FileText, CheckCircle2, Clock, XCircle, AlertCircle,
-  Trash2, X, CloudUpload,
-} from "lucide-react";
+import { Upload, FileText, CheckCircle2, Clock, XCircle, AlertCircle, Trash2, X, ArrowUp, RefreshCw } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
-import { Spinner } from "@/components/ui/Spinner";
 import { toast } from "@/components/ui/Toast";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 
@@ -20,31 +16,34 @@ interface DocumentItem {
   created_at: string;
 }
 
-const STATUS_MAP: Record<string, { label: string; cls: string; icon: React.ElementType }> = {
-  completed:  { label: "Indexado",   cls: "badge badge-suc", icon: CheckCircle2 },
-  processing: { label: "Procesando", cls: "badge badge-pri", icon: Clock },
-  failed:     { label: "Error",       cls: "badge badge-err", icon: XCircle },
-  pending:    { label: "Pendiente",   cls: "badge",           icon: Clock },
+const STATUS_CFG: Record<string, { label: string; bg: string; color: string; border: string }> = {
+  completed:  { label: "Indexado",   bg: "rgba(47,143,78,0.1)",   color: "#2F8F4E",            border: "rgba(47,143,78,0.2)"   },
+  processing: { label: "Procesando", bg: "var(--brand-dim)",      color: "var(--brand-primary)", border: "var(--brand-light)"   },
+  failed:     { label: "Error",       bg: "var(--error-dim)",      color: "var(--error)",         border: "rgba(200,54,44,0.2)"  },
+  pending:    { label: "Pendiente",   bg: "var(--surface-2)",      color: "var(--text-3)",        border: "var(--border)"        },
 };
 
-function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_MAP[status] ?? STATUS_MAP.pending;
-  const Icon = cfg.icon;
-  return <span className={cfg.cls} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Icon size={10} /> {cfg.label}</span>;
+function StatusPill({ status }: { status: string }) {
+  const cfg = STATUS_CFG[status] ?? STATUS_CFG.pending;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 9999, fontSize: 11, fontWeight: 600, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
+      {cfg.label}
+    </span>
+  );
 }
 
 export default function DocumentsPage() {
-  const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState(false);
+  const [documents, setDocuments]       = useState<DocumentItem[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [uploading, setUploading]       = useState(false);
+  const [error, setError]               = useState<string | null>(null);
+  const [dragOver, setDragOver]         = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [title, setTitle] = useState("");
-  const [faculty, setFaculty] = useState("");
-  const [program, setProgram] = useState("");
-  const [docType, setDocType] = useState("");
+  const [file, setFile]                 = useState<File | null>(null);
+  const [title, setTitle]               = useState("");
+  const [faculty, setFaculty]           = useState("");
+  const [program, setProgram]           = useState("");
+  const [docType, setDocType]           = useState("");
 
   const loadDocuments = useCallback(async () => {
     try {
@@ -53,9 +52,7 @@ export default function DocumentsPage() {
       setDocuments(data as unknown as DocumentItem[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error cargando documentos");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { loadDocuments(); }, [loadDocuments]);
@@ -88,18 +85,13 @@ export default function DocumentsPage() {
       await loadDocuments();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error subiendo documento";
-      setError(msg);
-      toast.error(msg);
+      setError(msg); toast.error(msg);
     } finally { setUploading(false); }
   };
 
   const handleDeleteClick = (id: string) => {
-    if (confirmDeleteId === id) {
-      handleDeleteConfirm(id);
-    } else {
-      setConfirmDeleteId(id);
-      setTimeout(() => setConfirmDeleteId(null), 3000);
-    }
+    if (confirmDeleteId === id) handleDeleteConfirm(id);
+    else { setConfirmDeleteId(id); setTimeout(() => setConfirmDeleteId(null), 3000); }
   };
 
   const handleDeleteConfirm = async (id: string) => {
@@ -110,8 +102,7 @@ export default function DocumentsPage() {
       await loadDocuments();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error eliminando documento";
-      setError(msg);
-      toast.error(msg);
+      setError(msg); toast.error(msg);
     }
   };
 
@@ -119,160 +110,217 @@ export default function DocumentsPage() {
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
       <AdminHeader
         title="Base de conocimiento"
-        subtitle="Sube y gestiona documentos académicos para el RAG."
-        action={<button onClick={() => loadDocuments()} className="btn btn-secondary btn-sm">Actualizar</button>}
+        subtitle={loading ? "Cargando..." : `${documents.length} documento${documents.length !== 1 ? "s" : ""} indexados`}
+        action={
+          <button onClick={loadDocuments} disabled={loading} className="btn btn-secondary btn-sm"
+            style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Actualizar
+          </button>
+        }
       />
 
       <div style={{ padding: "28px 32px 48px", flex: 1 }}>
 
-        {/* Alerts */}
         {error && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: "var(--r)", background: "#FEF2F2", border: "1px solid #FECACA", color: "#DC2626", fontSize: 13, marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: "var(--r)", background: "var(--error-dim)", border: "1px solid rgba(200,54,44,0.2)", color: "var(--error)", fontSize: 13, marginBottom: 20 }}>
             <AlertCircle size={14} style={{ flexShrink: 0 }} /> {error}
             <button onClick={() => setError(null)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={13} /></button>
           </div>
         )}
 
-        {/* Upload card */}
-        <div className="card" style={{ padding: 24, marginBottom: 24 }}>
-          <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, margin: "0 0 16px", color: "var(--text-1)", display: "flex", alignItems: "center", gap: 8 }}>
-            <CloudUpload size={16} style={{ color: "var(--brand-primary)" }} /> Subir nuevo documento
-          </h3>
-          <form onSubmit={handleUpload}>
-            {/* Drop zone */}
-            <div
-              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={handleDrop}
-              style={{
-                border: `2px dashed ${dragOver || file ? "var(--brand-primary)" : "var(--border)"}`,
-                borderRadius: "var(--r-lg)",
-                padding: "32px 24px",
-                textAlign: "center",
-                background: dragOver || file ? "var(--brand-primary-lighter)" : "var(--surface-2)",
-                transition: "all 150ms ease",
-                marginBottom: 16,
-              }}
-            >
-              {file ? (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
-                  <FileText size={24} style={{ color: "var(--brand-primary)" }} />
-                  <div style={{ textAlign: "left" }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text-1)" }}>{file.name}</div>
-                    <div style={{ fontSize: 11, color: "var(--text-3)" }}>{(file.size / 1024).toFixed(1)} KB</div>
-                  </div>
-                  <button type="button" onClick={() => setFile(null)} style={{
-                    marginLeft: 8, width: 24, height: 24, borderRadius: "50%", border: "none", cursor: "pointer",
-                    background: "var(--surface-3)", color: "var(--text-2)", display: "flex", alignItems: "center", justifyContent: "center",
-                  }}><X size={13} /></button>
-                </div>
-              ) : (
-                <>
-                  <Upload size={28} style={{ color: "var(--text-3)", margin: "0 auto 8px" }} />
-                  <div style={{ fontSize: 14, color: "var(--text-2)", marginBottom: 4 }}>
-                    Arrastra aquí o{" "}
-                    <label style={{ color: "var(--brand-primary)", cursor: "pointer", fontWeight: 500 }}>
-                      selecciona un archivo
-                      <input type="file" accept=".pdf,.docx,.txt" style={{ display: "none" }} onChange={handleFileSelect} />
-                    </label>
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--text-3)" }}>PDF, DOCX, TXT — máx. 50 MB</div>
-                </>
-              )}
+        {/* Two-col: upload card (sticky) + docs table */}
+        <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 24, alignItems: "start" }}>
+
+          {/* Upload panel */}
+          <div className="card" style={{ padding: 24, position: "sticky", top: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 20 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 9, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Upload size={14} style={{ color: "var(--brand-primary)" }} />
+              </div>
+              <span style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--text-1)" }}>Subir documento</span>
             </div>
 
-            {/* Metadata grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-              {[
-                { label: "Título", value: title, onChange: setTitle, placeholder: "Ej: Catálogo Académico 2026", required: true },
-                { label: "Facultad", value: faculty, onChange: setFaculty, placeholder: "Ej: Ingeniería" },
-                { label: "Programa", value: program, onChange: setProgram, placeholder: "Ej: Ingeniería de Sistemas" },
-              ].map(({ label, value, onChange, placeholder, required }) => (
-                <div key={label}>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-2)", marginBottom: 6, textTransform: "uppercase", letterSpacing: ".04em" }}>
-                    {label} {required && <span style={{ color: "var(--danger)" }}>*</span>}
-                  </label>
-                  <input type="text" value={value} onChange={(e) => onChange(e.target.value)}
-                    placeholder={placeholder} required={required}
-                    className="input" style={{ width: "100%", boxSizing: "border-box" }} />
-                </div>
-              ))}
-              <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--text-2)", marginBottom: 6, textTransform: "uppercase", letterSpacing: ".04em" }}>Tipo</label>
+            <form onSubmit={handleUpload}>
+              {/* Drop zone */}
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => !file && document.getElementById("doc-file-input")?.click()}
+                style={{
+                  border: `1px dashed ${dragOver || file ? "var(--brand-primary)" : "var(--border-2)"}`,
+                  borderRadius: "var(--r-lg)", padding: file ? "16px 14px" : "28px 16px",
+                  textAlign: "center",
+                  background: dragOver || file ? "var(--brand-dim)" : "var(--surface-2)",
+                  transition: "all 0.2s cubic-bezier(0.32,0.72,0,1)",
+                  marginBottom: 16, cursor: file ? "default" : "pointer",
+                }}
+              >
+                {file ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <FileText size={15} style={{ color: "var(--brand-primary)" }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{(file.size / 1024).toFixed(1)} KB</div>
+                    </div>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setFile(null); }} style={{ width: 22, height: 22, borderRadius: "50%", border: "none", cursor: "pointer", background: "var(--surface-3)", color: "var(--text-2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <X size={11} />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ width: 38, height: 38, borderRadius: 11, background: "var(--surface)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px" }}>
+                      <ArrowUp size={17} style={{ color: "var(--text-3)" }} strokeWidth={1.5} />
+                    </div>
+                    <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-2)", margin: "0 0 4px" }}>
+                      Arrastra o{" "}
+                      <label style={{ color: "var(--brand-primary)", cursor: "pointer", fontWeight: 600 }}>
+                        selecciona
+                        <input id="doc-file-input" type="file" accept=".pdf,.docx,.txt" style={{ display: "none" }} onChange={handleFileSelect} />
+                      </label>
+                    </p>
+                    <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0 }}>PDF · DOCX · TXT</p>
+                  </>
+                )}
+              </div>
+
+              {/* Title */}
+              <div style={{ marginBottom: 10 }}>
+                <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>
+                  Titulo <span style={{ color: "var(--danger)" }}>*</span>
+                </label>
+                <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Ej: Catalogo Academico 2026" required
+                  className="input" style={{ width: "100%", boxSizing: "border-box" }} />
+              </div>
+
+              {/* Optional fields */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+                {[
+                  { label: "Facultad", value: faculty, set: setFaculty, ph: "Ingenieria" },
+                  { label: "Programa", value: program, set: setProgram, ph: "Ing. Sistemas" },
+                ].map(({ label, value, set, ph }) => (
+                  <div key={label}>
+                    <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>{label}</label>
+                    <input type="text" value={value} onChange={(e) => set(e.target.value)} placeholder={ph}
+                      className="input" style={{ width: "100%", boxSizing: "border-box" }} />
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Tipo</label>
                 <select value={docType} onChange={(e) => setDocType(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
-                  <option value="">Seleccionar…</option>
+                  <option value="">General</option>
                   <option value="pensum">Pensum</option>
                   <option value="perfil">Perfil Profesional</option>
-                  <option value="mision">Misión y Visión</option>
+                  <option value="mision">Mision y Vision</option>
                   <option value="reglamento">Reglamento</option>
-                  <option value="admision">Requisitos de Admisión</option>
-                  <option value="general">General</option>
+                  <option value="admision">Requisitos de Admision</option>
                 </select>
               </div>
-            </div>
 
-            <button type="submit" disabled={!file || !title || uploading} className="btn btn-primary">
-              {uploading
-                ? <><Spinner size="sm" /> Procesando…</>
-                : <><Upload size={14} /> Subir Documento</>
-              }
-            </button>
-          </form>
-        </div>
+              <button type="submit" disabled={!file || !title || uploading} className="btn btn-primary"
+                style={{ width: "100%", justifyContent: "center", display: "flex", alignItems: "center", gap: 7 }}>
+                {uploading ? (
+                  <>{[0, 0.1, 0.2].map((d) => <span key={d} style={{ width: 3, height: 3, borderRadius: "50%", background: "rgba(255,255,255,0.8)", display: "inline-block", animation: `pulse-soft 1s ${d}s ease-in-out infinite` }} />)} Procesando...</>
+                ) : (
+                  <><Upload size={13} /> Subir Documento</>
+                )}
+              </button>
+            </form>
+          </div>
 
-        {/* Documents table */}
-        <div>
-          <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, margin: "0 0 12px", color: "var(--text-1)" }}>
-            Documentos indexados <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 400, color: "var(--text-3)", marginLeft: 4 }}>({documents.length})</span>
-          </h3>
-          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            {loading ? (
-              <div style={{ display: "flex", justifyContent: "center", padding: "48px 0" }}><Spinner size="lg" /></div>
-            ) : documents.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "48px 0" }}>
-                <FileText size={32} style={{ color: "var(--border)", margin: "0 auto 8px" }} />
-                <div style={{ fontSize: 13, color: "var(--text-2)" }}>No hay documentos. Sube el primero arriba.</div>
+          {/* Documents list */}
+          <div>
+            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+              <div style={{ padding: "13px 18px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
+                <FileText size={13} style={{ color: "var(--brand-primary)" }} />
+                <span style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Documentos indexados</span>
+                <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-3)" }}>{documents.length}</span>
               </div>
-            ) : (
-              <table className="admin-table" style={{ width: "100%" }}>
-                <thead>
-                  <tr>
-                    <th>Título</th>
-                    <th>Archivo</th>
-                    <th>Estado</th>
-                    <th>Chunks</th>
-                    <th>Fecha</th>
-                    <th style={{ textAlign: "right" }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {documents.map((doc) => (
-                    <tr key={doc.id}>
-                      <td style={{ fontWeight: 500, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.title}</td>
-                      <td style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-2)", fontFamily: "var(--font-mono)", fontSize: 12 }}>{doc.file_name}</td>
-                      <td><StatusBadge status={doc.ingestion_status} /></td>
-                      <td style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{doc.total_chunks}</td>
-                      <td style={{ color: "var(--text-3)", fontSize: 12 }}>{new Date(doc.created_at).toLocaleDateString("es-CO")}</td>
-                      <td style={{ textAlign: "right" }}>
-                        <button
-                          onClick={() => handleDeleteClick(doc.id)}
-                          className={[
-                            "inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded transition-all duration-100",
-                            confirmDeleteId === doc.id
-                              ? "bg-[var(--danger-bg)] text-[var(--danger)] border border-[var(--danger)]/30"
-                              : "text-[var(--text-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-bg)]",
-                          ].join(" ")}
-                          style={{ border: "none", cursor: "pointer" }}
-                        >
-                          <Trash2 size={11} />
-                          {confirmDeleteId === doc.id ? "¿Confirmar?" : "Eliminar"}
-                        </button>
-                      </td>
-                    </tr>
+
+              {loading ? (
+                <div style={{ padding: "56px 0", display: "flex", justifyContent: "center", gap: 5 }}>
+                  {[0, 0.12, 0.24].map((d) => (
+                    <span key={d} style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
                   ))}
-                </tbody>
-              </table>
-            )}
+                </div>
+              ) : documents.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "56px 0" }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 14, background: "var(--surface-2)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+                    <FileText size={22} style={{ color: "var(--text-3)" }} strokeWidth={1.5} />
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-2)", marginBottom: 4 }}>Sin documentos</div>
+                  <div style={{ fontSize: 12, color: "var(--text-3)" }}>Sube el primer documento desde el panel izquierdo.</div>
+                </div>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: "var(--surface-2)" }}>
+                        {["Titulo", "Archivo", "Estado", "Chunks", "Fecha", ""].map((h, i) => (
+                          <th key={i} style={{ padding: "10px 16px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-3)", textAlign: i === 5 ? "right" : "left", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {documents.map((doc, i) => (
+                        <tr key={doc.id}
+                          style={{ borderBottom: i < documents.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.1s" }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                        >
+                          <td style={{ padding: "13px 16px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <div style={{ width: 28, height: 28, borderRadius: 7, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                <FileText size={12} style={{ color: "var(--brand-primary)" }} />
+                              </div>
+                              <span style={{ fontWeight: 500, fontSize: 13, color: "var(--text-1)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {doc.title}
+                              </span>
+                            </div>
+                          </td>
+                          <td style={{ padding: "13px 16px", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+                            {doc.file_name}
+                          </td>
+                          <td style={{ padding: "13px 16px" }}>
+                            <StatusPill status={doc.ingestion_status} />
+                          </td>
+                          <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-2)" }}>
+                            {doc.total_chunks}
+                          </td>
+                          <td style={{ padding: "13px 16px", fontSize: 12, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
+                            {new Date(doc.created_at).toLocaleDateString("es-CO")}
+                          </td>
+                          <td style={{ padding: "13px 16px", textAlign: "right" }}>
+                            <button
+                              onClick={() => handleDeleteClick(doc.id)}
+                              style={{
+                                display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11,
+                                padding: "3px 8px", borderRadius: 6, border: "none", cursor: "pointer",
+                                background: confirmDeleteId === doc.id ? "var(--error-dim)" : "transparent",
+                                color: confirmDeleteId === doc.id ? "var(--error)" : "var(--text-3)",
+                                transition: "all 0.1s",
+                              }}
+                              onMouseEnter={(e) => { if (confirmDeleteId !== doc.id) { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--error-dim)"; b.style.color = "var(--error)"; } }}
+                              onMouseLeave={(e) => { if (confirmDeleteId !== doc.id) { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--text-3)"; } }}
+                            >
+                              <Trash2 size={11} />
+                              {confirmDeleteId === doc.id ? "Confirmar?" : "Eliminar"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

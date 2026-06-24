@@ -1,12 +1,14 @@
 "use client";
 
+import { GraduationCap, ClipboardList, Coins, MapPin, Code2, Leaf } from "lucide-react";
+
 const SUGGESTIONS = [
-  { label: "Pregrados en Mocoa",      icon: "🎓", query: "¿Qué pregrados ofrece UniPutumayo en la sede Mocoa?" },
-  { label: "Requisitos de admisión",  icon: "📋", query: "¿Cuáles son los requisitos de admisión para ingresar a UniPutumayo?" },
-  { label: "Costos de matrícula",     icon: "💰", query: "¿Cuáles son los costos académicos y derechos de matrícula en UniPutumayo?" },
-  { label: "Pensum Ing. Sistemas",    icon: "💻", query: "¿Cuál es el pensum de Ingeniería de Sistemas en UniPutumayo?" },
-  { label: "Sedes universitarias",    icon: "📍", query: "¿Cuáles son las sedes de UniPutumayo y qué programas ofrecen?" },
-  { label: "Bienestar universitario", icon: "🌿", query: "¿Qué servicios de bienestar universitario ofrece UniPutumayo?" },
+  { label: "Pregrados en Mocoa",      Icon: GraduationCap, query: "Que pregrados ofrece UniPutumayo en la sede Mocoa?" },
+  { label: "Requisitos de admision",  Icon: ClipboardList,  query: "Cuales son los requisitos de admision para ingresar a UniPutumayo?" },
+  { label: "Costos matricula 2026",   Icon: Coins,          query: "Cuales son los costos academicos y derechos de matricula en UniPutumayo?" },
+  { label: "Pensum Ing. Sistemas",    Icon: Code2,          query: "Cual es el pensum de Ingenieria de Sistemas en UniPutumayo?" },
+  { label: "Sedes universitarias",    Icon: MapPin,         query: "Cuales son las sedes de UniPutumayo y que programas ofrecen?" },
+  { label: "Bienestar universitario", Icon: Leaf,           query: "Que servicios de bienestar universitario ofrece UniPutumayo?" },
 ];
 
 interface QuickRepliesProps {
@@ -18,14 +20,20 @@ export function QuickReplies({ onSelect }: QuickRepliesProps) {
     <div className="flex-shrink-0 px-4 pb-3">
       <div className="max-w-3xl mx-auto">
         <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-          {SUGGESTIONS.map((s) => (
+          {SUGGESTIONS.map(({ label, Icon, query }) => (
             <button
-              key={s.label}
-              onClick={() => onSelect(s.query)}
-              className="flex items-center gap-2 px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-xs font-medium text-[var(--text-2)] hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)] hover:bg-[var(--brand-dim)] active:scale-[0.96] transition-all whitespace-nowrap flex-shrink-0"
+              key={label}
+              onClick={() => onSelect(query)}
+              className="flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 active:scale-[0.96] transition-all hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)] hover:bg-[var(--brand-dim)]"
+              style={{
+                padding: "5px 12px", borderRadius: 9999,
+                background: "var(--surface)", border: "1px solid var(--border)",
+                fontSize: 12, fontWeight: 500, color: "var(--text-2)", cursor: "pointer",
+                transition: "border-color 0.15s, color 0.15s, background 0.15s",
+              }}
             >
-              <span className="text-sm">{s.icon}</span>
-              <span>{s.label}</span>
+              <Icon size={11} strokeWidth={1.75} />
+              <span>{label}</span>
             </button>
           ))}
         </div>

@@ -27,8 +27,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (!checked) {
     return (
-      <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ width: 32, height: 32, border: "3px solid var(--brand-primary)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin .8s linear infinite" }} />
+      <div style={{ minHeight: "100dvh", background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: 18, height: 18, borderRadius: 4, background: "var(--brand-primary)" }} />
+          </div>
+          <div style={{ display: "flex", gap: 5 }}>
+            {[0, 0.12, 0.24].map((d) => (
+              <span key={d} style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

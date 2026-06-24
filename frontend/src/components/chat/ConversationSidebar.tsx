@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   MessageSquare, Trash2, Search,
-  LogOut, Settings, Home, PenSquare
+  LogOut, Settings, Home, Plus
 } from "lucide-react";
 import { isAuthenticated, getUser, logout, type AuthUser } from "@/lib/auth";
 import type { Conversation } from "@/types/chat";
@@ -71,9 +71,12 @@ export const ConversationSidebar = memo(function ConversationSidebar({
 
   return (
     <aside
+      style={{
+        width: 260, flexShrink: 0, display: "flex", flexDirection: "column", height: "100%",
+        background: "#0B3447",
+        borderRight: "1px solid rgba(255,255,255,0.07)",
+      }}
       className={[
-        "w-[260px] flex flex-col h-full",
-        "bg-[var(--sb-bg)] border-r border-[var(--sb-border)]",
         "md:relative md:translate-x-0 md:flex",
         "fixed inset-y-0 left-0 z-40 transition-transform duration-200 ease-out",
         isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
@@ -81,90 +84,129 @@ export const ConversationSidebar = memo(function ConversationSidebar({
       aria-label="Conversaciones"
     >
       {/* Header */}
-      <div className="px-3 pt-3.5 pb-2.5 flex-shrink-0">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Image src="/isotipo.webp" alt="UniPutumayo" width={28} height={28} style={{ objectFit: "contain" }} />
-            <div>
-              <div className="text-[15px] font-bold text-[var(--sb-text)]" style={{ fontFamily: "var(--font-display)" }}>Nexus</div>
-              <div className="text-[11px] text-[var(--sb-muted)]">UniPutumayo</div>
-            </div>
+      <div style={{ padding: "14px 14px 10px", flexShrink: 0 }}>
+        {/* Brand row */}
+        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 14 }}>
+          <Image src="/isotipo.webp" alt="Nexus" width={28} height={28} style={{ objectFit: "contain", borderRadius: 6 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, color: "#fff", lineHeight: 1 }}>Nexus</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>UniPutumayo</div>
           </div>
-          <button
-            onClick={() => { onNew(); onClose(); }}
-            className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors"
-            title="Nueva conversación"
-          >
-            <PenSquare size={13} strokeWidth={1.5} />
-          </button>
         </div>
 
+        {/* New chat button */}
+        <button
+          onClick={() => { onNew(); onClose(); }}
+          style={{
+            width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+            padding: "9px 14px", borderRadius: 8,
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            color: "rgba(255,255,255,0.75)", cursor: "pointer",
+            fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 500,
+            marginBottom: 10, transition: "background 0.12s, border-color 0.12s",
+          }}
+          className="hover:bg-white/10 hover:border-white/20"
+        >
+          <Plus size={13} strokeWidth={2} /> Nueva conversacion
+        </button>
+
         {/* Search */}
-        <div className="relative">
-          <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-[var(--sb-muted)]" />
+        <div style={{ position: "relative" }}>
+          <Search size={12} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.3)" }} />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar…"
-            className="w-full pl-6 pr-2.5 py-2 text-[13px] rounded-md bg-[var(--sb-hover)] border border-[var(--sb-border)] text-[var(--sb-text)] placeholder-[var(--sb-muted)] outline-none focus:border-[var(--sb-active)]/50 transition-colors"
+            placeholder="Buscar..."
+            style={{
+              width: "100%", paddingLeft: 28, paddingRight: 10, paddingTop: 8, paddingBottom: 8,
+              fontSize: 12, borderRadius: 8,
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.8)",
+              outline: "none", boxSizing: "border-box",
+              transition: "border-color 0.12s",
+            }}
+            className="placeholder-white/30 focus:border-white/20"
           />
         </div>
       </div>
 
       {/* Conversations list */}
-      <div className="flex-1 overflow-y-auto sb-scroll px-1.5">
+      <div style={{ flex: 1, overflowY: "auto", padding: "0 8px" }} className="sb-scroll">
         {conversations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center px-4">
-            <div className="w-8 h-8 rounded-lg bg-[var(--sb-hover)] flex items-center justify-center mb-2.5">
-              <MessageSquare size={15} className="text-[var(--sb-muted)]" strokeWidth={1.5} />
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 16px", textAlign: "center" }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: "rgba(255,255,255,0.05)",
+              display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10,
+            }}>
+              <MessageSquare size={15} style={{ color: "rgba(255,255,255,0.3)" }} strokeWidth={1.5} />
             </div>
-            <p className="text-[13px] text-[var(--sb-muted)] font-medium">Sin conversaciones</p>
-            <p className="text-[11px] text-[var(--sb-muted)] opacity-50 mt-0.5">
-              Empieza una nueva arriba
-            </p>
+            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", margin: 0, fontWeight: 500 }}>Sin conversaciones</p>
+            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", margin: "4px 0 0" }}>Empieza una arriba</p>
           </div>
         ) : grouped.length === 0 ? (
-          <p className="text-[13px] text-[var(--sb-muted)] text-center py-8">Sin resultados</p>
+          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", textAlign: "center", padding: "32px 0" }}>Sin resultados</p>
         ) : (
           grouped.map(([label, items]) => (
-            <div key={label} className="mb-4">
-              <p className="text-[11px] font-semibold text-[var(--sb-muted)] uppercase tracking-wider px-2 py-1">
+            <div key={label} style={{ marginBottom: 18 }}>
+              <p style={{
+                fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
+                textTransform: "uppercase", color: "rgba(255,255,255,0.25)",
+                padding: "0 6px 4px", margin: 0,
+              }}>
                 {label}
               </p>
               {items.map((conv) => {
                 const isActive  = conv.id === activeId;
                 const isConfirm = confirmId === conv.id;
                 return (
-                  <button
-                    key={conv.id}
-                    onClick={() => handleSelect(conv.id)}
-                    className={[
-                      "group w-full flex items-center gap-1.5 px-2 py-2 rounded-md text-left mb-0.5 transition-all duration-100 relative",
-                      isActive
-                        ? "bg-[var(--sb-hover)] text-[var(--sb-text)] active-left-border"
-                        : "text-[var(--sb-muted)] hover:bg-[var(--sb-hover)] hover:text-[var(--sb-text)]",
-                    ].join(" ")}
-                  >
-                    <MessageSquare
-                      size={10}
-                      strokeWidth={1.5}
-                      className={`shrink-0 ${isActive ? "text-[var(--sb-active)]" : "text-[var(--sb-muted)]"}`}
-                    />
-                    <span className="flex-1 text-[13px] truncate">{conv.title ?? "Conversación"}</span>
+                  <div key={conv.id}>
                     <button
-                      onClick={(e) => handleDeleteClick(e, conv.id)}
-                      className={[
-                        "shrink-0 w-4 h-4 rounded flex items-center justify-center transition-all duration-100",
-                        isConfirm
-                          ? "opacity-100 text-[var(--error)] bg-[var(--error)]/12"
-                          : "opacity-0 group-hover:opacity-100 text-[var(--sb-muted)] hover:text-[var(--error)]",
-                      ].join(" ")}
-                      title={isConfirm ? "Confirmar eliminación" : "Eliminar"}
+                      onClick={() => handleSelect(conv.id)}
+                      style={{
+                        width: "100%", display: "flex", alignItems: "center", gap: 8,
+                        padding: "7px 8px", borderRadius: 7,
+                        marginBottom: 1, cursor: "pointer",
+                        background: isActive ? "rgba(255,255,255,0.07)" : "transparent",
+                        border: "none",
+                        borderLeft: isActive ? "2px solid #7BB52E" : "2px solid transparent",
+                        color: isActive ? "#fff" : "rgba(255,255,255,0.5)",
+                        transition: "background 0.1s, color 0.1s",
+                        textAlign: "left",
+                      }}
+                      className={!isActive ? "hover:bg-white/[0.04] hover:text-white/70" : ""}
                     >
-                      <Trash2 size={8} strokeWidth={1.5} />
+                      <span style={{ flex: 1, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.35 }}>
+                        {conv.title ?? "Conversacion"}
+                      </span>
+                      <button
+                        onClick={(e) => handleDeleteClick(e, conv.id)}
+                        style={{
+                          flexShrink: 0, width: 18, height: 18, borderRadius: 4,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          background: "none", border: "none", cursor: "pointer",
+                          color: isConfirm ? "#f87171" : "rgba(255,255,255,0.3)",
+                          opacity: isConfirm ? 1 : 0,
+                          transition: "opacity 0.1s, color 0.1s",
+                        }}
+                        className="group-hover:opacity-100"
+                        title={isConfirm ? "Confirmar eliminacion" : "Eliminar"}
+                      >
+                        <Trash2 size={10} strokeWidth={1.5} />
+                      </button>
                     </button>
-                  </button>
+                    {isConfirm && (
+                      <div style={{
+                        fontSize: 10, color: "rgba(248,113,113,0.8)",
+                        padding: "3px 10px 6px", margin: "0 0 2px",
+                      }}>
+                        Clic de nuevo para confirmar
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -173,47 +215,84 @@ export const ConversationSidebar = memo(function ConversationSidebar({
       </div>
 
       {/* Footer */}
-      <div className="p-1.5 border-t border-[var(--sb-border)] flex-shrink-0 space-y-0.5">
-        <Link href="/"
-          className="flex items-center gap-1.5 px-2 py-2 rounded-md text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors text-[13px]"
+      <div style={{
+        padding: "8px 8px 10px",
+        borderTop: "1px solid rgba(255,255,255,0.07)",
+        flexShrink: 0,
+        display: "flex", flexDirection: "column", gap: 2,
+      }}>
+        <Link href="/" style={{
+          display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 7,
+          color: "rgba(255,255,255,0.4)", textDecoration: "none", fontSize: 12,
+          transition: "color 0.12s", fontWeight: 500,
+        }}
+          className="hover:text-white/70"
         >
-          <Home size={13} strokeWidth={1.5} /> Inicio
+          <Home size={12} strokeWidth={1.5} /> Inicio
         </Link>
 
         {user?.role === "admin" && (
-          <Link href="/admin"
-            className="flex items-center gap-1.5 px-2 py-2 rounded-md text-[var(--sb-muted)] hover:text-[var(--sb-text)] hover:bg-[var(--sb-hover)] transition-colors text-[13px]"
+          <Link href="/admin" style={{
+            display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 7,
+            color: "rgba(255,255,255,0.4)", textDecoration: "none", fontSize: 12,
+            transition: "color 0.12s", fontWeight: 500,
+          }}
+            className="hover:text-white/70"
           >
-            <Settings size={13} strokeWidth={1.5} /> Admin
+            <Settings size={12} strokeWidth={1.5} /> Admin
           </Link>
         )}
 
-        <div className="pt-1 mt-0.5 border-t border-[var(--sb-border)]">
+        {/* User row */}
+        <div style={{
+          marginTop: 4, paddingTop: 8,
+          borderTop: "1px solid rgba(255,255,255,0.06)",
+          display: "flex", alignItems: "center", gap: 8, padding: "8px",
+        }}
+          className="group"
+        >
           {user ? (
-            <div className="flex items-center gap-1.5 px-2 py-2 rounded-md group cursor-default">
-              <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[9px] font-bold uppercase shrink-0" style={{ background: "var(--brand-accent)" }}>
+            <>
+              <div style={{
+                width: 26, height: 26, borderRadius: "50%",
+                background: "#1B6E94",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase", flexShrink: 0,
+              }}>
                 {user.display_name?.[0] ?? "U"}
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-medium text-[var(--sb-text)] truncate leading-tight">
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.75)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {user.display_name ?? "Usuario"}
                 </p>
-                <p className="text-[10px] text-[var(--sb-muted)] capitalize">{user.role}</p>
+                <p style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", margin: 0, textTransform: "capitalize" }}>
+                  {user.role}
+                </p>
               </div>
               <button
                 onClick={handleLogout}
-                className="w-4 h-4 rounded flex items-center justify-center text-[var(--sb-muted)] hover:text-[var(--error)] transition-colors opacity-0 group-hover:opacity-100"
-                title="Cerrar sesión"
+                title="Cerrar sesion"
+                style={{
+                  width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "none", border: "none", cursor: "pointer",
+                  color: "rgba(255,255,255,0.25)",
+                  opacity: 0, transition: "opacity 0.12s, color 0.12s",
+                }}
+                className="group-hover:opacity-100 hover:text-red-400"
               >
-                <LogOut size={9} strokeWidth={1.5} />
+                <LogOut size={11} strokeWidth={1.5} />
               </button>
-            </div>
+            </>
           ) : (
-            <Link
-              href="/admin/login"
-              className="flex items-center justify-center gap-1 px-2.5 py-2 rounded-md bg-[var(--sb-hover)] border border-[var(--sb-border)] text-[var(--sb-text)] hover:bg-white/10 transition-colors text-[13px] font-medium"
-            >
-              Iniciar sesión
+            <Link href="/admin/login" style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: "100%", padding: "8px", borderRadius: 7,
+              background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)",
+              color: "rgba(255,255,255,0.6)", textDecoration: "none",
+              fontSize: 12, fontWeight: 500,
+            }}>
+              Iniciar sesion
             </Link>
           )}
         </div>

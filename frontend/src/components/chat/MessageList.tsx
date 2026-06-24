@@ -21,76 +21,97 @@ interface MessageListProps {
 const CARDS = [
   {
     icon: GraduationCap,
-    label: "¿Qué pregrados hay en Mocoa?",
-    query: "¿Qué pregrados hay en la sede Mocoa de UniPutumayo?",
+    label: "Pregrados en Mocoa",
+    query: "Que pregrados hay en la sede Mocoa de UniPutumayo?",
   },
   {
     icon: Globe,
-    label: "Programas en Sibundoy y Puerto Asís",
-    query: "¿Qué programas académicos hay en las sedes de Sibundoy y Puerto Asís?",
+    label: "Sedes Sibundoy y Puerto Asis",
+    query: "Que programas academicos hay en las sedes de Sibundoy y Puerto Asis?",
   },
   {
     icon: FileText,
-    label: "Requisitos de inscripción 2026-1",
-    query: "¿Cuáles son los requisitos de inscripción para el período 2026-1 en UniPutumayo?",
+    label: "Requisitos 2026-1",
+    query: "Cuales son los requisitos de inscripcion para el periodo 2026-1 en UniPutumayo?",
   },
   {
     icon: BookOpen,
-    label: "¿Cuáles son los costos académicos?",
-    query: "¿Cuáles son los costos académicos y derechos de matrícula en UniPutumayo?",
+    label: "Costos academicos",
+    query: "Cuales son los costos academicos y derechos de matricula en UniPutumayo?",
   },
 ];
 
 /* ── Welcome / empty state ── */
 function WelcomeState({ onSend }: { onSend?: (q: string) => void }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full px-6 py-16 select-none">
-      <div className="mb-5">
-        <GuacamayaAvatar state="idle" size={64} className="drop-shadow-md" />
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", padding: "48px 24px", userSelect: "none" }}>
+
+      {/* Avatar */}
+      <div className="animate-fade-up" style={{ animationDelay: "0s", marginBottom: 20 }}>
+        <GuacamayaAvatar state="idle" size={56} className="drop-shadow-md" />
       </div>
 
-      <div className="eyebrow-band mb-2" style={{ textAlign: "center" }}>NEXUS UNIPUTUMAYO</div>
-      <h1 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(20px, 3vw, 26px)", fontWeight: 700, textAlign: "center", marginBottom: 8, color: "var(--text-1)", letterSpacing: "-0.015em" }}>
-        ¡Hola! ¿En qué te puedo ayudar?
-      </h1>
-      <p className="text-center text-[var(--text-2)] max-w-xs mb-8 text-sm leading-relaxed">
-        Pregúntame sobre programas, sedes, costos y trámites de UniPutumayo.
-      </p>
+      {/* Heading block */}
+      <div className="animate-fade-up" style={{ animationDelay: "0.06s", textAlign: "center", marginBottom: 28, maxWidth: 420 }}>
+        <div style={{ marginBottom: 14, display: "flex", justifyContent: "center" }}>
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em",
+            textTransform: "uppercase", color: "var(--text-3)",
+            border: "1px solid var(--border)", borderRadius: 9999, padding: "4px 11px",
+          }}>
+            <span style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--brand-accent)", flexShrink: 0, animation: "pulse-soft 2s ease-in-out infinite" }} />
+            Nexus · UniPutumayo
+          </span>
+        </div>
+        <h1 style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "clamp(22px, 3vw, 30px)", fontWeight: 800,
+          margin: "0 0 10px", color: "var(--text-1)",
+          letterSpacing: "-0.025em", lineHeight: 1.1,
+        }}>
+          Que quieres saber<br />de UniPutumayo?
+        </h1>
+        <p style={{ fontSize: 14, color: "var(--text-3)", margin: 0, lineHeight: 1.65 }}>
+          Pregunta sobre programas, sedes, costos o tramites. Respuestas verificadas del catalogo oficial.
+        </p>
+      </div>
 
+      {/* Prompt cards */}
       {onSend && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-[560px]">
-          {CARDS.map(({ icon: Icon, label, query }) => (
+        <div className="animate-fade-up" style={{ animationDelay: "0.12s", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, width: "100%", maxWidth: 520 }}>
+          {CARDS.map(({ icon: Icon, label, query }, i) => (
             <button
               key={label}
               onClick={() => onSend(query)}
-              style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "13px 14px",
-                background: "var(--surface)", border: "1px solid var(--border)",
-                borderRadius: "var(--r-lg)", cursor: "pointer",
-                fontFamily: "var(--font-body)", fontSize: 13,
-                color: "var(--text-1)", textAlign: "left",
-                transition: "all 120ms ease",
-              }}
-              className="hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)] active:scale-[.98]"
+              className="prompt-card"
+              style={{ animationDelay: `${0.14 + i * 0.05}s`, animationFillMode: "both" }}
             >
-              <Icon size={16} style={{ color: "var(--brand-primary)", flexShrink: 0 }} />
-              <span>{label}</span>
+              <div style={{
+                width: 28, height: 28, borderRadius: 7, flexShrink: 0,
+                background: "var(--brand-dim)", border: "1px solid var(--brand-light)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                <Icon size={13} style={{ color: "var(--brand-primary)" }} />
+              </div>
+              <span style={{ fontSize: 12.5, lineHeight: 1.4, color: "var(--text-1)" }}>{label}</span>
             </button>
           ))}
         </div>
       )}
 
-      <div className="flex flex-wrap justify-center gap-2 mt-6">
+      {/* Capabilities */}
+      <div className="animate-fade-up" style={{ animationDelay: "0.35s", display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 20 }}>
         {[
-          { icon: Mic, label: "Voz y texto" },
-          { icon: Clock, label: "Disponible 24/7" },
+          { icon: Mic,      label: "Voz y texto" },
+          { icon: Clock,    label: "24/7" },
           { icon: FileText, label: "Fuentes citadas" },
         ].map(({ icon: Icon, label }) => (
-          <div
-            key={label}
-            className="flex items-center gap-1 text-[11px] text-[var(--text-3)] px-2.5 py-1 rounded-full border border-[var(--border)] bg-[var(--surface)]"
-          >
+          <div key={label} style={{
+            display: "flex", alignItems: "center", gap: 4, fontSize: 11,
+            color: "var(--text-3)", padding: "4px 10px", borderRadius: 9999,
+            border: "1px solid var(--border)", background: "var(--surface)",
+          }}>
             <Icon size={10} strokeWidth={1.5} /> {label}
           </div>
         ))}

@@ -4,14 +4,14 @@ import { useState, useId } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, AlertCircle, Check } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { setToken, setUser } from "@/lib/auth";
 import { Spinner } from "@/components/ui/Spinner";
 
 type Tab = "login" | "register";
 
-function InputField({
+function DarkInputField({
   id, label, type = "text", value, onChange, placeholder, required, showToggle,
 }: {
   id: string; label?: string; type?: string; value: string;
@@ -23,19 +23,35 @@ function InputField({
 
   return (
     <div>
-      {label && <label htmlFor={id} style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--text-1)", marginBottom: 6 }}>{label}</label>}
+      {label && (
+        <label htmlFor={id} style={{
+          display: "block", fontSize: 12, fontWeight: 600,
+          color: "rgba(255,255,255,0.5)", marginBottom: 7,
+          letterSpacing: "0.04em", textTransform: "uppercase",
+        }}>
+          {label}
+        </label>
+      )}
       <div style={{ position: "relative" }}>
         <input
           id={id} type={inputType} value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder} required={required}
-          className="input w-full"
-          style={{ paddingRight: showToggle ? 36 : undefined }}
+          className="dark-input"
+          style={{ paddingRight: showToggle ? 42 : undefined }}
         />
         {showToggle && (
-          <button type="button" onClick={() => setShow(!show)}
-            className="absolute right-1 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-[var(--text-3)] flex items-center justify-center w-9 h-9 hover:text-[var(--brand-primary)] transition-colors">
-            {show ? <EyeOff size={16} /> : <Eye size={16} />}
+          <button
+            type="button"
+            onClick={() => setShow(!show)}
+            style={{
+              position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+              background: "none", border: "none", cursor: "pointer",
+              color: "rgba(255,255,255,0.35)", display: "flex", alignItems: "center",
+              padding: 4,
+            }}
+          >
+            {show ? <EyeOff size={15} /> : <Eye size={15} />}
           </button>
         )}
       </div>
@@ -62,14 +78,14 @@ export default function LoginPage() {
       setToken(res.access_token); setUser(res.user);
       router.push(res.user.role === "admin" ? "/admin" : "/chat");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al iniciar sesión");
+      setError(err instanceof Error ? err.message : "Error al iniciar sesion");
     } finally { setLoading(false); }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password !== confirmPassword) return setError("Las contraseñas no coinciden");
-    if (password.length < 6) return setError("La contraseña debe tener al menos 6 caracteres");
+    if (password !== confirmPassword) return setError("Las contrasenas no coinciden");
+    if (password.length < 6) return setError("La contrasena debe tener al menos 6 caracteres");
     setLoading(true); setError(null);
     try {
       const res = await apiClient.register(email, password, displayName);
@@ -80,105 +96,217 @@ export default function LoginPage() {
     } finally { setLoading(false); }
   };
 
-  const switchTab = (t: Tab) => { setTab(t); setError(null); setEmail(""); setPassword(""); setConfirmPassword(""); setDisplayName(""); };
+  const switchTab = (t: Tab) => {
+    setTab(t); setError(null);
+    setEmail(""); setPassword(""); setConfirmPassword(""); setDisplayName("");
+  };
+
+  const BULLETS = [
+    "Catalogo oficial de programas 2026",
+    "Respuestas verificadas con fuentes",
+    "Voz y texto, disponible 24 horas",
+  ];
 
   return (
-    <div className="campus-panel min-h-screen flex relative overflow-hidden">
-      <div className="w-full max-w-[1100px] mx-auto flex flex-col md:flex-row items-center justify-center md:justify-between p-6 md:p-12 z-10 gap-10">
-        
-        {/* Left panel — hero text */}
-        <div className="hidden md:flex flex-col flex-1 max-w-[460px]">
-          <div className="eyebrow-band" style={{ color: "var(--accent)", marginBottom: 12 }}>NEXUS UNIPUTUMAYO</div>
-          <h1 style={{
-            fontFamily: "var(--font-display)", fontSize: "clamp(32px, 3.5vw, 46px)", fontWeight: 800,
-            color: "#fff", lineHeight: 1.1, marginTop: 0, marginBottom: 16, letterSpacing: "-0.02em"
-          }}>
-            Tu guía académica,<br />en cualquier momento.
-          </h1>
-          <p style={{ fontSize: 16, color: "rgba(255,255,255,0.85)", lineHeight: 1.6, margin: 0 }}>
-            Conversa con Nexus, una guacamaya que conoce a fondo cada programa, sede y trámite de UniPutumayo.
-          </p>
-        </div>
+    <div style={{ minHeight: "100dvh", background: "#071824", display: "flex" }}>
 
-        {/* Right panel — login card */}
-        <div className="w-full md:w-[440px] bg-white rounded-[1.25rem] p-8 shadow-2xl relative flex-shrink-0">
-          
-          <div style={{ textAlign: "center", marginBottom: 20 }}>
-            <Image src="/logo-azul.png" alt="UniPutumayo" width={140} height={40} style={{ objectFit: "contain", margin: "0 auto" }} />
+      {/* Left panel — brand showcase */}
+      <div
+        className="hidden md:flex"
+        style={{
+          width: "58%", flexShrink: 0, position: "relative",
+          overflow: "hidden", flexDirection: "column", justifyContent: "center",
+          padding: "60px 56px",
+        }}
+      >
+        {/* Campus background */}
+        <div style={{
+          position: "absolute", inset: 0,
+          backgroundImage: "url('/hero-fondo.png')",
+          backgroundSize: "cover", backgroundPosition: "center",
+        }} />
+        {/* Heavy dark overlay */}
+        <div style={{
+          position: "absolute", inset: 0,
+          background: "linear-gradient(135deg, rgba(7,24,36,0.97) 0%, rgba(11,52,71,0.94) 60%, rgba(27,110,148,0.5) 100%)",
+        }} />
+        {/* Accent blob */}
+        <div style={{
+          position: "absolute", bottom: "10%", right: "-5%",
+          width: 320, height: 320, borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(123,181,46,0.08), transparent 70%)",
+          filter: "blur(50px)", pointerEvents: "none",
+        }} />
+
+        {/* Content */}
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 440 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 48 }}>
+            <Image src="/isotipo.webp" alt="Nexus" width={48} height={48} style={{ objectFit: "contain" }} />
+            <div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em", lineHeight: 1 }}>Nexus</div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginTop: 3 }}>UniPutumayo</div>
+            </div>
           </div>
 
-          <h2 style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 700, margin: "0 0 6px", color: "#111827", textAlign: "center", letterSpacing: "-0.01em" }}>
-            {tab === "login" ? "Inicia sesión en Nexus" : "Regístrate en Nexus"}
+          <h2 style={{
+            fontFamily: "var(--font-display)",
+            fontSize: "clamp(30px,3vw,44px)",
+            fontWeight: 900, color: "#fff",
+            lineHeight: 1.05, letterSpacing: "-0.03em",
+            margin: "0 0 14px",
+          }}>
+            Panel de administracion<br />
+            <span style={{ color: "#1B6E94" }}>UniPutumayo.</span>
           </h2>
-          <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 28, textAlign: "center" }}>
-            Acceso para estudiantes, aspirantes y administradores
+
+          <p style={{ fontSize: 15, color: "rgba(255,255,255,0.55)", lineHeight: 1.65, margin: "0 0 36px" }}>
+            Gestiona documentos, usuarios y el catalogo institucional de Nexus.
           </p>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {BULLETS.map((b) => (
+              <div key={b} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{
+                  width: 20, height: 20, borderRadius: "50%",
+                  background: "rgba(123,181,46,0.15)", border: "1px solid rgba(123,181,46,0.3)",
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                }}>
+                  <Check size={10} color="#7BB52E" strokeWidth={2.5} />
+                </div>
+                <span style={{ fontSize: 14, color: "rgba(255,255,255,0.65)" }}>{b}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Right panel — login form */}
+      <div style={{
+        flex: 1, display: "flex", flexDirection: "column",
+        justifyContent: "center", alignItems: "center",
+        padding: "48px 40px", background: "#0F1E2A",
+        minHeight: "100dvh",
+      }}>
+        <div style={{ width: "100%", maxWidth: 360 }}>
+
+          {/* Logo mobile only */}
+          <div className="md:hidden" style={{ textAlign: "center", marginBottom: 32 }}>
+            <Image src="/isotipo.webp" alt="Nexus" width={40} height={40} style={{ objectFit: "contain", margin: "0 auto" }} />
+          </div>
+
+          <h2 style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 24, fontWeight: 800, color: "#fff",
+            letterSpacing: "-0.02em", margin: "0 0 6px",
+          }}>
+            Bienvenido de vuelta
+          </h2>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", margin: "0 0 28px" }}>
+            Accede al panel de administracion de Nexus
+          </p>
+
+          {/* Tabs */}
+          <div style={{ display: "flex", gap: 24, borderBottom: "1px solid rgba(255,255,255,0.1)", marginBottom: 28 }}>
+            <button className={`dark-tab${tab === "login" ? " active" : ""}`} onClick={() => switchTab("login")}>
+              Iniciar sesion
+            </button>
+            <button className={`dark-tab${tab === "register" ? " active" : ""}`} onClick={() => switchTab("register")}>
+              Registrarse
+            </button>
+          </div>
 
           {/* Error */}
           {error && (
-            <div className="animate-shake" style={{
+            <div style={{
               display: "flex", alignItems: "flex-start", gap: 8,
-              padding: "10px 12px", borderRadius: "var(--r)", marginBottom: 18,
-              background: "#FBE7E5", border: "1px solid rgba(200,54,44,0.2)", color: "#C8362C", fontSize: 13
+              padding: "10px 12px", borderRadius: 8, marginBottom: 20,
+              background: "rgba(200,54,44,0.12)", border: "1px solid rgba(200,54,44,0.25)",
+              color: "#f87171", fontSize: 13,
             }}>
-              <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} /> {error}
+              <AlertCircle size={13} style={{ flexShrink: 0, marginTop: 1 }} /> {error}
             </div>
           )}
 
           {tab === "login" ? (
             <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <InputField id={`${uid}_email`} label="Correo o documento" type="email"
-                value={email} onChange={setEmail} placeholder="estudiante@itp.edu.co"
-                required />
+              <DarkInputField
+                id={`${uid}_email`} label="Correo electronico" type="email"
+                value={email} onChange={setEmail}
+                placeholder="admin@itp.edu.co" required
+              />
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <label htmlFor={`${uid}_pass`} style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)" }}>Contraseña</label>
-                  <a href="#" style={{ fontSize: 12, color: "var(--brand-primary)" }}>¿La olvidaste?</a>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.5)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                    Contrasena
+                  </label>
                 </div>
-                <InputField id={`${uid}_pass`} label="" type="password"
-                  value={password} onChange={setPassword} placeholder="••••••••"
-                  required showToggle />
+                <DarkInputField
+                  id={`${uid}_pass`} type="password"
+                  value={password} onChange={setPassword}
+                  placeholder="Minimo 6 caracteres" required showToggle
+                />
               </div>
-              
-              <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: "100%", padding: "12px 18px", marginTop: 4, justifyContent: "center", borderRadius: "8px" }}>
-                {loading ? <><Spinner size="sm" /> Ingresando…</> : "Iniciar sesión"}
+
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  width: "100%", padding: "13px", borderRadius: 10,
+                  background: "#7BB52E", color: "#fff", border: "none",
+                  fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 600,
+                  cursor: loading ? "not-allowed" : "pointer", marginTop: 8,
+                  opacity: loading ? 0.7 : 1,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  transition: "background 0.15s",
+                }}
+              >
+                {loading ? <><Spinner size="sm" /> Ingresando</> : "Iniciar sesion"}
               </button>
-
-
             </form>
           ) : (
-            <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <InputField id={`${uid}_name`} label="Nombre completo" type="text"
-                value={displayName} onChange={setDisplayName} placeholder="Tu nombre completo"
-                required />
-              <InputField id={`${uid}_email2`} label="Correo electrónico" type="email"
-                value={email} onChange={setEmail} placeholder="correo@ejemplo.com"
-                required />
-              <InputField id={`${uid}_pass2`} label="Contraseña" type="password"
-                value={password} onChange={setPassword} placeholder="Mínimo 6 caracteres"
-                required showToggle />
-              <InputField id={`${uid}_conf`} label="Confirmar contraseña" type="password"
-                value={confirmPassword} onChange={setConfirmPassword} placeholder="Repite tu contraseña"
-                required showToggle />
-              
-              <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: "100%", padding: "12px 18px", marginTop: 4, justifyContent: "center", borderRadius: "8px" }}>
-                {loading ? <><Spinner size="sm" /> Registrando…</> : "Crear cuenta"}
+            <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <DarkInputField
+                id={`${uid}_name`} label="Nombre completo" type="text"
+                value={displayName} onChange={setDisplayName}
+                placeholder="Tu nombre" required
+              />
+              <DarkInputField
+                id={`${uid}_email2`} label="Correo electronico" type="email"
+                value={email} onChange={setEmail}
+                placeholder="correo@ejemplo.com" required
+              />
+              <DarkInputField
+                id={`${uid}_pass2`} label="Contrasena" type="password"
+                value={password} onChange={setPassword}
+                placeholder="Minimo 6 caracteres" required showToggle
+              />
+              <DarkInputField
+                id={`${uid}_conf`} label="Confirmar contrasena" type="password"
+                value={confirmPassword} onChange={setConfirmPassword}
+                placeholder="Repite tu contrasena" required showToggle
+              />
+
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  width: "100%", padding: "13px", borderRadius: 10,
+                  background: "#7BB52E", color: "#fff", border: "none",
+                  fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 600,
+                  cursor: loading ? "not-allowed" : "pointer", marginTop: 6,
+                  opacity: loading ? 0.7 : 1,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  transition: "background 0.15s",
+                }}
+              >
+                {loading ? <><Spinner size="sm" /> Registrando</> : "Crear cuenta"}
               </button>
             </form>
           )}
 
-          <div style={{ textAlign: "center", fontSize: 13, color: "var(--text-2)", marginTop: 24 }}>
-            {tab === "login" ? "¿Aún no tienes cuenta? " : "¿Ya tienes cuenta? "}
-            <button onClick={() => switchTab(tab === "login" ? "register" : "login")}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--brand-primary)", fontWeight: 600, fontSize: 13, padding: 0 }}>
-              {tab === "login" ? "Crear cuenta" : "Iniciar sesión"}
-            </button>
-          </div>
-          
-          <div style={{ textAlign: "center", marginTop: 24, position: "absolute", bottom: -40, left: 0, right: 0 }}>
-            <Link href="/" style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", textDecoration: "none" }}
-              className="hover:text-white transition-colors">
-              ← Volver al inicio
+          <div style={{ marginTop: 32, textAlign: "center" }}>
+            <Link href="/" style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", textDecoration: "none" }}>
+              Ir al inicio
             </Link>
           </div>
         </div>

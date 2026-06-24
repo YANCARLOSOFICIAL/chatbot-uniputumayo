@@ -290,25 +290,45 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Module nav cards */}
+        {/* Module nav — editorial list, not equal-card grid */}
         <div style={{ marginTop: 24 }}>
-          <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, margin: "0 0 12px", color: "var(--text-1)" }}>Módulos</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, margin: "0 0 10px", color: "var(--text-1)" }}>
+            Modulos
+          </h3>
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
             {[
-              { href: "/admin/documents",    icon: FileText,  title: "Documentos",       desc: "Gestionar base de conocimiento RAG.", color: "var(--brand-primary)" },
-              { href: "/admin/config",       icon: Settings,  title: "Configuración IA",  desc: "Proveedores, modelos y API keys.",    color: "#8B5CF6" },
-              { href: "/admin/users",        icon: Users,     title: "Usuarios",           desc: "Roles y permisos de acceso.",          color: "var(--success)" },
-              { href: "/admin/conversations",icon: MessageSquare, title: "Conversaciones", desc: "Historial de interacciones.",          color: "var(--warning)" },
-              { href: "/admin/analytics",    icon: BarChart3, title: "Métricas",           desc: "Estadísticas de uso.",                  color: "var(--brand-primary)" },
-            ].map(({ href, icon: Icon, title, desc, color }) => (
-              <Link key={href} href={href} style={{ textDecoration: "none" }}>
-                <div className="card card-interactive" style={{ padding: 20 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: "var(--r)", background: color + "18", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
-                    <Icon size={20} style={{ color }} />
-                  </div>
-                  <div style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--text-1)", marginBottom: 4 }}>{title}</div>
-                  <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.5 }}>{desc}</div>
+              { href: "/admin/documents",     Icon: FileText,      label: "Documentos",      desc: "Base de conocimiento RAG",    color: "var(--brand-primary)", featured: true },
+              { href: "/admin/config",        Icon: Settings,      label: "Configuracion IA", desc: "Proveedores, modelos, API",   color: "#8B5CF6",              featured: false },
+              { href: "/admin/users",         Icon: Users,         label: "Usuarios",          desc: "Roles y permisos",            color: "var(--success)",       featured: false },
+              { href: "/admin/conversations", Icon: MessageSquare, label: "Conversaciones",    desc: "Historial de interacciones",  color: "var(--warning)",       featured: false },
+              { href: "/admin/analytics",     Icon: BarChart3,     label: "Metricas",          desc: "Estadisticas de uso",         color: "var(--brand-primary)", featured: false },
+            ].map(({ href, Icon, label, desc, color, featured }, i, arr) => (
+              <Link
+                key={href}
+                href={href}
+                style={{
+                  display: "flex", alignItems: "center", gap: 14, padding: "13px 18px",
+                  textDecoration: "none",
+                  borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
+                  transition: "background 0.12s",
+                  background: featured ? "var(--brand-dim)" : "transparent",
+                }}
+                className="hover:bg-[var(--surface-3)]"
+              >
+                <div style={{
+                  width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+                  background: color + "14",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <Icon size={16} style={{ color }} />
                 </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: featured ? 700 : 500, color: "var(--text-1)" }}>{label}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 1 }}>{desc}</div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.75">
+                  <path d="M9 18l6-6-6-6"/>
+                </svg>
               </Link>
             ))}
           </div>

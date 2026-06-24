@@ -7,7 +7,7 @@ import { ToastContainer } from "@/components/ui/Toast";
 const beVietnam = Be_Vietnam_Pro({
   variable: "--font-display",
   subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
+  weight: ["500", "600", "700", "800", "900"],
 });
 const inter = Inter({
   variable: "--font-body",

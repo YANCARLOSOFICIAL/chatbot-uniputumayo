@@ -13,45 +13,92 @@ export function SourceCard({ sources }: SourceCardProps) {
   if (!sources.length) return null;
 
   return (
-    <div style={{ marginTop: 10 }}>
+    <div style={{ marginTop: 12 }}>
+      {/* Toggle — subtle, editorial */}
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-3)] hover:text-[var(--brand-primary)] bg-transparent border-none cursor-pointer p-0 transition-colors duration-100"
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 5,
+          padding: "4px 10px 4px 8px", borderRadius: 9999,
+          border: "1px solid var(--border)", background: "var(--surface)",
+          fontSize: 11, fontWeight: 600, color: "var(--text-3)",
+          cursor: "pointer", transition: "border-color 0.15s, color 0.15s",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--brand-primary)";
+          (e.currentTarget as HTMLButtonElement).style.color = "var(--brand-primary)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)";
+          (e.currentTarget as HTMLButtonElement).style.color = "var(--text-3)";
+        }}
       >
-        <BookOpen size={11} strokeWidth={1.5} />
-        <span>
-          {sources.length} fuente{sources.length !== 1 ? "s" : ""} consultada{sources.length !== 1 ? "s" : ""}
-        </span>
-        {open ? <ChevronUp size={10} strokeWidth={1.5} /> : <ChevronDown size={10} strokeWidth={1.5} />}
+        <BookOpen size={10} strokeWidth={2} style={{ color: "var(--brand-primary)" }} />
+        {sources.length} {sources.length === 1 ? "fuente" : "fuentes"}
+        {open ? <ChevronUp size={10} strokeWidth={2} /> : <ChevronDown size={10} strokeWidth={2} />}
       </button>
 
       {open && (
-        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-          {sources.map((source) => {
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 0, border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
+          {sources.map((source, i) => {
             const score = source.score;
-            const dotColor = score >= 0.6 ? "var(--success)" : score >= 0.4 ? "var(--warning)" : "var(--text-3)";
+            const dotColor = score >= 0.55 ? "#2F8F4E" : score >= 0.38 ? "#C77A0A" : "var(--text-3)";
             return (
-              <div key={source.chunk_id} className="citation-card">
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                  <div style={{
-                    width: 28, height: 28, borderRadius: "var(--r)",
-                    background: "var(--brand-primary-lighter)",
-                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                  }}>
-                    <BookOpen size={13} style={{ color: "var(--brand-primary)" }} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {source.document_title}
-                    </div>
-                    {source.program && (
-                      <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {source.program}
-                      </div>
-                    )}
-                  </div>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor, flexShrink: 0, marginTop: 4 }} />
+              <div
+                key={source.chunk_id}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "10px 14px",
+                  borderBottom: i < sources.length - 1 ? "1px solid var(--border)" : "none",
+                  background: "var(--surface)",
+                  transition: "background 0.12s",
+                }}
+                onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "var(--surface-2)")}
+                onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "var(--surface)")}
+              >
+                {/* Index */}
+                <span style={{
+                  fontFamily: "var(--font-mono)", fontSize: 9,
+                  color: "var(--text-3)", width: 16, flexShrink: 0, textAlign: "right",
+                }}>
+                  {i + 1}
+                </span>
+
+                {/* Doc icon */}
+                <div style={{
+                  width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+                  background: "var(--brand-dim)", border: "1px solid var(--brand-light)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <BookOpen size={11} style={{ color: "var(--brand-primary)" }} />
                 </div>
+
+                {/* Title + program */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    fontSize: 12, fontWeight: 600, color: "var(--text-1)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    lineHeight: 1.3,
+                  }}>
+                    {source.document_title}
+                  </div>
+                  {source.program && (
+                    <div style={{
+                      fontSize: 10, color: "var(--text-3)", marginTop: 2,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      fontFamily: "var(--font-mono)",
+                    }}>
+                      {source.program}
+                    </div>
+                  )}
+                </div>
+
+                {/* Relevance dot */}
+                <div style={{
+                  width: 6, height: 6, borderRadius: "50%",
+                  background: dotColor, flexShrink: 0,
+                  boxShadow: `0 0 4px ${dotColor}`,
+                }} title={`Relevancia: ${Math.round(score * 100)}%`} />
               </div>
             );
           })}

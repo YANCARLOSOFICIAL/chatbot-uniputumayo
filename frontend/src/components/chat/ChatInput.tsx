@@ -18,6 +18,7 @@ export function ChatInput({
   isListening, isLoading, isVoiceSupported,
 }: ChatInputProps) {
   const [value, setValue] = useState("");
+  const [shaking, setShaking] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const resize = () => {
@@ -37,9 +38,15 @@ export function ChatInput({
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   };
 
+  const triggerShake = () => {
+    setShaking(true);
+    setTimeout(() => setShaking(false), 500);
+  };
+
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
     const trimmed = value.trim();
+    if (!trimmed && !isLoading) { triggerShake(); return; }
     if (!trimmed || isLoading) return;
     onSend(trimmed);
     reset();
@@ -51,96 +58,115 @@ export function ChatInput({
   };
 
   const canSend = value.trim().length > 0 && !isLoading && !isListening;
+  const showCounter = value.length > 200;
 
   return (
-    <div className="flex-shrink-0 px-3 pb-4 pt-2 bg-[var(--bg)]">
-      <div className="max-w-2xl mx-auto">
+    <div
+      className={`flat-input-bar${isListening ? " listening" : ""}${shaking ? " animate-shake" : ""}`}
+      style={{ flexShrink: 0 }}
+    >
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
 
-        {/* Listening indicator */}
+        {/* Listening banner */}
         {isListening && (
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--error)] opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--error)]" />
-            </span>
-            <span className="text-[13px] text-[var(--error)] font-medium">Escuchando…</span>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            marginBottom: 10, padding: "6px 10px", borderRadius: 8,
+            background: "rgba(123,181,46,0.08)", border: "1px solid rgba(123,181,46,0.2)",
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#7BB52E", display: "inline-block", animation: "pulse-soft 1s ease-in-out infinite" }} />
+            <span style={{ fontSize: 12, color: "#7BB52E", fontWeight: 500 }}>Escuchando</span>
           </div>
         )}
 
-        {/* Input card */}
-        <div className={[
-          "chat-input-area transition-all",
-          isListening ? "border-[var(--error)]/30 shadow-lg shadow-[var(--error)]/5" : "",
-        ].join(" ")}>
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={handleChange}
-            onKeyDown={handleKey}
-            placeholder={
-              isListening ? "Escuchando…"
-              : isLoading  ? "Buscando en el catálogo…"
-              : "Pregúntale a Nexus sobre programas, sedes, requisitos…"
-            }
-            rows={1}
-            disabled={isLoading || isListening}
-            className="w-full resize-none bg-transparent px-4 pt-3 pb-1 text-sm text-[var(--text-1)] placeholder-[var(--text-3)] outline-none leading-relaxed disabled:opacity-40"
-            style={{ maxHeight: "140px", overflowY: "auto" }}
-            aria-label="Mensaje"
-          />
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
 
-          <div className="flex items-center justify-between px-3 pb-2.5 pt-0.5 gap-2">
-            {/* Left: voice */}
-            <div className="flex items-center gap-1">
-              {isVoiceSupported && (
-                <button
-                  type="button"
-                  onClick={isListening ? onVoiceStop : onVoiceStart}
-                  disabled={isLoading}
-                  aria-label={isListening ? "Detener" : "Micrófono"}
-                  className={[
-                    "w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-150",
-                    isListening
-                      ? "bg-red-500 text-white shadow-sm"
-                      : "text-[var(--text-3)] hover:text-[var(--brand)] hover:bg-[var(--surface-3)]",
-                    isLoading ? "opacity-30 cursor-not-allowed" : "",
-                  ].join(" ")}
-                >
-                  {isListening
-                    ? <Square size={14} fill="currentColor" strokeWidth={2} />
-                    : <Mic size={16} strokeWidth={1.5} />
-                  }
-                </button>
-              )}
-            </div>
+          {/* Voice button */}
+          {isVoiceSupported && (
+            <button
+              type="button"
+              onClick={isListening ? onVoiceStop : onVoiceStart}
+              disabled={isLoading}
+              aria-label={isListening ? "Detener" : "Microfono"}
+              style={{
+                width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
+                background: isListening ? "rgba(123,181,46,0.12)" : "var(--surface-3)",
+                border: isListening ? "1px solid rgba(123,181,46,0.3)" : "1px solid var(--border)",
+                color: isListening ? "#7BB52E" : "var(--text-3)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: isLoading ? "not-allowed" : "pointer",
+                opacity: isLoading ? 0.4 : 1,
+                transition: "all 0.15s",
+              }}
+            >
+              {isListening
+                ? <Square size={13} fill="currentColor" strokeWidth={2} />
+                : <Mic size={15} strokeWidth={1.5} />
+              }
+            </button>
+          )}
 
-            {/* Right: counter + send */}
-            <div className="flex items-center gap-2">
-              {value.length > 200 && (
-                <span className={`text-[11px] tabular-nums ${value.length > 500 ? "text-[var(--error)]" : "text-[var(--text-3)]"}`}>
-                  {value.length}
-                </span>
-              )}
-              <button
-                onClick={() => submit()}
-                disabled={!canSend}
-                aria-label="Enviar"
-                className={[
-                  "w-9 h-9 rounded-lg flex items-center justify-center transition-all duration-150",
-                  canSend
-                    ? "bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)] active:scale-95"
-                    : "bg-[var(--surface-3)] text-[var(--text-3)] cursor-not-allowed",
-                ].join(" ")}
-              >
-                {isLoading ? <Spinner size="sm" /> : <ArrowUp size={16} strokeWidth={2.5} />}
-              </button>
-            </div>
+          {/* Textarea + counter */}
+          <div style={{ flex: 1, position: "relative" }}>
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={handleChange}
+              onKeyDown={handleKey}
+              placeholder={
+                isListening ? "Escuchando..."
+                : isLoading  ? "Buscando en el catalogo..."
+                : "Preguntale a Nexus sobre programas, sedes, requisitos..."
+              }
+              rows={1}
+              disabled={isLoading || isListening}
+              aria-label="Mensaje"
+              style={{
+                width: "100%", resize: "none",
+                background: "transparent", border: "none", outline: "none",
+                fontFamily: "var(--font-body)", fontSize: 15,
+                color: "var(--text-1)", lineHeight: 1.55,
+                maxHeight: 140, overflowY: "auto",
+                paddingBottom: showCounter ? 18 : 0,
+                opacity: (isLoading || isListening) ? 0.5 : 1,
+              }}
+            />
+            {showCounter && (
+              <span style={{
+                position: "absolute", bottom: 0, right: 0,
+                fontFamily: "var(--font-mono)", fontSize: 10,
+                color: value.length > 500 ? "var(--error)" : "var(--text-3)",
+                fontVariantNumeric: "tabular-nums",
+              }}>
+                {value.length}
+              </span>
+            )}
           </div>
+
+          {/* Send button */}
+          <button
+            onClick={() => submit()}
+            disabled={!canSend}
+            aria-label="Enviar"
+            style={{
+              width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
+              background: canSend ? "#1B6E94" : "var(--surface-3)",
+              border: "none",
+              color: canSend ? "#fff" : "var(--text-3)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: canSend ? "pointer" : "not-allowed",
+              transition: "all 0.15s",
+            }}
+          >
+            {isLoading ? <Spinner size="sm" /> : <ArrowUp size={17} strokeWidth={2.5} />}
+          </button>
         </div>
 
-        <p className="text-center text-[12px] text-[var(--text-3)] mt-2 opacity-70">
-          Nexus puede equivocarse. Verifica información crítica con la oficina de admisiones.
-        </p>
+        {!isListening && !isLoading && (
+          <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 8, opacity: 0.6, textAlign: "center" }}>
+            Nexus puede equivocarse. Verifica informacion critica con admisiones.
+          </p>
+        )}
       </div>
     </div>
   );
