@@ -198,7 +198,7 @@ export function SiteFooter() {
               <span style={{ color: "rgba(255,255,255,0.70)", fontWeight: 600 }}>Yan Carlos Pinchao Guerra</span>
               {" "}y{" "}
               <span style={{ color: "rgba(255,255,255,0.70)", fontWeight: 600 }}>Ilver Edelmo Chapal Villareal</span>
-              {" · "}Semillero de Innovacion TI · IUP 2026
+              {" · "}Grupo de Investigacion Virtualab· UNIPUTUMAYO 2026
             </span>
           </div>
 
