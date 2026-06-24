@@ -261,10 +261,10 @@ export const ConversationSidebar = memo(function ConversationSidebar({
             <p style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", margin: "0 0 16px", lineHeight: 1.5 }}>
               Inicia sesion para guardar y revisar tus conversaciones.
             </p>
-            <Link href="/login" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: "rgba(27,110,148,0.2)", border: "1px solid rgba(27,110,148,0.3)", color: "rgba(255,255,255,0.75)", textDecoration: "none", fontSize: 12, fontWeight: 600 }}>
+            <Link href="/admin/login" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: "rgba(27,110,148,0.2)", border: "1px solid rgba(27,110,148,0.3)", color: "rgba(255,255,255,0.75)", textDecoration: "none", fontSize: 12, fontWeight: 600 }}>
               <LogIn size={12} /> Iniciar sesion
             </Link>
-            <Link href="/login" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "7px 14px", borderRadius: 8, background: "transparent", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.4)", textDecoration: "none", fontSize: 12, fontWeight: 500, marginTop: 6 }}>
+            <Link href="/admin/login" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "7px 14px", borderRadius: 8, background: "transparent", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.4)", textDecoration: "none", fontSize: 12, fontWeight: 500, marginTop: 6 }}>
               <UserPlus size={12} /> Crear cuenta
             </Link>
           </div>
@@ -333,7 +333,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
               </button>
             </>
           ) : (
-            <Link href="/login" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "8px", borderRadius: 7, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)", textDecoration: "none", fontSize: 12, fontWeight: 500 }}>
+            <Link href="/admin/login" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "8px", borderRadius: 7, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)", textDecoration: "none", fontSize: 12, fontWeight: 500 }}>
               Iniciar sesion
             </Link>
           )}

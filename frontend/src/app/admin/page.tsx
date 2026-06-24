@@ -110,9 +110,9 @@ export default function AdminPage() {
           position: "relative", minHeight: 120,
         }}>
           {/* Background image */}
-          <div style={{ position: "absolute", inset: 0, backgroundImage: "url('/estudiantes.jpg')", backgroundSize: "cover", backgroundPosition: "center top", opacity: 0.09 }} />
+          <div style={{ position: "absolute", inset: 0, backgroundImage: "url('/estudiantes.jpg')", backgroundSize: "cover", backgroundPosition: "center top", opacity: 0.22 }} />
           {/* Gradient overlay left-to-right */}
-          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(11,52,71,0.95) 55%, rgba(11,52,71,0.6) 100%)" }} />
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(11,52,71,0.88) 45%, rgba(11,52,71,0.45) 100%)" }} />
 
           {/* Left: greeting */}
           <div style={{ position: "relative", zIndex: 1 }}>

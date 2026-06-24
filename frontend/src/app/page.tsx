@@ -96,7 +96,7 @@ export default function LandingPage() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Link href="/login" style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.5)", textDecoration: "none", padding: "6px 12px", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 9999, transition: "color 0.15s, border-color 0.15s", whiteSpace: "nowrap" }}>
+            <Link href="/admin/login" style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.5)", textDecoration: "none", padding: "6px 12px", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 9999, transition: "color 0.15s, border-color 0.15s", whiteSpace: "nowrap" }}>
               Iniciar sesion
             </Link>
             <button onClick={() => goToChat()} className="btn-island" style={{ fontSize: 12, padding: "7px 5px 7px 14px" }}>
@@ -411,10 +411,10 @@ export default function LandingPage() {
         {/* ══════ CTA ══════ */}
         <section style={{ padding: "120px 0", background: "#071824", position: "relative", overflow: "hidden" }}>
           {/* Subtle photo background */}
-          <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: "40%", overflow: "hidden", opacity: 0.12 }} aria-hidden>
+          <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: "45%", overflow: "hidden", opacity: 0.32 }} aria-hidden>
             <Image src="/lab-aguas.jpg" alt="" fill style={{ objectFit: "cover", objectPosition: "center" }} />
           </div>
-          <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: "50%", background: "linear-gradient(to right, #071824 0%, transparent 100%)" }} aria-hidden />
+          <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: "55%", background: "linear-gradient(to right, #071824 20%, transparent 100%)" }} aria-hidden />
 
           <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px", position: "relative", zIndex: 1 }}>
             <div ref={cta.ref} className={`reveal${cta.inView ? " in-view" : ""}`} style={{ maxWidth: 680 }}>
@@ -433,7 +433,7 @@ export default function LandingPage() {
                     <ArrowRight size={16} />
                   </span>
                 </button>
-                <Link href="/login" style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", textDecoration: "none" }} className="hover:text-white/60 transition-colors">
+                <Link href="/admin/login" style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", textDecoration: "none" }} className="hover:text-white/60 transition-colors">
                   Crear una cuenta gratuita
                 </Link>
               </div>

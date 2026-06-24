@@ -204,7 +204,7 @@ export function ChatContainer() {
                 </>
               ) : (
                 <Link
-                  href="/login"
+                  href="/admin/login"
                   className="flex items-center gap-1.5 text-[12px] text-[var(--text-2)] hover:text-[var(--brand-primary)] transition-colors px-2.5 py-1.5 rounded-md border border-[var(--border)] hover:border-[var(--brand-primary)] font-medium"
                   style={{ whiteSpace: "nowrap" }}
                 >
@@ -235,7 +235,7 @@ export function ChatContainer() {
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderRadius: 10, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", fontSize: 12 }}>
               <span style={{ color: "var(--text-2)", flex: 1 }}>
                 Esta conversacion no se guardara.{" "}
-                <Link href="/login" style={{ color: "var(--brand-primary)", fontWeight: 600, textDecoration: "none" }}>
+                <Link href="/admin/login" style={{ color: "var(--brand-primary)", fontWeight: 600, textDecoration: "none" }}>
                   Inicia sesion
                 </Link>{" "}
                 para guardar tu historial.

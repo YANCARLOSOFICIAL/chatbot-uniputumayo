@@ -38,10 +38,8 @@ async function request<T>(
       if (typeof window !== "undefined") {
         localStorage.removeItem("auth_token");
         localStorage.removeItem("auth_user");
-        const isAdminRoute = window.location.pathname.startsWith("/admin");
-        const loginPath = isAdminRoute ? "/admin/login" : "/login";
         if (!window.location.pathname.includes("/login")) {
-          window.location.href = loginPath;
+          window.location.href = "/admin/login";
         }
       }
     }

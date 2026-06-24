@@ -123,10 +123,10 @@ export default function LoginPage() {
           backgroundImage: "url('/hero-fondo.png')",
           backgroundSize: "cover", backgroundPosition: "center",
         }} />
-        {/* Heavy dark overlay */}
+        {/* Overlay — lighter so campus shows through */}
         <div style={{
           position: "absolute", inset: 0,
-          background: "linear-gradient(135deg, rgba(7,24,36,0.97) 0%, rgba(11,52,71,0.94) 60%, rgba(27,110,148,0.5) 100%)",
+          background: "linear-gradient(135deg, rgba(7,24,36,0.72) 0%, rgba(11,52,71,0.62) 55%, rgba(27,110,148,0.30) 100%)",
         }} />
         {/* Accent blob */}
         <div style={{
@@ -148,17 +148,17 @@ export default function LoginPage() {
 
           <h2 style={{
             fontFamily: "var(--font-display)",
-            fontSize: "clamp(30px,3vw,44px)",
+            fontSize: "clamp(30px,3vw,48px)",
             fontWeight: 900, color: "#fff",
-            lineHeight: 1.05, letterSpacing: "-0.03em",
-            margin: "0 0 14px",
+            lineHeight: 1.0, letterSpacing: "-0.04em",
+            margin: "0 0 14px", textWrap: "balance",
           }}>
-            Panel de administracion<br />
-            <span style={{ color: "var(--brand-primary)" }}>UniPutumayo.</span>
+            La guia academica<br />
+            del <span style={{ color: "var(--brand-primary)" }}>Putumayo.</span>
           </h2>
 
           <p style={{ fontSize: 15, color: "rgba(255,255,255,0.55)", lineHeight: 1.65, margin: "0 0 36px" }}>
-            Gestiona documentos, usuarios y el catalogo institucional de Nexus.
+            Respuestas verificadas del catalogo oficial. Sin filas, sin formularios.
           </p>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -197,10 +197,10 @@ export default function LoginPage() {
             fontSize: 24, fontWeight: 800, color: "#fff",
             letterSpacing: "-0.02em", margin: "0 0 6px",
           }}>
-            Bienvenido de vuelta
+            Accede a Nexus
           </h2>
           <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", margin: "0 0 28px" }}>
-            Accede al panel de administracion de Nexus
+            Inicia sesion o crea tu cuenta para guardar tu historial
           </p>
 
           {/* Tabs */}
@@ -314,9 +314,31 @@ export default function LoginPage() {
             </form>
           )}
 
-          <div style={{ marginTop: 32, textAlign: "center" }}>
-            <Link href="/" style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", textDecoration: "none" }}>
-              Ir al inicio
+          {/* Continue without account */}
+          <div style={{ marginTop: 20, position: "relative" }}>
+            <div style={{ position: "absolute", inset: "50% 0 auto", borderTop: "1px solid rgba(255,255,255,0.08)" }} />
+            <span style={{ position: "relative", background: "#0F1E2A", padding: "0 10px", fontSize: 11, color: "rgba(255,255,255,0.3)", display: "flex", justifyContent: "center" }}>
+              o
+            </span>
+          </div>
+          <button
+            onClick={() => router.push("/chat")}
+            style={{
+              width: "100%", padding: "11px", borderRadius: 10, marginTop: 16,
+              background: "transparent", color: "rgba(255,255,255,0.5)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 500,
+              cursor: "pointer", transition: "border-color 0.15s, color 0.15s",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,255,255,0.25)"; (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.75)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,255,255,0.1)"; (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.5)"; }}
+          >
+            Continuar sin cuenta
+          </button>
+
+          <div style={{ marginTop: 24, textAlign: "center" }}>
+            <Link href="/" style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", textDecoration: "none" }}>
+              ← Volver al inicio
             </Link>
           </div>
         </div>
