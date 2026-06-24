@@ -141,6 +141,7 @@
   --bg-2:      #121E2B;
   --bg-3:      #1A2B3A;
   --surface:   rgba(255,255,255,0.04);
+  --surface-1: rgba(255,255,255,0.05);
   --surface-2: rgba(255,255,255,0.06);
   --surface-3: rgba(255,255,255,0.09);
   --border:    rgba(255,255,255,0.08);
@@ -519,13 +520,11 @@ body::before {
   flex-shrink: 0; position: relative;
 }
 .nexus-av::after {
-  content: "🦜"; position: absolute;
-  bottom: -3px; right: -3px;
-  font-size: 11px; background: #fff;
-  width: 16px; height: 16px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  border: 1.5px solid var(--brand-accent);
-  line-height: 1;
+  content: ""; position: absolute;
+  bottom: -2px; right: -2px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--brand-accent);
+  border: 2px solid var(--bg, #fff);
 }
 .nexus-av.lg { width: 56px; height: 56px; font-size: 22px; }
 .nexus-av.lg::after { width: 22px; height: 22px; font-size: 14px; bottom: -4px; right: -4px; }
@@ -960,14 +959,20 @@ body::before {
 .flat-input-bar {
   background: var(--surface); border-top: 1px solid var(--border);
   padding: 14px 20px 14px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.flat-input-bar:focus-within {
+  border-top-color: rgba(27,110,148,0.35);
+  box-shadow: 0 -1px 0 rgba(27,110,148,0.18);
 }
 .flat-input-bar.listening {
-  box-shadow: inset 0 0 0 2px rgba(123,181,46,0.5);
+  border-top-color: rgba(123,181,46,0.4);
+  box-shadow: 0 -1px 0 rgba(123,181,46,0.2);
 }
 
 /* Bot message flat style */
 .msg-bot-flat {
-  border-left: 2px solid #1B6E94;
+  border-left: 2px solid var(--brand);
   padding: 4px 0 4px 16px;
   background: none; border-radius: 0;
 }

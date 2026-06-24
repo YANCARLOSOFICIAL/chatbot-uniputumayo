@@ -126,7 +126,7 @@ export default function AnalyticsPage() {
                     </div>
                   </div>
                   {convDelta && convDelta.positive !== null && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 700, color: convDelta.positive ? "var(--success)" : "var(--danger)", padding: "4px 10px", borderRadius: 8, background: convDelta.positive ? "rgba(47,143,78,0.1)" : "var(--error-dim)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 700, color: convDelta.positive ? "var(--success)" : "var(--danger)", padding: "4px 10px", borderRadius: 8, background: convDelta.positive ? "var(--success-bg)" : "var(--error-dim)" }}>
                       {convDelta.positive ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                       {convDelta.label}
                     </div>

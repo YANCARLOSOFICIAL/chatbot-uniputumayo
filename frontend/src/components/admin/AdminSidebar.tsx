@@ -79,7 +79,7 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
           <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1 }}>
             Nexus
           </div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "#7BB52E", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--brand-accent)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>
             Admin
           </div>
         </div>
@@ -114,7 +114,7 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
                 background: isActive
                   ? "linear-gradient(90deg, rgba(27,110,148,0.22) 0%, rgba(27,110,148,0.06) 100%)"
                   : "transparent",
-                borderLeft: isActive ? "2.5px solid #1B6E94" : "2.5px solid transparent",
+                borderLeft: isActive ? "2.5px solid var(--brand-primary)" : "2.5px solid transparent",
                 boxShadow: isActive ? "inset 0 0 12px rgba(27,110,148,0.06)" : "none",
                 transition: "all 0.12s cubic-bezier(0.16,1,0.3,1)",
               }}
@@ -141,11 +141,11 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
                 transition: "all 0.12s",
               }}>
                 <item.icon size={14} strokeWidth={isActive ? 2 : 1.75}
-                  style={{ color: isActive ? "#1B6E94" : "rgba(255,255,255,0.4)", transition: "color 0.12s" }} />
+                  style={{ color: isActive ? "var(--brand-primary)" : "rgba(255,255,255,0.4)", transition: "color 0.12s" }} />
               </div>
               <span style={{ flex: 1 }}>{item.label}</span>
               {isActive && (
-                <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#7BB52E", flexShrink: 0, boxShadow: "0 0 5px #7BB52E" }} />
+                <div style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--brand-accent)", flexShrink: 0, boxShadow: "0 0 5px var(--brand-accent)" }} />
               )}
             </Link>
           );

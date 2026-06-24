@@ -70,7 +70,7 @@ export default function ConversationsPage() {
         <div style={{ display: "flex", borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface)", marginBottom: 24 }}>
           {[
             { label: "Total",        value: loading ? "..." : conversations.length, color: "var(--brand-primary)" },
-            { label: "Esta semana",  value: loading ? "..." : weekCount,            color: "#7BB52E" },
+            { label: "Esta semana",  value: loading ? "..." : weekCount,            color: "var(--brand-accent)" },
             { label: "Hoy",          value: loading ? "..." : todayCount,           color: "var(--success)" },
           ].map((s, i, arr) => (
             <div key={s.label} style={{ flex: 1, padding: "22px 24px", borderRight: i < arr.length - 1 ? "1px solid var(--border)" : "none", textAlign: "center" }}>

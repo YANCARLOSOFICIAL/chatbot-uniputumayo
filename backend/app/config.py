@@ -36,8 +36,6 @@ class Settings(BaseSettings):
     default_llm_provider: str = "ollama"
     default_temperature: float = 0.05   # Casi determinista para respuestas RAG factuales
     default_max_tokens: int = 2048
-    # Provider de respaldo si el primario no responde (ej: "openai" si ollama falla)
-    llm_fallback_provider: str = ""
 
     # RAG Configuration
     chunk_size: int = 512

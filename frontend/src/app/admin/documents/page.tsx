@@ -17,7 +17,7 @@ interface DocumentItem {
 }
 
 const STATUS_CFG: Record<string, { label: string; bg: string; color: string; border: string }> = {
-  completed:  { label: "Indexado",   bg: "rgba(47,143,78,0.1)",   color: "#2F8F4E",            border: "rgba(47,143,78,0.2)"   },
+  completed:  { label: "Indexado",   bg: "var(--success-bg)",      color: "var(--success)",       border: "rgba(47,143,78,0.2)"   },
   processing: { label: "Procesando", bg: "var(--brand-dim)",      color: "var(--brand-primary)", border: "var(--brand-light)"   },
   failed:     { label: "Error",       bg: "var(--error-dim)",      color: "var(--error)",         border: "rgba(200,54,44,0.2)"  },
   pending:    { label: "Pendiente",   bg: "var(--surface-2)",      color: "var(--text-3)",        border: "var(--border)"        },

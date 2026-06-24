@@ -11,7 +11,7 @@ export const TypingIndicator = memo(function TypingIndicator() {
       <div className="shrink-0" style={{ marginTop: 2 }}>
         <GuacamayaAvatar state="thinking" size={28} className="drop-shadow-sm" />
       </div>
-      <div className="msg-bot" style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "12px 16px" }}>
+      <div className="msg-bot-flat" style={{ display: "inline-flex", alignItems: "center", gap: 10, paddingTop: 4, paddingBottom: 4 }}>
         <span style={{ display: "inline-flex", gap: 3, alignItems: "center", height: 20 }}>
           {BARS.map((delay, i) => (
             <span

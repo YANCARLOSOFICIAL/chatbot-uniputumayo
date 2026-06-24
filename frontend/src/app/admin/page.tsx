@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   FileText, Settings, Users,
   CheckCircle2, XCircle, Clock, MessageSquare,
-  Upload, RefreshCw, BarChart3,
+  Upload, RefreshCw, BarChart3, ChevronRight,
 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { getUser } from "@/lib/auth";
@@ -103,7 +103,7 @@ export default function AdminPage() {
         {/* Welcome banner */}
         <div style={{
           borderRadius: 16, overflow: "hidden",
-          background: "#0B3447",
+          background: "var(--sb-bg)",
           marginBottom: 24, padding: "28px 32px",
           display: "grid", gridTemplateColumns: "1fr auto",
           alignItems: "center", gap: 20,
@@ -122,10 +122,10 @@ export default function AdminPage() {
               border: "1px solid rgba(123,181,46,0.3)",
               background: "rgba(123,181,46,0.08)",
               fontSize: 10, fontWeight: 700, letterSpacing: "0.09em",
-              textTransform: "uppercase", color: "#7BB52E",
+              textTransform: "uppercase", color: "var(--brand-accent)",
               fontFamily: "var(--font-mono)",
             }}>
-              <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#7BB52E", display: "inline-block", animation: "pulse-soft 2s ease-in-out infinite" }} />
+              <span style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--brand-accent)", display: "inline-block", animation: "pulse-soft 2s ease-in-out infinite" }} />
               Panel de control
             </div>
             <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(20px,2.2vw,28px)", fontWeight: 900, color: "#fff", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
@@ -143,8 +143,8 @@ export default function AdminPage() {
             ) : health ? (
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "rgba(255,255,255,0.07)", backdropFilter: "blur(8px)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)", fontSize: 13, color: "#fff", fontWeight: 500 }}>
                 {health.status === "healthy"
-                  ? <CheckCircle2 size={14} style={{ color: "#7BB52E" }} />
-                  : <XCircle size={14} style={{ color: "#E5484D" }} />}
+                  ? <CheckCircle2 size={14} style={{ color: "var(--brand-accent)" }} />
+                  : <XCircle size={14} style={{ color: "var(--danger)" }} />}
                 Sistema {health.status === "healthy" ? "activo" : "con problemas"}
               </div>
             ) : (
@@ -320,12 +320,12 @@ export default function AdminPage() {
           </h3>
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
             {[
-              { href: "/admin/documents",     Icon: FileText,      label: "Documentos",      desc: "Base de conocimiento RAG",    color: "var(--brand-primary)", featured: true },
-              { href: "/admin/config",        Icon: Settings,      label: "Configuracion IA", desc: "Proveedores, modelos, API",   color: "#8B5CF6",              featured: false },
-              { href: "/admin/users",         Icon: Users,         label: "Usuarios",          desc: "Roles y permisos",            color: "var(--success)",       featured: false },
-              { href: "/admin/conversations", Icon: MessageSquare, label: "Conversaciones",    desc: "Historial de interacciones",  color: "var(--warning)",       featured: false },
-              { href: "/admin/analytics",     Icon: BarChart3,     label: "Metricas",          desc: "Estadisticas de uso",         color: "var(--brand-primary)", featured: false },
-            ].map(({ href, Icon, label, desc, color, featured }, i, arr) => (
+              { href: "/admin/documents",     Icon: FileText,      label: "Documentos",      desc: "Base de conocimiento RAG",    iconBg: "var(--brand-dim)",          iconColor: "var(--brand-primary)", featured: true },
+              { href: "/admin/config",        Icon: Settings,      label: "Configuracion IA", desc: "Proveedores, modelos, API",   iconBg: "rgba(139,92,246,0.08)",     iconColor: "#8B5CF6",              featured: false },
+              { href: "/admin/users",         Icon: Users,         label: "Usuarios",          desc: "Roles y permisos",            iconBg: "var(--success-bg)",         iconColor: "var(--success)",       featured: false },
+              { href: "/admin/conversations", Icon: MessageSquare, label: "Conversaciones",    desc: "Historial de interacciones",  iconBg: "var(--warning-bg)",         iconColor: "var(--warning)",       featured: false },
+              { href: "/admin/analytics",     Icon: BarChart3,     label: "Metricas",          desc: "Estadisticas de uso",         iconBg: "var(--brand-dim)",          iconColor: "var(--brand-primary)", featured: false },
+            ].map(({ href, Icon, label, desc, iconBg, iconColor, featured }, i, arr) => (
               <Link
                 key={href}
                 href={href}
@@ -340,18 +340,16 @@ export default function AdminPage() {
               >
                 <div style={{
                   width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-                  background: color + "14",
+                  background: iconBg,
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}>
-                  <Icon size={16} style={{ color }} />
+                  <Icon size={16} style={{ color: iconColor }} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: featured ? 700 : 500, color: "var(--text-1)" }}>{label}</div>
                   <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 1 }}>{desc}</div>
                 </div>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" strokeWidth="1.75">
-                  <path d="M9 18l6-6-6-6"/>
-                </svg>
+                <ChevronRight size={14} style={{ color: "var(--text-3)", flexShrink: 0 }} strokeWidth={1.75} />
               </Link>
             ))}
           </div>

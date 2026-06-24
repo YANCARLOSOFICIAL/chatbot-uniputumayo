@@ -73,7 +73,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
     <aside
       style={{
         width: 260, flexShrink: 0, display: "flex", flexDirection: "column", height: "100%",
-        background: "#0B3447",
+        background: "var(--sb-bg)",
         borderRight: "1px solid rgba(255,255,255,0.07)",
       }}
       className={[
@@ -172,7 +172,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                         marginBottom: 1, cursor: "pointer",
                         background: isActive ? "rgba(255,255,255,0.07)" : "transparent",
                         border: "none",
-                        borderLeft: isActive ? "2px solid #7BB52E" : "2px solid transparent",
+                        borderLeft: isActive ? "2px solid var(--sb-active)" : "2px solid transparent",
                         color: isActive ? "#fff" : "rgba(255,255,255,0.5)",
                         transition: "background 0.1s, color 0.1s",
                         textAlign: "left",

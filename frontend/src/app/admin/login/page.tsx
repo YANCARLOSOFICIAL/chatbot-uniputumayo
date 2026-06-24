@@ -169,7 +169,7 @@ export default function LoginPage() {
                   background: "rgba(123,181,46,0.15)", border: "1px solid rgba(123,181,46,0.3)",
                   display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
                 }}>
-                  <Check size={10} color="#7BB52E" strokeWidth={2.5} />
+                  <Check size={10} color="var(--brand-accent)" strokeWidth={2.5} />
                 </div>
                 <span style={{ fontSize: 14, color: "rgba(255,255,255,0.65)" }}>{b}</span>
               </div>
@@ -219,7 +219,7 @@ export default function LoginPage() {
               display: "flex", alignItems: "flex-start", gap: 8,
               padding: "10px 12px", borderRadius: 8, marginBottom: 20,
               background: "rgba(200,54,44,0.12)", border: "1px solid rgba(200,54,44,0.25)",
-              color: "#f87171", fontSize: 13,
+              color: "#fca5a5", fontSize: 13,
             }}>
               <AlertCircle size={13} style={{ flexShrink: 0, marginTop: 1 }} /> {error}
             </div>
@@ -250,7 +250,7 @@ export default function LoginPage() {
                 disabled={loading}
                 style={{
                   width: "100%", padding: "13px", borderRadius: 10,
-                  background: "#7BB52E", color: "#fff", border: "none",
+                  background: "var(--brand-accent)", color: "#fff", border: "none",
                   fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 600,
                   cursor: loading ? "not-allowed" : "pointer", marginTop: 8,
                   opacity: loading ? 0.7 : 1,
@@ -295,7 +295,7 @@ export default function LoginPage() {
                 disabled={loading}
                 style={{
                   width: "100%", padding: "13px", borderRadius: 10,
-                  background: "#7BB52E", color: "#fff", border: "none",
+                  background: "var(--brand-accent)", color: "#fff", border: "none",
                   fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 600,
                   cursor: loading ? "not-allowed" : "pointer", marginTop: 6,
                   opacity: loading ? 0.7 : 1,

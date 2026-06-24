@@ -121,14 +121,19 @@ export default function UsersPage() {
                       <td style={{ padding: "14px 18px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <div style={{
-                            width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-                            background: user.role === "admin" ? "rgba(139,92,246,0.12)" : "var(--brand-dim)",
-                            border: `1px solid ${user.role === "admin" ? "rgba(139,92,246,0.25)" : "var(--brand-light)"}`,
+                            width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+                            background: user.role === "admin"
+                              ? "linear-gradient(135deg, #1B6E94, #7BB52E)"
+                              : "var(--brand-dim)",
+                            border: user.role === "admin"
+                              ? "none"
+                              : "1px solid var(--brand-light)",
                             display: "flex", alignItems: "center", justifyContent: "center",
-                            fontSize: 11, fontWeight: 800, textTransform: "uppercase",
-                            color: user.role === "admin" ? "#8B5CF6" : "var(--brand-primary)",
+                            fontSize: 10, fontWeight: 800, textTransform: "uppercase",
+                            color: user.role === "admin" ? "#fff" : "var(--brand-primary)",
+                            letterSpacing: "0.01em",
                           }}>
-                            {user.display_name?.[0] ?? "U"}
+                            {(user.display_name?.split(" ").map((w: string) => w[0]).join("").slice(0, 2)) ?? "U"}
                           </div>
                           <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-1)" }}>
                             {user.display_name || "Sin nombre"}

@@ -99,12 +99,17 @@ class ChatService:
             r.content for r in search_results.results
         )
 
-        # 4. Get conversation history (last 10 messages)
-        history_messages = await self.get_messages(conversation_id, limit=10)
+        # 4. Get conversation history (last 10 messages, most recent first then reversed)
+        recent = await self.db.execute(
+            select(Message)
+            .where(Message.conversation_id == conversation_id)
+            .where(Message.id != user_message.id)
+            .order_by(desc(Message.created_at))
+            .limit(10)
+        )
         history = [
             LLMMessage(role=m.role, content=m.content)
-            for m in history_messages
-            if m.id != user_message.id
+            for m in reversed(recent.scalars().all())
         ]
 
         # 5. Build prompt and generate response
@@ -188,12 +193,17 @@ class ChatService:
             # 3. Build context
             context = "\n\n---\n\n".join(r.content for r in search_results.results)
 
-            # 4. Get conversation history
-            history_messages = await self.get_messages(conversation_id, limit=10)
+            # 4. Get conversation history (most recent, then re-order chronologically)
+            recent = await self.db.execute(
+                select(Message)
+                .where(Message.conversation_id == conversation_id)
+                .where(Message.id != user_message.id)
+                .order_by(desc(Message.created_at))
+                .limit(10)
+            )
             history = [
                 LLMMessage(role=m.role, content=m.content)
-                for m in history_messages
-                if m.id != user_message.id
+                for m in reversed(recent.scalars().all())
             ]
 
             # 5. Build prompt

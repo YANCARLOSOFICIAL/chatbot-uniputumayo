@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
-import { ArrowUp, ArrowRight, MapPin, BookOpen } from "lucide-react";
+import { ArrowUp, ArrowRight, MapPin, BookOpen, Mic } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 /* ── IntersectionObserver scroll reveal ── */
@@ -149,7 +149,7 @@ export default function LandingPage() {
                 <div style={{ marginBottom: 28 }}>
                   <span className="eyebrow-pill">
                     <span className="dot" />
-                    NEXUS · UNIPUTUMAYO · 2026
+                    NEXUS · 2026
                   </span>
                 </div>
 
@@ -332,9 +332,7 @@ export default function LandingPage() {
                   background: "rgba(123,181,46,0.12)", border: "1px solid rgba(123,181,46,0.18)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7BB52E" strokeWidth="1.8">
-                    <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
-                  </svg>
+                  <Mic size={18} style={{ color: "#7BB52E" }} strokeWidth={1.8} />
                 </div>
                 <h4 style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, margin: "0 0 10px", letterSpacing: "-0.01em", color: "#fff" }}>
                   Voz y texto
@@ -404,9 +402,7 @@ export default function LandingPage() {
                   <span className="prog-name">{p.name}</span>
                   <span className="prog-dots" />
                   <span className="prog-meta">
-                    <span style={{
-                      display: "none",
-                    }} className="md:inline-block prog-snies">
+                    <span className="hidden md:inline-block prog-snies">
                       {p.snies}
                     </span>
                     <span style={{ display: "flex", alignItems: "center", gap: 4 }} className="hidden md:flex prog-sede">

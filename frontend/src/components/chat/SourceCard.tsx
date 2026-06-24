@@ -42,7 +42,7 @@ export function SourceCard({ sources }: SourceCardProps) {
         <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 0, border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
           {sources.map((source, i) => {
             const score = source.score;
-            const dotColor = score >= 0.55 ? "#2F8F4E" : score >= 0.38 ? "#C77A0A" : "var(--text-3)";
+            const dotColor = score >= 0.55 ? "var(--success)" : score >= 0.38 ? "var(--warning)" : "var(--text-3)";
             return (
               <div
                 key={source.chunk_id}

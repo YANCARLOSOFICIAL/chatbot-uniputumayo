@@ -305,7 +305,11 @@ class DocumentService:
 
         try:
             cleaned_text = await self._build_enriched_text(file_path, doc.file_type)
-            chunks = chunk_text(cleaned_text)
+            chunks = chunk_text(
+                cleaned_text,
+                chunk_size=settings.chunk_size,
+                chunk_overlap=settings.chunk_overlap,
+            )
             all_embeddings = await self._embed_chunks(chunks)
 
             for idx, (chunk, embedding) in enumerate(zip(chunks, all_embeddings)):

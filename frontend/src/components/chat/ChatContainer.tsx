@@ -76,6 +76,11 @@ export function ChatContainer() {
       dispatch({ type: "SET_AVATAR_STATE", payload: "idle" });
   }, [isSpeaking, avatarState, dispatch]);
 
+  const handleRegenerate = useCallback(() => {
+    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+    if (lastUser) handleSend(lastUser.content, lastUser.input_type ?? "text");
+  }, [messages, handleSend]);
+
   const handleVoiceStart = useCallback(() => {
     dispatch({ type: "SET_AVATAR_STATE", payload: "listening" });
     startListening();
@@ -159,6 +164,7 @@ export function ChatContainer() {
           sources={sources}
           isLoading={isLoading}
           onQuickReply={(msg) => handleSend(msg, "text")}
+          onRegenerate={handleRegenerate}
         />
 
         {/* Quick replies */}

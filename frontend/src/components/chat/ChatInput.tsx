@@ -73,8 +73,8 @@ export function ChatInput({
             marginBottom: 10, padding: "6px 10px", borderRadius: 8,
             background: "rgba(123,181,46,0.08)", border: "1px solid rgba(123,181,46,0.2)",
           }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#7BB52E", display: "inline-block", animation: "pulse-soft 1s ease-in-out infinite" }} />
-            <span style={{ fontSize: 12, color: "#7BB52E", fontWeight: 500 }}>Escuchando</span>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--brand-accent)", display: "inline-block", animation: "pulse-soft 1s ease-in-out infinite" }} />
+            <span style={{ fontSize: 12, color: "var(--brand-accent)", fontWeight: 500 }}>Escuchando</span>
           </div>
         )}
 
@@ -91,7 +91,7 @@ export function ChatInput({
                 width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
                 background: isListening ? "rgba(123,181,46,0.12)" : "var(--surface-3)",
                 border: isListening ? "1px solid rgba(123,181,46,0.3)" : "1px solid var(--border)",
-                color: isListening ? "#7BB52E" : "var(--text-3)",
+                color: isListening ? "var(--brand-accent)" : "var(--text-3)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 cursor: isLoading ? "not-allowed" : "pointer",
                 opacity: isLoading ? 0.4 : 1,
@@ -149,7 +149,7 @@ export function ChatInput({
             aria-label="Enviar"
             style={{
               width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
-              background: canSend ? "#1B6E94" : "var(--surface-3)",
+              background: canSend ? "var(--brand-primary)" : "var(--surface-3)",
               border: "none",
               color: canSend ? "#fff" : "var(--text-3)",
               display: "flex", alignItems: "center", justifyContent: "center",

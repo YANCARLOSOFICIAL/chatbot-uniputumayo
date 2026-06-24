@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react";
 import {
   ChevronDown, GraduationCap, BookOpen,
-  Clock, FileText, Mic, Globe
+  Clock, FileText, Mic, Globe, ArrowRight
 } from "lucide-react";
 import { MessageBubble } from "./MessageBubble";
 import { TypingIndicator } from "./TypingIndicator";
@@ -16,6 +16,7 @@ interface MessageListProps {
   sources: SourceInfo[];
   isLoading: boolean;
   onQuickReply?: (text: string) => void;
+  onRegenerate?: () => void;
 }
 
 const CARDS = [
@@ -44,64 +45,86 @@ const CARDS = [
 /* ── Welcome / empty state ── */
 function WelcomeState({ onSend }: { onSend?: (q: string) => void }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", padding: "48px 24px", userSelect: "none" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", padding: "36px 24px 24px", userSelect: "none" }}>
 
       {/* Avatar */}
-      <div className="animate-fade-up" style={{ animationDelay: "0s", marginBottom: 20 }}>
-        <GuacamayaAvatar state="idle" size={56} className="drop-shadow-md" />
+      <div className="animate-fade-up nexus-idle" style={{ marginBottom: 14 }}>
+        <GuacamayaAvatar state="idle" size={52} />
       </div>
 
-      {/* Heading block */}
-      <div className="animate-fade-up" style={{ animationDelay: "0.06s", textAlign: "center", marginBottom: 28, maxWidth: 420 }}>
-        <div style={{ marginBottom: 14, display: "flex", justifyContent: "center" }}>
-          <span style={{
-            display: "inline-flex", alignItems: "center", gap: 5,
-            fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em",
-            textTransform: "uppercase", color: "var(--text-3)",
-            border: "1px solid var(--border)", borderRadius: 9999, padding: "4px 11px",
-          }}>
-            <span style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--brand-accent)", flexShrink: 0, animation: "pulse-soft 2s ease-in-out infinite" }} />
-            Nexus · UniPutumayo
-          </span>
-        </div>
+      {/* Heading */}
+      <div className="animate-fade-up" style={{ animationDelay: "0.05s", textAlign: "center", marginBottom: 24, maxWidth: 360 }}>
         <h1 style={{
           fontFamily: "var(--font-display)",
-          fontSize: "clamp(22px, 3vw, 30px)", fontWeight: 800,
-          margin: "0 0 10px", color: "var(--text-1)",
-          letterSpacing: "-0.025em", lineHeight: 1.1,
+          fontSize: "clamp(20px, 2.8vw, 26px)", fontWeight: 800,
+          margin: "0 0 8px", color: "var(--text-1)",
+          letterSpacing: "-0.022em", lineHeight: 1.12,
         }}>
-          Que quieres saber<br />de UniPutumayo?
+          Que quieres saber de UniPutumayo?
         </h1>
-        <p style={{ fontSize: 14, color: "var(--text-3)", margin: 0, lineHeight: 1.65 }}>
-          Pregunta sobre programas, sedes, costos o tramites. Respuestas verificadas del catalogo oficial.
+        <p style={{ fontSize: 13, color: "var(--text-3)", margin: 0, lineHeight: 1.6 }}>
+          Respuestas del catalogo oficial, con fuentes citadas.
         </p>
       </div>
 
-      {/* Prompt cards */}
+      {/* Suggestions — asymmetric: 1 featured wide + 3 compact hairline rows */}
       {onSend && (
-        <div className="animate-fade-up" style={{ animationDelay: "0.12s", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, width: "100%", maxWidth: 520 }}>
-          {CARDS.map(({ icon: Icon, label, query }, i) => (
-            <button
-              key={label}
-              onClick={() => onSend(query)}
-              className="prompt-card"
-              style={{ animationDelay: `${0.14 + i * 0.05}s`, animationFillMode: "both" }}
-            >
-              <div style={{
-                width: 28, height: 28, borderRadius: 7, flexShrink: 0,
-                background: "var(--brand-dim)", border: "1px solid var(--brand-light)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                <Icon size={13} style={{ color: "var(--brand-primary)" }} />
+        <div className="animate-fade-up" style={{ animationDelay: "0.1s", width: "100%", maxWidth: 456 }}>
+
+          {/* Featured wide card */}
+          <button
+            onClick={() => onSend(CARDS[0].query)}
+            className="prompt-card"
+            style={{ width: "100%", marginBottom: 6, padding: "14px 16px", gap: 12 }}
+          >
+            <div style={{
+              width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+              background: "var(--brand-dim)", border: "1px solid var(--brand-light)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <GraduationCap size={16} style={{ color: "var(--brand-primary)" }} />
+            </div>
+            <div style={{ flex: 1, textAlign: "left" }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-1)", marginBottom: 3, lineHeight: 1.2 }}>
+                {CARDS[0].label}
               </div>
-              <span style={{ fontSize: 12.5, lineHeight: 1.4, color: "var(--text-1)" }}>{label}</span>
-            </button>
-          ))}
+              <div style={{ fontSize: 11.5, color: "var(--text-3)", lineHeight: 1.4 }}>
+                Programa, sede, SNIES y requisitos de admision
+              </div>
+            </div>
+            <ArrowRight size={13} style={{ color: "var(--text-3)", flexShrink: 0 }} strokeWidth={1.5} />
+          </button>
+
+          {/* Compact hairline rows */}
+          <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
+            {CARDS.slice(1).map(({ icon: Icon, label, query }, i) => (
+              <button
+                key={label}
+                onClick={() => onSend(query)}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 10,
+                  padding: "11px 14px",
+                  background: "var(--surface)",
+                  border: "none",
+                  borderTop: i > 0 ? "1px solid var(--border)" : "none",
+                  cursor: "pointer", textAlign: "left",
+                  fontFamily: "var(--font-body)",
+                  transition: "background 0.12s",
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-2)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--surface)"; }}
+              >
+                <Icon size={13} style={{ color: "var(--text-3)", flexShrink: 0 }} strokeWidth={1.5} />
+                <span style={{ flex: 1, fontSize: 13, color: "var(--text-1)", fontWeight: 500 }}>{label}</span>
+                <ArrowRight size={11} style={{ color: "var(--text-3)", opacity: 0.4, flexShrink: 0 }} strokeWidth={1.5} />
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
       {/* Capabilities */}
-      <div className="animate-fade-up" style={{ animationDelay: "0.35s", display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6, marginTop: 20 }}>
+      <div className="animate-fade-up" style={{ animationDelay: "0.22s", display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 5, marginTop: 18 }}>
         {[
           { icon: Mic,      label: "Voz y texto" },
           { icon: Clock,    label: "24/7" },
@@ -109,10 +132,10 @@ function WelcomeState({ onSend }: { onSend?: (q: string) => void }) {
         ].map(({ icon: Icon, label }) => (
           <div key={label} style={{
             display: "flex", alignItems: "center", gap: 4, fontSize: 11,
-            color: "var(--text-3)", padding: "4px 10px", borderRadius: 9999,
-            border: "1px solid var(--border)", background: "var(--surface)",
+            color: "var(--text-3)", padding: "3px 9px", borderRadius: 9999,
+            border: "1px solid var(--border)",
           }}>
-            <Icon size={10} strokeWidth={1.5} /> {label}
+            <Icon size={9} strokeWidth={1.5} /> {label}
           </div>
         ))}
       </div>
@@ -121,7 +144,7 @@ function WelcomeState({ onSend }: { onSend?: (q: string) => void }) {
 }
 
 /* ── Main ── */
-export function MessageList({ messages, sources, isLoading, onQuickReply }: MessageListProps) {
+export function MessageList({ messages, sources, isLoading, onQuickReply, onRegenerate }: MessageListProps) {
   const scrollRef       = useRef<HTMLDivElement>(null);
   const [showBtn, setShowBtn] = useState(false);
   const isAtBottomRef   = useRef(true);
@@ -162,15 +185,25 @@ export function MessageList({ messages, sources, isLoading, onQuickReply }: Mess
           <WelcomeState onSend={onQuickReply} />
         ) : (
           <div className="max-w-2xl mx-auto px-4 sm:px-5 py-6 space-y-5">
-            {messages.map((msg, i) => (
-              <div
-                key={msg.id}
-                className="animate-fade-up"
-                style={{ animationDelay: `${Math.min(i * 0.03, 0.15)}s`, animationFillMode: "both" }}
-              >
-                <MessageBubble message={msg} />
-              </div>
-            ))}
+            {(() => {
+              const lastBotIdx = messages.reduceRight((found, m, idx) => found === -1 && m.role === "assistant" ? idx : found, -1);
+              return messages.map((msg, i) => {
+              const isLast = msg.role === "assistant" && i === lastBotIdx;
+              return (
+                <div
+                  key={msg.id}
+                  className="animate-fade-up"
+                  style={{ animationDelay: `${Math.min(i * 0.03, 0.15)}s`, animationFillMode: "both" }}
+                >
+                  <MessageBubble
+                    message={msg}
+                    isLast={isLast}
+                    onRegenerate={isLast && !isLoading ? onRegenerate : undefined}
+                  />
+                </div>
+              );
+            });
+            })()}
 
             {sources.length > 0 && (
               <div className="pl-8">

@@ -32,7 +32,7 @@ function UserMessage({ message }: { message: Message }) {
         )}
         <div
           style={{
-            background: "#1B6E94", color: "#fff",
+            background: "var(--user-bg)", color: "#fff",
             padding: "10px 16px", borderRadius: "20px 20px 4px 20px",
             fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word",
           }}
