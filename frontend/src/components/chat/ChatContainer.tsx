@@ -2,7 +2,8 @@
 
 import { useEffect, useCallback, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { PanelLeft, LogOut } from "lucide-react";
+import { PanelLeft, LogOut, LogIn } from "lucide-react";
+import Link from "next/link";
 import { useChat } from "@/hooks/useChat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useSpeechSynthesis } from "@/hooks/useSpeechSynthesis";
@@ -14,22 +15,23 @@ import { ChatInput } from "./ChatInput";
 import { QuickReplies } from "./QuickReplies";
 import { GuacamayaAvatar, type GuacamayaState } from "./GuacamayaAvatar";
 
-// Carga diferida: el sidebar es pesado y no bloquea el primer paint del chat
 const ConversationSidebar = dynamic(
   () => import("./ConversationSidebar").then((m) => ({ default: m.ConversationSidebar })),
   { ssr: false }
 );
 
 export function ChatContainer() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true); // desktop: open by default
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [authed, setAuthed] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   const {
     conversations, activeConversationId, messages, sources,
     isLoading, avatarState, error,
     loadConversations, createConversation, selectConversation,
-    sendMessage, deleteConversation, dispatch,
+    sendMessage, deleteConversation, renameConversation, dispatch,
   } = useChat();
 
   const { transcript, isListening, startListening, stopListening, isSupported } =
@@ -38,7 +40,6 @@ export function ChatContainer() {
 
   const handleSendRef = useRef<((content: string, inputType: "text" | "voice") => Promise<void>) | null>(null);
 
-  // Show error as toast and clear from state
   useEffect(() => {
     if (error) {
       toast.error(error);
@@ -47,9 +48,11 @@ export function ChatContainer() {
   }, [error, dispatch]);
 
   useEffect(() => {
+    const a = isAuthenticated();
+    setAuthed(a);
+    if (a) setUser(getUser());
     loadConversations();
     setMounted(true);
-    if (isAuthenticated()) setUser(getUser());
   }, [loadConversations]);
 
   const handleSend = useCallback(
@@ -86,74 +89,128 @@ export function ChatContainer() {
     startListening();
   }, [dispatch, startListening]);
 
+  const handleSelectConversation = useCallback((id: string) => {
+    selectConversation(id);
+    setMobileSidebarOpen(false);
+  }, [selectConversation]);
+
+  const initials = user?.display_name
+    ? user.display_name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
+    : "U";
+
   return (
     <div className="flex h-[100dvh] bg-[var(--bg)] overflow-hidden">
 
       {/* Mobile backdrop */}
-      {mounted && sidebarOpen && (
+      {mounted && mobileSidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/40 z-30 md:hidden animate-fade-in"
-          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 bg-black/50 z-30 md:hidden animate-fade-in"
+          onClick={() => setMobileSidebarOpen(false)}
           aria-hidden
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar — desktop persistent/collapsible, mobile overlay */}
       {mounted && (
-        <ConversationSidebar
-          conversations={conversations}
-          activeId={activeConversationId}
-          onSelect={selectConversation}
-          onNew={createConversation}
-          onDelete={deleteConversation}
-          isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-        />
+        <>
+          {/* Desktop sidebar */}
+          <div
+            className="hidden md:block flex-shrink-0 overflow-hidden transition-all duration-200"
+            style={{ width: sidebarOpen ? 260 : 0 }}
+            aria-hidden={!sidebarOpen}
+          >
+            <ConversationSidebar
+              conversations={conversations}
+              activeId={activeConversationId}
+              onSelect={handleSelectConversation}
+              onNew={createConversation}
+              onDelete={deleteConversation}
+              onRename={renameConversation}
+              isOpen
+              onClose={() => {}}
+            />
+          </div>
+
+          {/* Mobile overlay sidebar */}
+          <div className="md:hidden">
+            <ConversationSidebar
+              conversations={conversations}
+              activeId={activeConversationId}
+              onSelect={handleSelectConversation}
+              onNew={createConversation}
+              onDelete={deleteConversation}
+              onRename={renameConversation}
+              isOpen={mobileSidebarOpen}
+              onClose={() => setMobileSidebarOpen(false)}
+            />
+          </div>
+        </>
       )}
 
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-        {/* Top bar — compact, clean */}
-        <header className="flex-shrink-0 h-14 px-4 border-b border-[var(--border)] bg-[var(--bg)] flex items-center gap-3">
+        {/* Top bar */}
+        <header className="flex-shrink-0 h-14 px-3 border-b border-[var(--border)] bg-[var(--bg)] flex items-center gap-2">
+          {/* Toggle buttons */}
           <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
+            onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
             className="md:hidden w-9 h-9 rounded-md flex items-center justify-center text-[var(--text-3)] hover:bg-[var(--surface-3)] hover:text-[var(--text-1)] transition-colors"
             aria-label="Abrir menú"
           >
             <PanelLeft size={20} strokeWidth={1.5} />
           </button>
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="hidden md:flex w-9 h-9 rounded-md items-center justify-center text-[var(--text-3)] hover:bg-[var(--surface-3)] hover:text-[var(--text-1)] transition-colors"
+            aria-label={sidebarOpen ? "Colapsar barra lateral" : "Expandir barra lateral"}
+            title={sidebarOpen ? "Colapsar" : "Expandir"}
+          >
+            <PanelLeft size={18} strokeWidth={1.5} style={{ transform: sidebarOpen ? "none" : "scaleX(-1)" }} />
+          </button>
 
-          <div className="flex items-center gap-1.5 min-w-0">
+          {/* Brand */}
+          <div className="flex items-center gap-2 min-w-0 ml-1">
             <GuacamayaAvatar
               state={(avatarState as GuacamayaState) ?? "idle"}
-              size={28}
+              size={26}
               className="flex-shrink-0"
             />
-            <span className="text-[15px] font-semibold text-[var(--text-1)] truncate">Nexus</span>
+            <span className="text-[14px] font-semibold text-[var(--text-1)] truncate" style={{ fontFamily: "var(--font-display)" }}>
+              Nexus
+            </span>
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)] flex-shrink-0" />
           </div>
 
+          {/* Right actions */}
           <div className="ml-auto flex items-center gap-1">
             <ThemeToggle />
-            {mounted && user && (
-              <>
-                <button
-                  onClick={() => { logout(); window.location.href = "/"; }}
-                  className="hidden sm:flex items-center gap-1.5 text-[13px] text-[var(--text-3)] hover:text-[var(--error)] transition-colors px-2.5 py-1.5 rounded-md hover:bg-[var(--error-dim)]"
-                  title="Cerrar sesión"
+            {mounted && (
+              authed && user ? (
+                <>
+                  <button
+                    onClick={() => { logout(); window.location.href = "/"; }}
+                    className="hidden sm:flex items-center gap-1.5 text-[12px] text-[var(--text-3)] hover:text-[var(--error)] transition-colors px-2 py-1.5 rounded-md hover:bg-[var(--error-dim)]"
+                    title="Cerrar sesión"
+                  >
+                    <LogOut size={12} /> Salir
+                  </button>
+                  <div
+                    title={user.display_name}
+                    style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: "linear-gradient(135deg, var(--brand-primary), var(--brand-accent))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#fff", letterSpacing: "0.01em", textTransform: "uppercase", cursor: "default" }}
+                  >
+                    {initials}
+                  </div>
+                </>
+              ) : (
+                <Link
+                  href="/login"
+                  className="flex items-center gap-1.5 text-[12px] text-[var(--text-2)] hover:text-[var(--brand-primary)] transition-colors px-2.5 py-1.5 rounded-md border border-[var(--border)] hover:border-[var(--brand-primary)] font-medium"
+                  style={{ whiteSpace: "nowrap" }}
                 >
-                  <LogOut size={13} /> Salir
-                </button>
-                <div style={{
-                  width: 30, height: 30, borderRadius: 9, flexShrink: 0,
-                  background: "linear-gradient(135deg, #1B6E94, #7BB52E)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 11, fontWeight: 800, color: "#fff", letterSpacing: "0.01em", textTransform: "uppercase",
-                }}>
-                  {(user.display_name?.split(" ").map((w) => w[0]).join("").slice(0, 2)) ?? "U"}
-                </div>
-              </>
+                  <LogIn size={12} /> Iniciar sesion
+                </Link>
+              )
             )}
           </div>
         </header>
@@ -170,6 +227,21 @@ export function ChatContainer() {
         {/* Quick replies */}
         {messages.length > 0 && !isLoading && (
           <QuickReplies onSelect={(q) => handleSend(q, "text")} />
+        )}
+
+        {/* Guest banner — subtle, dismissible */}
+        {mounted && !authed && messages.length > 0 && (
+          <div style={{ padding: "0 16px 8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderRadius: 10, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", fontSize: 12 }}>
+              <span style={{ color: "var(--text-2)", flex: 1 }}>
+                Esta conversacion no se guardara.{" "}
+                <Link href="/login" style={{ color: "var(--brand-primary)", fontWeight: 600, textDecoration: "none" }}>
+                  Inicia sesion
+                </Link>{" "}
+                para guardar tu historial.
+              </span>
+            </div>
+          </div>
         )}
 
         {/* Input */}

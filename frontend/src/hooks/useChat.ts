@@ -3,6 +3,7 @@
 import { useCallback, useRef } from "react";
 import { useChatContext } from "@/context/ChatContext";
 import { apiClient } from "@/lib/api/client";
+import { isAuthenticated } from "@/lib/auth";
 import type { Message } from "@/types/chat";
 
 export function useChat() {
@@ -11,6 +12,7 @@ export function useChat() {
   messagesRef.current = state.messages;
 
   const loadConversations = useCallback(async () => {
+    if (!isAuthenticated()) return; // guests don't have persistent history
     try {
       const data = await apiClient.getConversations();
       dispatch({
@@ -211,6 +213,21 @@ export function useChat() {
     [dispatch]
   );
 
+  const renameConversation = useCallback(
+    async (conversationId: string, title: string) => {
+      try {
+        await apiClient.renameConversation(conversationId, title);
+        dispatch({ type: "RENAME_CONVERSATION", payload: { id: conversationId, title } });
+      } catch (error) {
+        dispatch({
+          type: "SET_ERROR",
+          payload: error instanceof Error ? error.message : "Error renombrando conversación",
+        });
+      }
+    },
+    [dispatch]
+  );
+
   return {
     ...state,
     loadConversations,
@@ -218,6 +235,7 @@ export function useChat() {
     selectConversation,
     sendMessage,
     deleteConversation,
+    renameConversation,
     dispatch,
   };
 }

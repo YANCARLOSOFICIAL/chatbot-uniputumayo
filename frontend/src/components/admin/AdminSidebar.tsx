@@ -40,17 +40,17 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
   const sidebar = (
     <aside style={{
       width: 252,
-      background: "#08202E",
+      background: "var(--admin-sb-bg)",
       display: "flex",
       flexDirection: "column",
-      height: "100vh",
+      height: "100dvh",
       position: "relative",
       overflow: "hidden",
     }}>
       {/* Top brand gradient bar */}
       <div style={{
         height: 3, flexShrink: 0, width: "100%",
-        background: "linear-gradient(90deg, #1B6E94 0%, #7BB52E 100%)",
+        background: "linear-gradient(90deg, var(--brand-primary) 0%, var(--brand-accent) 100%)",
       }} />
 
       {/* Ambient glow blob */}
@@ -179,7 +179,7 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
         {/* Squircle avatar — not circle */}
         <div style={{
           width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-          background: "linear-gradient(135deg, #1B6E94, #7BB52E)",
+          background: "linear-gradient(135deg, var(--brand-primary), var(--brand-accent))",
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: 12, fontWeight: 800, color: "#fff", letterSpacing: "0.01em",
         }}>

@@ -38,8 +38,10 @@ async function request<T>(
       if (typeof window !== "undefined") {
         localStorage.removeItem("auth_token");
         localStorage.removeItem("auth_user");
+        const isAdminRoute = window.location.pathname.startsWith("/admin");
+        const loginPath = isAdminRoute ? "/admin/login" : "/login";
         if (!window.location.pathname.includes("/login")) {
-          window.location.href = "/admin/login";
+          window.location.href = loginPath;
         }
       }
     }
@@ -108,6 +110,15 @@ export const apiClient = {
     request<{ success: boolean }>(`/api/v1/chat/conversations/${id}`, {
       method: "DELETE",
     }),
+
+  renameConversation: (id: string, title: string) =>
+    request<{ id: string; title: string; created_at: string; updated_at: string }>(
+      `/api/v1/chat/conversations/${id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ title }),
+      }
+    ),
 
   sendMessage: (
     conversationId: string,

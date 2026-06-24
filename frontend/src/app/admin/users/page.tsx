@@ -123,7 +123,7 @@ export default function UsersPage() {
                           <div style={{
                             width: 32, height: 32, borderRadius: 9, flexShrink: 0,
                             background: user.role === "admin"
-                              ? "linear-gradient(135deg, #1B6E94, #7BB52E)"
+                              ? "linear-gradient(135deg, var(--brand-primary), var(--brand-accent))"
                               : "var(--brand-dim)",
                             border: user.role === "admin"
                               ? "none"

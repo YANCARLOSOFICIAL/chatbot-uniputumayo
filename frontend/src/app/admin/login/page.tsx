@@ -154,7 +154,7 @@ export default function LoginPage() {
             margin: "0 0 14px",
           }}>
             Panel de administracion<br />
-            <span style={{ color: "#1B6E94" }}>UniPutumayo.</span>
+            <span style={{ color: "var(--brand-primary)" }}>UniPutumayo.</span>
           </h2>
 
           <p style={{ fontSize: 15, color: "rgba(255,255,255,0.55)", lineHeight: 1.65, margin: "0 0 36px" }}>

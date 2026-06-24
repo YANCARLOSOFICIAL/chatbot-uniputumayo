@@ -18,7 +18,7 @@ export function AdminHeader({ title, subtitle, action }: AdminHeaderProps) {
       <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
         <div style={{
           width: 3, borderRadius: 9999, alignSelf: "stretch", flexShrink: 0,
-          background: "linear-gradient(180deg, #1B6E94 0%, #7BB52E 100%)",
+          background: "linear-gradient(180deg, var(--brand-primary) 0%, var(--brand-accent) 100%)",
           minHeight: 32,
         }} />
         <div>

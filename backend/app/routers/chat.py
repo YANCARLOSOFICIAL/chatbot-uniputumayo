@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db, async_session as create_session
 from app.schemas.chat import (
     ConversationCreate,
+    ConversationUpdate,
     ConversationResponse,
     MessageCreate,
     MessageResponse,
@@ -51,6 +52,19 @@ async def get_conversation(
 ):
     service = ChatService(db)
     conversation = await service.get_conversation(conversation_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return conversation
+
+
+@router.patch("/conversations/{conversation_id}", response_model=ConversationResponse)
+async def rename_conversation(
+    conversation_id: UUID,
+    data: ConversationUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    service = ChatService(db)
+    conversation = await service.update_conversation_title(conversation_id, data.title)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return conversation

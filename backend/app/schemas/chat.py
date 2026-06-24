@@ -51,6 +51,10 @@ class SourceInfo(BaseModel):
     faculty: str | None
 
 
+class ConversationUpdate(BaseModel):
+    title: str
+
+
 class ChatResponse(BaseModel):
     user_message: MessageResponse
     assistant_message: MessageResponse

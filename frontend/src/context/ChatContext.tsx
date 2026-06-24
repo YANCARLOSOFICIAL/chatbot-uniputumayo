@@ -33,7 +33,8 @@ type ChatAction =
   | { type: "SET_INPUT_MODE"; payload: "text" | "voice" }
   | { type: "SET_ERROR"; payload: string | null }
   | { type: "ADD_CONVERSATION"; payload: Conversation }
-  | { type: "REMOVE_CONVERSATION"; payload: string };
+  | { type: "REMOVE_CONVERSATION"; payload: string }
+  | { type: "RENAME_CONVERSATION"; payload: { id: string; title: string } };
 
 const initialState: ChatState = {
   conversations: [],
@@ -87,6 +88,13 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         sources: isActive ? [] : state.sources,
       };
     }
+    case "RENAME_CONVERSATION":
+      return {
+        ...state,
+        conversations: state.conversations.map((c) =>
+          c.id === action.payload.id ? { ...c, title: action.payload.title } : c
+        ),
+      };
     default:
       return state;
   }

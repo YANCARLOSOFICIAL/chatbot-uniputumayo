@@ -62,6 +62,15 @@ class ChatService:
         await self.db.commit()
         return True
 
+    async def update_conversation_title(self, conversation_id: UUID, title: str) -> Conversation | None:
+        conversation = await self.get_conversation(conversation_id)
+        if not conversation:
+            return None
+        conversation.title = title.strip()
+        await self.db.commit()
+        await self.db.refresh(conversation)
+        return conversation
+
     async def get_messages(
         self, conversation_id: UUID, limit: int = 50, offset: int = 0
     ) -> list[Message]:

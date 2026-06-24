@@ -298,8 +298,13 @@ export default function ConfigPage() {
 
       {/* API Key Modal */}
       {showKeyModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}>
-          <div className="card" style={{ maxWidth: 420, width: "100%", padding: 24 }}>
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}
+          onClick={() => { setShowKeyModal(false); setApiKey(""); setKeyError(null); setKeySuccess(null); }}
+          onKeyDown={(e) => { if (e.key === "Escape") { setShowKeyModal(false); setApiKey(""); setKeyError(null); setKeySuccess(null); } }}
+          role="dialog" aria-modal="true" aria-label="Configurar API Key"
+        >
+          <div className="card" style={{ maxWidth: 420, width: "100%", padding: 24 }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
               <div style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 800, color: "var(--text-1)" }}>API Key de OpenAI</div>
               <button onClick={() => { setShowKeyModal(false); setApiKey(""); setKeyError(null); setKeySuccess(null); }}

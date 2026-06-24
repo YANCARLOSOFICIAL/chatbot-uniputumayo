@@ -3,10 +3,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
-import { ArrowUp, ArrowRight, MapPin, BookOpen, Mic } from "lucide-react";
+import { ArrowUp, ArrowRight, MapPin, BookOpen, Mic, MessageCircle, Search, Shield } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-/* ── IntersectionObserver scroll reveal ── */
+/* ── Intersection observer scroll reveal ── */
 function useInView(threshold = 0.15) {
   const ref = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
@@ -23,7 +23,6 @@ function useInView(threshold = 0.15) {
   return { ref, inView };
 }
 
-/* ── Data ── */
 const PROGRAMS = [
   { num: "01", name: "Ingenieria de Sistemas",      snies: "SNIES 105603", sede: "Mocoa",                     cat: "PREGRADO" },
   { num: "02", name: "Ingenieria Ambiental",         snies: "SNIES 53095",  sede: "Mocoa · Sibundoy",          cat: "PREGRADO" },
@@ -33,24 +32,13 @@ const PROGRAMS = [
   { num: "06", name: "Esp. en Gestion Ambiental",    snies: "Acreditado",   sede: "Mocoa",                     cat: "POSGRADO" },
 ];
 
-const CHIPS = [
-  "Que pregrados tienen?",
-  "Costos 2026-1",
-  "Como inscribirse?",
-  "Sedes disponibles",
-];
+const CHIPS = ["Que pregrados tienen?", "Costos 2026-1", "Como inscribirse?", "Sedes disponibles"];
 
-/* ── Ambient glow blob ── */
-function Glow({ color, top, left, size = 400 }: { color: string; top: string; left: string; size?: number }) {
-  return (
-    <div style={{
-      position: "absolute", top, left,
-      width: size, height: size, borderRadius: "50%",
-      background: `radial-gradient(circle, ${color} 0%, transparent 70%)`,
-      filter: "blur(60px)", pointerEvents: "none", transform: "translate(-50%,-50%)",
-    }} />
-  );
-}
+const STEPS = [
+  { icon: MessageCircle, num: "01", title: "Escribe o habla", body: "Pregunta en espanol natural. Nexus entiende contexto, no solo palabras clave." },
+  { icon: Search,        num: "02", title: "Busca en el catalogo", body: "Consulta el PEI, reglamentos y programas oficiales de UniPutumayo en tiempo real." },
+  { icon: Shield,        num: "03", title: "Responde con fuentes", body: "Cada respuesta cita el documento de origen. Informacion verificada, no alucinada." },
+];
 
 export default function LandingPage() {
   const router = useRouter();
@@ -58,7 +46,6 @@ export default function LandingPage() {
   const [navVisible, setNavVisible] = useState(true);
   const lastY = useRef(0);
 
-  /* Hide pill nav on scroll down, show on scroll up */
   useEffect(() => {
     const h = () => {
       const y = window.scrollY;
@@ -75,20 +62,19 @@ export default function LandingPage() {
     router.push("/chat");
   };
 
-  /* Reveal refs */
   const hero   = useInView(0.05);
   const stats  = useInView(0.3);
+  const steps  = useInView(0.15);
+  const campus = useInView(0.1);
   const bento  = useInView(0.1);
   const progs  = useInView(0.1);
   const cta    = useInView(0.3);
 
   return (
     <div style={{ background: "#071824", color: "#fff", overflowX: "hidden" }}>
-
-      {/* Grain overlay — physical texture */}
       <div className="noise-layer" aria-hidden />
 
-      {/* ══════════ FLOATING PILL NAV ══════════ */}
+      {/* ══════ FLOATING PILL NAV ══════ */}
       <nav style={{
         position: "fixed", top: 20, left: "50%",
         transform: `translateX(-50%) translateY(${navVisible ? 0 : -80}px)`,
@@ -97,32 +83,21 @@ export default function LandingPage() {
       }}>
         <div className="pill-nav">
           <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", flexShrink: 0 }}>
-            <Image src="/isotipo.webp" alt="Nexus" width={22} height={22} style={{ objectFit: "contain" }} />
-            <span style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em" }}>
-              Nexus
-            </span>
+            <Image src="/isotipo.webp" alt="Nexus" width={22} height={22} style={{ objectFit: "contain" }} priority />
+            <span style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em" }}>Nexus</span>
           </Link>
 
           <div className="hidden md:flex" style={{ gap: 18, alignItems: "center" }}>
-            <a href="#features" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none", transition: "color 0.15s" }}
-              className="hover:text-white">
-              Que hace
-            </a>
-            <a href="#programs" style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none", transition: "color 0.15s" }}
-              className="hover:text-white">
-              Programas
-            </a>
+            {[["Como funciona", "#how"], ["Programas", "#programs"]].map(([label, href]) => (
+              <a key={href} href={href} style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }} className="hover:text-white transition-colors">
+                {label}
+              </a>
+            ))}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Link href="/admin/login" style={{
-              fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.5)",
-              textDecoration: "none", padding: "6px 12px",
-              border: "1px solid rgba(255,255,255,0.1)", borderRadius: 9999,
-              transition: "color 0.15s, border-color 0.15s",
-              whiteSpace: "nowrap",
-            }}>
-              Entrar
+            <Link href="/login" style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.5)", textDecoration: "none", padding: "6px 12px", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 9999, transition: "color 0.15s, border-color 0.15s", whiteSpace: "nowrap" }}>
+              Iniciar sesion
             </Link>
             <button onClick={() => goToChat()} className="btn-island" style={{ fontSize: 12, padding: "7px 5px 7px 14px" }}>
               Hablar
@@ -134,57 +109,39 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* ══════════ HERO — left-aligned, asymmetric split ══════════ */}
+      {/* ══════ HERO — campus background ══════ */}
       <main>
-        <section style={{ minHeight: "100dvh", display: "flex", alignItems: "center", position: "relative", overflow: "hidden", padding: "120px 0 80px" }}>
-          <Glow color="rgba(27,110,148,0.14)" top="40%" left="30%" size={600} />
-          <Glow color="rgba(123,181,46,0.07)" top="65%" left="75%" size={350} />
+        <section className="landing-hero">
+          {/* Background photo */}
+          <div className="landing-hero-bg" aria-hidden />
+          <div className="landing-hero-bg-glow" aria-hidden />
 
           <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px", width: "100%", position: "relative", zIndex: 1 }}>
             <div className="hero-split">
 
               {/* Left — headline + input */}
               <div ref={hero.ref} className={`reveal${hero.inView ? " in-view" : ""}`}>
-                {/* Eyebrow pill with pulse dot */}
                 <div style={{ marginBottom: 28 }}>
                   <span className="eyebrow-pill">
                     <span className="dot" />
-                    NEXUS · 2026
+                    NEXUS · UniPutumayo 2026
                   </span>
                 </div>
 
-                {/* H1 — left-aligned, Variance=8, NOT centered */}
-                <h1 style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: "clamp(52px, 7.5vw, 90px)",
-                  fontWeight: 900, lineHeight: 0.93,
-                  letterSpacing: "-0.04em",
-                  margin: "0 0 26px",
-                  textWrap: "balance",
-                }}>
+                <h1 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(48px, 7vw, 86px)", fontWeight: 900, lineHeight: 0.93, letterSpacing: "-0.04em", margin: "0 0 24px", textWrap: "balance" }}>
                   La guia<br />
-                  <span style={{ color: "#1B6E94" }}>academica</span><br />
+                  <span style={{ color: "var(--brand-primary)" }}>academica</span><br />
                   del Putumayo.
                 </h1>
 
-                <p style={{
-                  fontSize: "clamp(15px, 1.8vw, 17px)",
-                  color: "rgba(255,255,255,0.52)", lineHeight: 1.7,
-                  margin: "0 0 38px", maxWidth: 420,
-                }}>
-                  Respuestas verificadas del catalogo oficial. Sin filas, sin formularios.
+                <p style={{ fontSize: "clamp(14px, 1.7vw, 17px)", color: "rgba(255,255,255,0.52)", lineHeight: 1.7, margin: "0 0 36px", maxWidth: 420 }}>
+                  Respuestas verificadas del catalogo oficial. Sin filas, sin formularios. Disponible 24 horas.
                 </p>
 
-                {/* Hero chat bar */}
-                <form
-                  onSubmit={(e) => { e.preventDefault(); goToChat(); }}
-                  style={{ marginBottom: 16 }}
-                >
+                <form onSubmit={(e) => { e.preventDefault(); goToChat(); }} style={{ marginBottom: 16 }}>
                   <div className="hero-chat-bar" style={{ maxWidth: 440 }}>
                     <input
-                      type="text"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
+                      type="text" value={query} onChange={(e) => setQuery(e.target.value)}
                       placeholder="Pregunta sobre programas, costos, sedes..."
                       autoComplete="off"
                     />
@@ -194,18 +151,15 @@ export default function LandingPage() {
                   </div>
                 </form>
 
-                {/* Suggestion chips */}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
                   {CHIPS.map((c) => (
-                    <button key={c} className="hero-chip" onClick={() => goToChat(c)}>
-                      {c}
-                    </button>
+                    <button key={c} className="hero-chip" onClick={() => goToChat(c)}>{c}</button>
                   ))}
                 </div>
               </div>
 
               {/* Right — Double-Bezel chat preview */}
-              <div className="hidden md:flex justify-center reveal reveal-d2" style={{
+              <div className="hidden md:flex justify-center" style={{
                 opacity: hero.inView ? 1 : 0,
                 transform: hero.inView ? "none" : "translateY(28px)",
                 filter: hero.inView ? "none" : "blur(3px)",
@@ -245,94 +199,135 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ══════════ STATS — minimal strip ══════════ */}
-        <div
-          ref={stats.ref}
-          className={`reveal${stats.inView ? " in-view" : ""}`}
-          style={{
-            borderTop: "1px solid rgba(255,255,255,0.06)",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
-          }}
-        >
+        {/* ══════ STATS STRIP ══════ */}
+        <div ref={stats.ref} className={`reveal${stats.inView ? " in-view" : ""}`}
+          style={{ borderTop: "1px solid rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
           <div style={{ maxWidth: 900, margin: "0 auto", padding: "0 32px", display: "grid", gridTemplateColumns: "repeat(4,1fr)" }}>
             {[
-              { val: "6",    lbl: "Programas",         accent: false },
-              { val: "3",    lbl: "Sedes activas",     accent: true  },
-              { val: "24/7", lbl: "Disponible",        accent: false },
-              { val: "100%", lbl: "Catalogo oficial",  accent: true  },
+              { val: "6",    lbl: "Programas",        accent: false },
+              { val: "3",    lbl: "Sedes activas",    accent: true  },
+              { val: "24/7", lbl: "Disponible",       accent: false },
+              { val: "100%", lbl: "Catalogo oficial", accent: true  },
             ].map((s, i) => (
-              <div key={s.lbl} style={{
-                padding: "32px 20px", textAlign: "center",
-                borderLeft: i > 0 ? "1px solid rgba(255,255,255,0.06)" : "none",
-              }}>
-                <div style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: "clamp(26px,4vw,38px)", fontWeight: 900,
-                  letterSpacing: "-0.04em", lineHeight: 1,
-                  color: s.accent ? "#1B6E94" : "#fff",
-                }}>
+              <div key={s.lbl} style={{ padding: "32px 20px", textAlign: "center", borderLeft: i > 0 ? "1px solid rgba(255,255,255,0.06)" : "none" }}>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(26px,4vw,38px)", fontWeight: 900, letterSpacing: "-0.04em", lineHeight: 1, color: s.accent ? "var(--brand-primary)" : "#fff" }}>
                   {s.val}
                 </div>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 7, fontWeight: 500, letterSpacing: "0.04em" }}>
-                  {s.lbl}
-                </div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 7, fontWeight: 500, letterSpacing: "0.04em" }}>{s.lbl}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* ══════════ FEATURES — Z-Axis Bento (no 3 equal cards, rotated depth) ══════════ */}
-        <section id="features" style={{ padding: "120px 0", background: "#071824" }}>
+        {/* ══════ HOW IT WORKS — 3 steps ══════ */}
+        <section id="how" style={{ padding: "100px 0", background: "#071824" }}>
+          <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 32px" }}>
+            <div ref={steps.ref} className={`reveal${steps.inView ? " in-view" : ""}`} style={{ marginBottom: 52 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 14 }}>
+                Como funciona
+              </div>
+              <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(26px,4vw,44px)", fontWeight: 800, letterSpacing: "-0.03em", margin: 0, lineHeight: 1.05, color: "#fff", textWrap: "balance", maxWidth: 520 }}>
+                Informacion institucional en segundos.
+              </h2>
+            </div>
+
+            <div className={`steps-grid reveal${steps.inView ? " in-view" : ""} reveal-d1`}>
+              {STEPS.map(({ icon: Icon, num, title, body }) => (
+                <div key={num} className="step-card">
+                  <div className="step-num">{num}</div>
+                  <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(27,110,148,0.12)", border: "1px solid rgba(27,110,148,0.2)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+                    <Icon size={18} style={{ color: "var(--brand-primary)" }} strokeWidth={1.8} />
+                  </div>
+                  <h3 style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, color: "#fff", margin: "0 0 10px", letterSpacing: "-0.01em" }}>
+                    {title}
+                  </h3>
+                  <p style={{ fontSize: 13.5, color: "rgba(255,255,255,0.5)", lineHeight: 1.7, margin: 0 }}>
+                    {body}
+                  </p>
+                  <div className="step-connector" aria-hidden />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ══════ CAMPUS IMAGE EDITORIAL SECTION ══════ */}
+        <section ref={campus.ref}>
+          <div className={`campus-split reveal${campus.inView ? " in-view" : ""}`}>
+
+            {/* Left — campus photo */}
+            <div className="campus-img-pane">
+              <Image
+                src="/estudiantes.jpg"
+                alt="Estudiantes UniPutumayo"
+                fill
+                style={{ objectFit: "cover", objectPosition: "center" }}
+                sizes="50vw"
+              />
+              {/* Subtle overlay */}
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(7,24,36,0.3) 0%, transparent 50%)" }} />
+            </div>
+
+            {/* Right — text */}
+            <div className={`campus-text-pane reveal${campus.inView ? " in-view" : ""} reveal-d1`}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(123,181,46,0.7)", marginBottom: 18 }}>
+                Universidad del Putumayo
+              </div>
+              <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(24px,3.5vw,40px)", fontWeight: 800, letterSpacing: "-0.03em", color: "#fff", margin: "0 0 20px", lineHeight: 1.05, textWrap: "balance" }}>
+                Formacion de calidad en el corazon de la Amazonia.
+              </h2>
+              <p style={{ fontSize: 14.5, color: "rgba(255,255,255,0.5)", lineHeight: 1.75, margin: "0 0 28px" }}>
+                Desde 1992, la Institucion Universitaria del Putumayo forma lideres y profesionales en ciencias, tecnologia e ingenieria con impacto regional.
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {[
+                  "Acreditada por el Ministerio de Educacion",
+                  "3 sedes: Mocoa, Sibundoy, Colon, Puerto Asis",
+                  "Investigacion aplicada en biodiversidad y agua",
+                ].map((item) => (
+                  <div key={item} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                    <div style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--brand-accent)", marginTop: 7, flexShrink: 0 }} />
+                    <span style={{ fontSize: 13.5, color: "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ══════ FEATURES BENTO ══════ */}
+        <section id="features" style={{ padding: "100px 0", background: "#071824" }}>
           <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px" }}>
 
             <div ref={bento.ref} className={`reveal${bento.inView ? " in-view" : ""}`} style={{ marginBottom: 52 }}>
-              <h2 style={{
-                fontFamily: "var(--font-display)",
-                fontSize: "clamp(30px, 4.5vw, 52px)",
-                fontWeight: 800, letterSpacing: "-0.03em",
-                color: "#fff", margin: 0, lineHeight: 1.05,
-                maxWidth: 560, textWrap: "balance",
-              }}>
+              <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(28px, 4.5vw, 50px)", fontWeight: 800, letterSpacing: "-0.03em", color: "#fff", margin: 0, lineHeight: 1.05, maxWidth: 560, textWrap: "balance" }}>
                 Informacion que puedes citar.
               </h2>
             </div>
 
-            {/* Z-Axis bento — 3 cards with physical rotation */}
             <div className={`feat-bento-v2 reveal${bento.inView ? " in-view" : ""} reveal-d1`}>
 
-              {/* Card 1 — main (spans 2 rows), rotated */}
+              {/* Card 1 — RAG catalog */}
               <div className="agency-card bento-span rotate-card-1" style={{ display: "flex", flexDirection: "column", minHeight: 380 }}>
-                <div style={{
-                  width: 48, height: 48, borderRadius: 14, marginBottom: 22,
-                  background: "rgba(27,110,148,0.15)", border: "1px solid rgba(27,110,148,0.2)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  <BookOpen size={22} style={{ color: "#1B6E94" }} />
+                <div style={{ width: 48, height: 48, borderRadius: 14, marginBottom: 22, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <BookOpen size={22} style={{ color: "var(--brand-primary)" }} />
                 </div>
-                <h3 style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, margin: "0 0 12px", letterSpacing: "-0.015em", color: "#fff" }}>
+                <h3 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, margin: "0 0 12px", letterSpacing: "-0.015em", color: "#fff" }}>
                   Respuestas del catalogo, no del internet.
                 </h3>
-                <p style={{ fontSize: 14.5, color: "rgba(255,255,255,0.55)", lineHeight: 1.7, margin: "0 0 auto" }}>
+                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", lineHeight: 1.7, margin: "0 0 auto" }}>
                   Nexus consulta el PEI, reglamentos y catalogo de programas de UniPutumayo. Cada respuesta cita el documento fuente.
                 </p>
-                {/* Mini chat inside card */}
-                <div style={{
-                  marginTop: 24, background: "rgba(0,0,0,0.25)", borderRadius: 12,
-                  padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8,
-                }}>
+                <div style={{ marginTop: 24, background: "rgba(0,0,0,0.25)", borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
                   <div className="mini-user">Cuales son los requisitos de admision?</div>
                   <div className="mini-bot">Cedula, diploma de bachillerato y puntaje ICFES. Inscripciones cierran el 28 de feb.</div>
                 </div>
               </div>
 
-              {/* Card 2 — top right, rotated */}
+              {/* Card 2 — Voice */}
               <div className="agency-card rotate-card-2">
-                <div style={{
-                  width: 40, height: 40, borderRadius: 12, marginBottom: 18,
-                  background: "rgba(123,181,46,0.12)", border: "1px solid rgba(123,181,46,0.18)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  <Mic size={18} style={{ color: "#7BB52E" }} strokeWidth={1.8} />
+                <div style={{ width: 40, height: 40, borderRadius: 12, marginBottom: 18, background: "var(--accent-dim)", border: "1px solid var(--accent-light)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Mic size={18} style={{ color: "var(--brand-accent)" }} strokeWidth={1.8} />
                 </div>
                 <h4 style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, margin: "0 0 10px", letterSpacing: "-0.01em", color: "#fff" }}>
                   Voz y texto
@@ -342,14 +337,11 @@ export default function LandingPage() {
                 </p>
               </div>
 
-              {/* Card 3 — bottom right, rotated */}
+              {/* Card 3 — 24/7 */}
               <div className="agency-card rotate-card-3">
                 <div style={{ marginBottom: 16 }}>
-                  <span style={{
-                    fontFamily: "var(--font-display)", fontSize: 42, fontWeight: 900,
-                    letterSpacing: "-0.04em", color: "#fff", lineHeight: 1,
-                  }}>
-                    24<span style={{ color: "#1B6E94", fontSize: 28 }}>/7</span>
+                  <span style={{ fontFamily: "var(--font-display)", fontSize: 42, fontWeight: 900, letterSpacing: "-0.04em", color: "#fff", lineHeight: 1 }}>
+                    24<span style={{ color: "var(--brand-primary)", fontSize: 28 }}>/7</span>
                   </span>
                 </div>
                 <h4 style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, margin: "0 0 10px", letterSpacing: "-0.01em", color: "#fff" }}>
@@ -364,32 +356,23 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ══════════ PROGRAMS — editorial table ══════════ */}
+        {/* ══════ PROGRAMS — editorial table ══════ */}
         <section id="programs" style={{ padding: "100px 0", background: "#0A1C2A" }}>
           <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px" }}>
 
-            <div
-              ref={progs.ref}
-              className={`reveal${progs.inView ? " in-view" : ""}`}
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 52, flexWrap: "wrap", gap: 16 }}
-            >
+            <div ref={progs.ref} className={`reveal${progs.inView ? " in-view" : ""}`}
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 52, flexWrap: "wrap", gap: 16 }}>
               <div>
-                <h2 style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: "clamp(28px,4vw,46px)", fontWeight: 800,
-                  letterSpacing: "-0.03em", margin: 0, color: "#fff", lineHeight: 1.05, textWrap: "balance",
-                }}>
+                <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(26px,4vw,44px)", fontWeight: 800, letterSpacing: "-0.03em", margin: 0, color: "#fff", lineHeight: 1.05, textWrap: "balance" }}>
                   Oferta academica 2026-1.
                 </h2>
               </div>
               <a href="https://itp.edu.co/ITP2022/" target="_blank" rel="noopener noreferrer"
-                style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", textDecoration: "none", transition: "color 0.15s" }}
-                className="hover:text-white">
+                style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", textDecoration: "none" }} className="hover:text-white transition-colors">
                 Ver todos los programas
               </a>
             </div>
 
-            {/* Editorial program rows */}
             <div className={`reveal${progs.inView ? " in-view" : ""} reveal-d1`}>
               {PROGRAMS.map((p) => (
                 <button
@@ -402,18 +385,16 @@ export default function LandingPage() {
                   <span className="prog-name">{p.name}</span>
                   <span className="prog-dots" />
                   <span className="prog-meta">
-                    <span className="hidden md:inline-block prog-snies">
-                      {p.snies}
-                    </span>
+                    <span className="hidden md:inline-block prog-snies">{p.snies}</span>
                     <span style={{ display: "flex", alignItems: "center", gap: 4 }} className="hidden md:flex prog-sede">
                       <MapPin size={10} /> {p.sede}
                     </span>
                     <span style={{
                       padding: "2px 7px", borderRadius: 4, fontSize: 9, fontWeight: 700,
                       letterSpacing: "0.07em",
-                      background: p.cat === "POSGRADO" ? "rgba(123,181,46,0.12)" : "rgba(27,110,148,0.12)",
-                      color: p.cat === "POSGRADO" ? "#7BB52E" : "#1B6E94",
-                      border: `1px solid ${p.cat === "POSGRADO" ? "rgba(123,181,46,0.2)" : "rgba(27,110,148,0.2)"}`,
+                      background: p.cat === "POSGRADO" ? "var(--accent-dim)" : "var(--brand-dim)",
+                      color: p.cat === "POSGRADO" ? "var(--brand-accent)" : "var(--brand-primary)",
+                      border: `1px solid ${p.cat === "POSGRADO" ? "var(--accent-light)" : "var(--brand-light)"}`,
                     }}>
                       {p.cat}
                     </span>
@@ -427,30 +408,24 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ══════════ CTA — bold, left-aligned ══════════ */}
+        {/* ══════ CTA ══════ */}
         <section style={{ padding: "120px 0", background: "#071824", position: "relative", overflow: "hidden" }}>
-          <Glow color="rgba(27,110,148,0.12)" top="50%" left="70%" size={500} />
+          {/* Subtle photo background */}
+          <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: "40%", overflow: "hidden", opacity: 0.12 }} aria-hidden>
+            <Image src="/lab-aguas.jpg" alt="" fill style={{ objectFit: "cover", objectPosition: "center" }} />
+          </div>
+          <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: "50%", background: "linear-gradient(to right, #071824 0%, transparent 100%)" }} aria-hidden />
+
           <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px", position: "relative", zIndex: 1 }}>
-            <div
-              ref={cta.ref}
-              className={`reveal${cta.inView ? " in-view" : ""}`}
-              style={{ maxWidth: 680 }}
-            >
-              <h2 style={{
-                fontFamily: "var(--font-display)",
-                fontSize: "clamp(36px, 6vw, 72px)",
-                fontWeight: 900, letterSpacing: "-0.04em",
-                color: "#fff", margin: "0 0 20px", lineHeight: 0.95,
-                textWrap: "balance",
-              }}>
+            <div ref={cta.ref} className={`reveal${cta.inView ? " in-view" : ""}`} style={{ maxWidth: 680 }}>
+              <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(34px, 6vw, 68px)", fontWeight: 900, letterSpacing: "-0.04em", color: "#fff", margin: "0 0 20px", lineHeight: 0.95, textWrap: "balance" }}>
                 Empieza ahora.<br />
-                <span style={{ color: "rgba(255,255,255,0.28)" }}>Sin costo, sin registro.</span>
+                <span style={{ color: "rgba(255,255,255,0.25)" }}>Sin costo, sin registro.</span>
               </h2>
               <p style={{ fontSize: 16, color: "rgba(255,255,255,0.45)", margin: "0 0 40px", lineHeight: 1.65 }}>
                 Nexus responde al instante con informacion oficial de UniPutumayo.
               </p>
 
-              {/* Button-in-button island */}
               <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
                 <button onClick={() => goToChat()} className="btn-island" style={{ fontSize: 15, padding: "13px 7px 13px 22px" }}>
                   Habla con Nexus
@@ -458,19 +433,15 @@ export default function LandingPage() {
                     <ArrowRight size={16} />
                   </span>
                 </button>
-                <Link href="/admin/login" style={{
-                  fontSize: 14, color: "rgba(255,255,255,0.35)",
-                  textDecoration: "none", transition: "color 0.15s",
-                }}
-                  className="hover:text-white">
-                  Soy administrador
+                <Link href="/login" style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", textDecoration: "none" }} className="hover:text-white/60 transition-colors">
+                  Crear una cuenta gratuita
                 </Link>
               </div>
             </div>
           </div>
         </section>
 
-        {/* ══════════ FOOTER ══════════ */}
+        {/* ══════ FOOTER ══════ */}
         <footer style={{ background: "#040E16", borderTop: "1px solid rgba(255,255,255,0.05)", padding: "48px 0 24px" }}>
           <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 32, marginBottom: 36 }}>
@@ -485,35 +456,22 @@ export default function LandingPage() {
 
               <div style={{ display: "flex", gap: 48, flexWrap: "wrap" }}>
                 <div>
-                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.25)", marginBottom: 14 }}>
-                    Nexus
-                  </div>
-                  {[
-                    { label: "Habla con Nexus", href: "/chat" },
-                    { label: "Entrar",          href: "/admin/login" },
-                  ].map((l) => (
-                    <Link key={l.href} href={l.href}
-                      style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,0.4)", textDecoration: "none", padding: "5px 0", transition: "color 0.15s" }}
-                      className="hover:text-white">
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.25)", marginBottom: 14 }}>Nexus</div>
+                  {[{ label: "Habla con Nexus", href: "/chat" }, { label: "Iniciar sesion", href: "/login" }, { label: "Admin", href: "/admin/login" }].map((l) => (
+                    <Link key={l.href} href={l.href} style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,0.4)", textDecoration: "none", padding: "5px 0" }} className="hover:text-white transition-colors">
                       {l.label}
                     </Link>
                   ))}
                 </div>
-
                 <div>
-                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.25)", marginBottom: 14 }}>
-                    Institucional
-                  </div>
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.25)", marginBottom: 14 }}>Institucional</div>
                   {["Pregrados", "Posgrados", "Bienestar"].map((l) => (
-                    <a key={l} href="https://itp.edu.co/ITP2022/" target="_blank" rel="noopener noreferrer"
-                      style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,0.4)", textDecoration: "none", padding: "5px 0", transition: "color 0.15s" }}
-                      className="hover:text-white">
+                    <a key={l} href="https://itp.edu.co/ITP2022/" target="_blank" rel="noopener noreferrer" style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,0.4)", textDecoration: "none", padding: "5px 0" }} className="hover:text-white transition-colors">
                       {l}
                     </a>
                   ))}
                 </div>
               </div>
-
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 20, flexWrap: "wrap", gap: 12 }}>
