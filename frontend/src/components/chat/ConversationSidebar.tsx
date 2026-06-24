@@ -113,7 +113,7 @@ function ConvItem({
           background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
           border: "none",
           borderLeft: isActive ? "2px solid var(--sb-active)" : "2px solid transparent",
-          color: isActive ? "#fff" : "rgba(255,255,255,0.55)",
+          color: isActive ? "#fff" : "rgba(255,255,255,0.72)",
           transition: "background 0.1s, color 0.1s",
           textAlign: "left",
         }}
@@ -197,9 +197,9 @@ export const ConversationSidebar = memo(function ConversationSidebar({
       {/* Header */}
       <div style={{ padding: "14px 14px 10px", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 14 }}>
-          <Image src="/isotipo.webp" alt="Nexus" width={28} height={28} style={{ objectFit: "contain", borderRadius: 6 }} />
+          <Image src="/isotipo.webp" alt="Guaca" width={28} height={28} style={{ objectFit: "contain", borderRadius: 6 }} />
           <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, color: "#fff", lineHeight: 1 }}>Nexus</div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, color: "#fff", lineHeight: 1 }}>Guaca</div>
             <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>UniPutumayo</div>
           </div>
         </div>
@@ -255,33 +255,33 @@ export const ConversationSidebar = memo(function ConversationSidebar({
           /* Guest — invite to sign in */
           <div style={{ padding: "28px 12px", textAlign: "center" }}>
             <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
-              <MessageSquare size={16} style={{ color: "rgba(255,255,255,0.25)" }} strokeWidth={1.5} />
+              <MessageSquare size={16} style={{ color: "rgba(255,255,255,0.45)" }} strokeWidth={1.5} />
             </div>
-            <p style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.5)", margin: "0 0 4px" }}>Sin historial</p>
-            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", margin: "0 0 16px", lineHeight: 1.5 }}>
+            <p style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.72)", margin: "0 0 4px" }}>Sin historial</p>
+            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.50)", margin: "0 0 16px", lineHeight: 1.5 }}>
               Inicia sesion para guardar y revisar tus conversaciones.
             </p>
-            <Link href="/admin/login" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: "rgba(27,110,148,0.2)", border: "1px solid rgba(27,110,148,0.3)", color: "rgba(255,255,255,0.75)", textDecoration: "none", fontSize: 12, fontWeight: 600 }}>
+            <Link href="/admin/login" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: "rgba(27,110,148,0.25)", border: "1px solid rgba(27,110,148,0.4)", color: "#fff", textDecoration: "none", fontSize: 12, fontWeight: 600 }}>
               <LogIn size={12} /> Iniciar sesion
             </Link>
-            <Link href="/admin/login" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "7px 14px", borderRadius: 8, background: "transparent", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.4)", textDecoration: "none", fontSize: 12, fontWeight: 500, marginTop: 6 }}>
+            <Link href="/admin/login" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "7px 14px", borderRadius: 8, background: "transparent", border: "1px solid rgba(255,255,255,0.14)", color: "rgba(255,255,255,0.65)", textDecoration: "none", fontSize: 12, fontWeight: 500, marginTop: 6 }}>
               <UserPlus size={12} /> Crear cuenta
             </Link>
           </div>
         ) : conversations.length === 0 ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 16px", textAlign: "center" }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-              <MessageSquare size={15} style={{ color: "rgba(255,255,255,0.3)" }} strokeWidth={1.5} />
+              <MessageSquare size={15} style={{ color: "rgba(255,255,255,0.50)" }} strokeWidth={1.5} />
             </div>
-            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", margin: 0, fontWeight: 500 }}>Sin conversaciones</p>
-            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", margin: "4px 0 0" }}>Empieza una arriba</p>
+            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.70)", margin: 0, fontWeight: 500 }}>Sin conversaciones</p>
+            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.48)", margin: "4px 0 0" }}>Empieza una arriba</p>
           </div>
         ) : grouped.length === 0 ? (
           <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", textAlign: "center", padding: "32px 0" }}>Sin resultados</p>
         ) : (
           grouped.map(([label, items]) => (
             <div key={label} style={{ marginBottom: 18 }}>
-              <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.25)", padding: "0 6px 4px", margin: 0 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,0.48)", padding: "0 6px 4px", margin: 0 }}>
                 {label}
               </p>
               {items.map((conv) => (
@@ -321,12 +321,12 @@ export const ConversationSidebar = memo(function ConversationSidebar({
                 <p style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.75)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {user.display_name ?? "Usuario"}
                 </p>
-                <p style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", margin: 0, textTransform: "capitalize" }}>{user.role}</p>
+                <p style={{ fontSize: 10, color: "rgba(255,255,255,0.52)", margin: 0, textTransform: "capitalize" }}>{user.role}</p>
               </div>
               <button
                 onClick={handleLogout}
                 title="Cerrar sesion"
-                style={{ width: 24, height: 24, borderRadius: 6, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.25)", opacity: 0, transition: "opacity 0.12s, color 0.12s" }}
+                style={{ width: 24, height: 24, borderRadius: 6, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.45)", opacity: 0, transition: "opacity 0.12s, color 0.12s" }}
                 className="group-hover:opacity-100 hover:!text-red-400"
               >
                 <LogOut size={11} strokeWidth={1.5} />

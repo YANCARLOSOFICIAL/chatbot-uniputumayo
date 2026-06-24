@@ -57,7 +57,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Menu size={20} strokeWidth={1.5} />
           </button>
           <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15, color: "var(--text-1)" }}>
-            Nexus Admin
+            Guaca Admin
           </span>
         </div>
 

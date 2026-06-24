@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useId } from "react";
+import { useState, useId, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, AlertCircle, Check } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { setToken, setUser } from "@/lib/auth";
+import { FooterCredit } from "@/components/ui/SiteFooter";
 type Tab = "login" | "register";
 
 function DarkInputField({
@@ -24,7 +25,7 @@ function DarkInputField({
       {label && (
         <label htmlFor={id} style={{
           display: "block", fontSize: 12, fontWeight: 600,
-          color: "rgba(255,255,255,0.5)", marginBottom: 7,
+          color: "rgba(255,255,255,0.65)", marginBottom: 7,
           letterSpacing: "0.04em", textTransform: "uppercase",
         }}>
           {label}
@@ -36,6 +37,7 @@ function DarkInputField({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder} required={required}
           className="dark-input"
+          autoComplete={type === "password" ? "new-password" : "off"}
           style={{ paddingRight: showToggle ? 42 : undefined }}
         />
         {showToggle && (
@@ -67,6 +69,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+
+  // Limpia los campos al montar para evitar que el navegador
+  // rellene automáticamente con credenciales de sesiones previas
+  useEffect(() => {
+    setEmail(""); setPassword(""); setConfirmPassword(""); setDisplayName("");
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,9 +147,9 @@ export default function LoginPage() {
         {/* Content */}
         <div style={{ position: "relative", zIndex: 1, maxWidth: 440 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 48 }}>
-            <Image src="/isotipo.webp" alt="Nexus" width={48} height={48} style={{ objectFit: "contain" }} />
+            <Image src="/isotipo.webp" alt="Guaca" width={48} height={48} style={{ objectFit: "contain" }} />
             <div>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em", lineHeight: 1 }}>Nexus</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em", lineHeight: 1 }}>Guaca</div>
               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginTop: 3 }}>UniPutumayo</div>
             </div>
           </div>
@@ -181,15 +189,15 @@ export default function LoginPage() {
       {/* Right panel — login form */}
       <div style={{
         flex: 1, display: "flex", flexDirection: "column",
-        justifyContent: "center", alignItems: "center",
-        padding: "48px 40px", background: "#0F1E2A",
-        minHeight: "100dvh",
+        background: "#0F1E2A", minHeight: "100dvh",
       }}>
+        {/* Form area — centered, fills available space */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "48px 40px" }}>
         <div style={{ width: "100%", maxWidth: 360 }}>
 
           {/* Logo mobile only */}
           <div className="md:hidden" style={{ textAlign: "center", marginBottom: 32 }}>
-            <Image src="/isotipo.webp" alt="Nexus" width={40} height={40} style={{ objectFit: "contain", margin: "0 auto" }} />
+            <Image src="/isotipo.webp" alt="Guaca" width={40} height={40} style={{ objectFit: "contain", margin: "0 auto" }} />
           </div>
 
           <h2 style={{
@@ -197,9 +205,9 @@ export default function LoginPage() {
             fontSize: 24, fontWeight: 800, color: "#fff",
             letterSpacing: "-0.02em", margin: "0 0 6px",
           }}>
-            Accede a Nexus
+            Accede a Guaca
           </h2>
-          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", margin: "0 0 28px" }}>
+          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.58)", margin: "0 0 28px" }}>
             Inicia sesion o crea tu cuenta para guardar tu historial
           </p>
 
@@ -226,7 +234,7 @@ export default function LoginPage() {
           )}
 
           {tab === "login" ? (
-            <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <form onSubmit={handleLogin} autoComplete="off" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <DarkInputField
                 id={`${uid}_email`} label="Correo electronico" type="email"
                 value={email} onChange={setEmail}
@@ -234,7 +242,7 @@ export default function LoginPage() {
               />
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.5)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.65)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
                     Contrasena
                   </label>
                 </div>
@@ -268,7 +276,7 @@ export default function LoginPage() {
               </button>
             </form>
           ) : (
-            <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <form onSubmit={handleRegister} autoComplete="off" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <DarkInputField
                 id={`${uid}_name`} label="Nombre completo" type="text"
                 value={displayName} onChange={setDisplayName}
@@ -317,7 +325,7 @@ export default function LoginPage() {
           {/* Continue without account */}
           <div style={{ marginTop: 20, position: "relative" }}>
             <div style={{ position: "absolute", inset: "50% 0 auto", borderTop: "1px solid rgba(255,255,255,0.08)" }} />
-            <span style={{ position: "relative", background: "#0F1E2A", padding: "0 10px", fontSize: 11, color: "rgba(255,255,255,0.3)", display: "flex", justifyContent: "center" }}>
+            <span style={{ position: "relative", background: "#0F1E2A", padding: "0 10px", fontSize: 11, color: "rgba(255,255,255,0.45)", display: "flex", justifyContent: "center" }}>
               o
             </span>
           </div>
@@ -337,11 +345,14 @@ export default function LoginPage() {
           </button>
 
           <div style={{ marginTop: 24, textAlign: "center" }}>
-            <Link href="/" style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", textDecoration: "none" }}>
+            <Link href="/" style={{ fontSize: 12, color: "rgba(255,255,255,0.52)", textDecoration: "none" }}>
               ← Volver al inicio
             </Link>
           </div>
         </div>
+        </div>
+        {/* Crédito compacto al pie del panel derecho */}
+        <FooterCredit />
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
 import { ArrowUp, ArrowRight, MapPin, BookOpen, Mic, MessageCircle, Search, Shield } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { SiteFooter } from "@/components/ui/SiteFooter";
 
 /* ── Intersection observer scroll reveal ── */
 function useInView(threshold = 0.15) {
@@ -35,7 +36,7 @@ const PROGRAMS = [
 const CHIPS = ["Que pregrados tienen?", "Costos 2026-1", "Como inscribirse?", "Sedes disponibles"];
 
 const STEPS = [
-  { icon: MessageCircle, num: "01", title: "Escribe o habla", body: "Pregunta en espanol natural. Nexus entiende contexto, no solo palabras clave." },
+  { icon: MessageCircle, num: "01", title: "Escribe o habla", body: "Pregunta en espanol natural. Guaca entiende contexto, no solo palabras clave." },
   { icon: Search,        num: "02", title: "Busca en el catalogo", body: "Consulta el PEI, reglamentos y programas oficiales de UniPutumayo en tiempo real." },
   { icon: Shield,        num: "03", title: "Responde con fuentes", body: "Cada respuesta cita el documento de origen. Informacion verificada, no alucinada." },
 ];
@@ -58,7 +59,7 @@ export default function LandingPage() {
 
   const goToChat = (q?: string) => {
     const text = q ?? query.trim();
-    if (text) sessionStorage.setItem("nexus_initial_query", text);
+    if (text) sessionStorage.setItem("guaca_initial_query", text);
     router.push("/chat");
   };
 
@@ -83,20 +84,20 @@ export default function LandingPage() {
       }}>
         <div className="pill-nav">
           <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", flexShrink: 0 }}>
-            <Image src="/isotipo.webp" alt="Nexus" width={22} height={22} style={{ objectFit: "contain" }} priority />
-            <span style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em" }}>Nexus</span>
+            <Image src="/isotipo.webp" alt="Guaca" width={22} height={22} style={{ objectFit: "contain" }} priority />
+            <span style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em" }}>Guaca</span>
           </Link>
 
           <div className="hidden md:flex" style={{ gap: 18, alignItems: "center" }}>
             {[["Como funciona", "#how"], ["Programas", "#programs"]].map(([label, href]) => (
-              <a key={href} href={href} style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", textDecoration: "none" }} className="hover:text-white transition-colors">
+              <a key={href} href={href} style={{ fontSize: 13, color: "rgba(255,255,255,0.72)", textDecoration: "none" }} className="hover:text-white transition-colors">
                 {label}
               </a>
             ))}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Link href="/admin/login" style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.5)", textDecoration: "none", padding: "6px 12px", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 9999, transition: "color 0.15s, border-color 0.15s", whiteSpace: "nowrap" }}>
+            <Link href="/admin/login" style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,255,255,0.72)", textDecoration: "none", padding: "6px 12px", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 9999, transition: "color 0.15s, border-color 0.15s", whiteSpace: "nowrap" }}>
               Iniciar sesion
             </Link>
             <button onClick={() => goToChat()} className="btn-island" style={{ fontSize: 12, padding: "7px 5px 7px 14px" }}>
@@ -134,7 +135,7 @@ export default function LandingPage() {
                   del Putumayo.
                 </h1>
 
-                <p style={{ fontSize: "clamp(14px, 1.7vw, 17px)", color: "rgba(255,255,255,0.52)", lineHeight: 1.7, margin: "0 0 36px", maxWidth: 420 }}>
+                <p style={{ fontSize: "clamp(14px, 1.7vw, 17px)", color: "rgba(255,255,255,0.70)", lineHeight: 1.7, margin: "0 0 36px", maxWidth: 420 }}>
                   Respuestas verificadas del catalogo oficial. Sin filas, sin formularios. Disponible 24 horas.
                 </p>
 
@@ -168,9 +169,9 @@ export default function LandingPage() {
                 <div className="double-bezel" style={{ width: "100%", maxWidth: 340 }}>
                   <div className="double-bezel-inner">
                     <div className="chat-mockup-hd">
-                      <Image src="/isotipo.webp" alt="Nexus" width={22} height={22} style={{ objectFit: "contain", borderRadius: 5 }} />
+                      <Image src="/isotipo.webp" alt="Guaca" width={22} height={22} style={{ objectFit: "contain", borderRadius: 5 }} />
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", lineHeight: 1 }}>Nexus</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", lineHeight: 1 }}>Guaca</div>
                         <div style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>UniPutumayo</div>
                       </div>
                       <span style={{ fontSize: 9, color: "#4ade80", fontWeight: 600, display: "flex", alignItems: "center", gap: 3 }}>
@@ -188,7 +189,7 @@ export default function LandingPage() {
                       </div>
                     </div>
                     <div className="chat-mockup-ft">
-                      <div className="mock-input">Preguntale a Nexus...</div>
+                      <div className="mock-input">Preguntale a Guaca...</div>
                       <div className="mock-send"><ArrowUp size={12} color="#fff" /></div>
                     </div>
                   </div>
@@ -213,7 +214,7 @@ export default function LandingPage() {
                 <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(26px,4vw,38px)", fontWeight: 900, letterSpacing: "-0.04em", lineHeight: 1, color: s.accent ? "var(--brand-primary)" : "#fff" }}>
                   {s.val}
                 </div>
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 7, fontWeight: 500, letterSpacing: "0.04em" }}>{s.lbl}</div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.58)", marginTop: 7, fontWeight: 500, letterSpacing: "0.04em" }}>{s.lbl}</div>
               </div>
             ))}
           </div>
@@ -223,7 +224,7 @@ export default function LandingPage() {
         <section id="how" style={{ padding: "100px 0", background: "#071824" }}>
           <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 32px" }}>
             <div ref={steps.ref} className={`reveal${steps.inView ? " in-view" : ""}`} style={{ marginBottom: 52 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.3)", marginBottom: 14 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.52)", marginBottom: 14 }}>
                 Como funciona
               </div>
               <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(26px,4vw,44px)", fontWeight: 800, letterSpacing: "-0.03em", margin: 0, lineHeight: 1.05, color: "#fff", textWrap: "balance", maxWidth: 520 }}>
@@ -241,7 +242,7 @@ export default function LandingPage() {
                   <h3 style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, color: "#fff", margin: "0 0 10px", letterSpacing: "-0.01em" }}>
                     {title}
                   </h3>
-                  <p style={{ fontSize: 13.5, color: "rgba(255,255,255,0.5)", lineHeight: 1.7, margin: 0 }}>
+                  <p style={{ fontSize: 13.5, color: "rgba(255,255,255,0.68)", lineHeight: 1.7, margin: 0 }}>
                     {body}
                   </p>
                   <div className="step-connector" aria-hidden />
@@ -276,7 +277,7 @@ export default function LandingPage() {
               <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(24px,3.5vw,40px)", fontWeight: 800, letterSpacing: "-0.03em", color: "#fff", margin: "0 0 20px", lineHeight: 1.05, textWrap: "balance" }}>
                 Formacion de calidad en el corazon de la Amazonia.
               </h2>
-              <p style={{ fontSize: 14.5, color: "rgba(255,255,255,0.5)", lineHeight: 1.75, margin: "0 0 28px" }}>
+              <p style={{ fontSize: 14.5, color: "rgba(255,255,255,0.70)", lineHeight: 1.75, margin: "0 0 28px" }}>
                 Desde 1992, la Institucion Universitaria del Putumayo forma lideres y profesionales en ciencias, tecnologia e ingenieria con impacto regional.
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -287,7 +288,7 @@ export default function LandingPage() {
                 ].map((item) => (
                   <div key={item} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                     <div style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--brand-accent)", marginTop: 7, flexShrink: 0 }} />
-                    <span style={{ fontSize: 13.5, color: "rgba(255,255,255,0.55)", lineHeight: 1.5 }}>{item}</span>
+                    <span style={{ fontSize: 13.5, color: "rgba(255,255,255,0.72)", lineHeight: 1.5 }}>{item}</span>
                   </div>
                 ))}
               </div>
@@ -315,8 +316,8 @@ export default function LandingPage() {
                 <h3 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, margin: "0 0 12px", letterSpacing: "-0.015em", color: "#fff" }}>
                   Respuestas del catalogo, no del internet.
                 </h3>
-                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", lineHeight: 1.7, margin: "0 0 auto" }}>
-                  Nexus consulta el PEI, reglamentos y catalogo de programas de UniPutumayo. Cada respuesta cita el documento fuente.
+                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.68)", lineHeight: 1.7, margin: "0 0 auto" }}>
+                  Guaca consulta el PEI, reglamentos y catalogo de programas de UniPutumayo. Cada respuesta cita el documento fuente.
                 </p>
                 <div style={{ marginTop: 24, background: "rgba(0,0,0,0.25)", borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
                   <div className="mini-user">Cuales son los requisitos de admision?</div>
@@ -332,8 +333,8 @@ export default function LandingPage() {
                 <h4 style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, margin: "0 0 10px", letterSpacing: "-0.01em", color: "#fff" }}>
                   Voz y texto
                 </h4>
-                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", margin: 0, lineHeight: 1.65 }}>
-                  Habla directamente. Nexus escucha en espanol colombiano y responde al instante.
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.68)", margin: 0, lineHeight: 1.65 }}>
+                  Habla directamente. Guaca escucha en espanol colombiano y responde al instante.
                 </p>
               </div>
 
@@ -347,7 +348,7 @@ export default function LandingPage() {
                 <h4 style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, margin: "0 0 10px", letterSpacing: "-0.01em", color: "#fff" }}>
                   Historial privado
                 </h4>
-                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", margin: 0, lineHeight: 1.65 }}>
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.68)", margin: 0, lineHeight: 1.65 }}>
                   Tu cuenta, tus conversaciones. Disponible sin importar la hora ni el dia.
                 </p>
               </div>
@@ -368,7 +369,7 @@ export default function LandingPage() {
                 </h2>
               </div>
               <a href="https://itp.edu.co/ITP2022/" target="_blank" rel="noopener noreferrer"
-                style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", textDecoration: "none" }} className="hover:text-white transition-colors">
+                style={{ fontSize: 13, color: "rgba(255,255,255,0.62)", textDecoration: "none" }} className="hover:text-white transition-colors">
                 Ver todos los programas
               </a>
             </div>
@@ -420,20 +421,20 @@ export default function LandingPage() {
             <div ref={cta.ref} className={`reveal${cta.inView ? " in-view" : ""}`} style={{ maxWidth: 680 }}>
               <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(34px, 6vw, 68px)", fontWeight: 900, letterSpacing: "-0.04em", color: "#fff", margin: "0 0 20px", lineHeight: 0.95, textWrap: "balance" }}>
                 Empieza ahora.<br />
-                <span style={{ color: "rgba(255,255,255,0.25)" }}>Sin costo, sin registro.</span>
+                <span style={{ color: "rgba(255,255,255,0.48)" }}>Sin costo, sin registro.</span>
               </h2>
-              <p style={{ fontSize: 16, color: "rgba(255,255,255,0.45)", margin: "0 0 40px", lineHeight: 1.65 }}>
-                Nexus responde al instante con informacion oficial de UniPutumayo.
+              <p style={{ fontSize: 16, color: "rgba(255,255,255,0.70)", margin: "0 0 40px", lineHeight: 1.65 }}>
+                Guaca responde al instante con informacion oficial de UniPutumayo.
               </p>
 
               <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
                 <button onClick={() => goToChat()} className="btn-island" style={{ fontSize: 15, padding: "13px 7px 13px 22px" }}>
-                  Habla con Nexus
+                  Habla con Guaca
                   <span className="btn-island-icon" style={{ width: 38, height: 38, marginLeft: 12 }}>
                     <ArrowRight size={16} />
                   </span>
                 </button>
-                <Link href="/admin/login" style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", textDecoration: "none" }} className="hover:text-white/60 transition-colors">
+                <Link href="/admin/login" style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", textDecoration: "none" }} className="hover:text-white/80 transition-colors">
                   Crear una cuenta gratuita
                 </Link>
               </div>
@@ -441,48 +442,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ══════ FOOTER ══════ */}
-        <footer style={{ background: "#040E16", borderTop: "1px solid rgba(255,255,255,0.05)", padding: "48px 0 24px" }}>
-          <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 32, marginBottom: 36 }}>
-
-              <div style={{ maxWidth: 280 }}>
-                <Image src="/logo-azul.png" alt="UniPutumayo" width={120} height={34}
-                  style={{ filter: "brightness(0) invert(1)", objectFit: "contain" }} />
-                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginTop: 12, lineHeight: 1.7 }}>
-                  Barrio Luis Carlos Galan, Mocoa, Putumayo.
-                </p>
-              </div>
-
-              <div style={{ display: "flex", gap: 48, flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.25)", marginBottom: 14 }}>Nexus</div>
-                  {[{ label: "Habla con Nexus", href: "/chat" }, { label: "Iniciar sesion", href: "/login" }, { label: "Admin", href: "/admin/login" }].map((l) => (
-                    <Link key={l.href} href={l.href} style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,0.4)", textDecoration: "none", padding: "5px 0" }} className="hover:text-white transition-colors">
-                      {l.label}
-                    </Link>
-                  ))}
-                </div>
-                <div>
-                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.25)", marginBottom: 14 }}>Institucional</div>
-                  {["Pregrados", "Posgrados", "Bienestar"].map((l) => (
-                    <a key={l} href="https://itp.edu.co/ITP2022/" target="_blank" rel="noopener noreferrer" style={{ display: "block", fontSize: 13, color: "rgba(255,255,255,0.4)", textDecoration: "none", padding: "5px 0" }} className="hover:text-white transition-colors">
-                      {l}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: 20, flexWrap: "wrap", gap: 12 }}>
-              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.2)" }}>
-                2026 Institucion Universitaria del Putumayo. Vigilada Mineducacion.
-              </span>
-              <Image src="/logo-vigilada.png" alt="Vigilada Mineducacion" width={80} height={44}
-                style={{ objectFit: "contain", opacity: 0.5 }} />
-            </div>
-          </div>
-        </footer>
+        <SiteFooter />
       </main>
     </div>
   );

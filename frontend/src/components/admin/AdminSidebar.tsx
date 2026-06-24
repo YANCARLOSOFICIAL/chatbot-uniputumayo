@@ -73,11 +73,11 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
           background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <Image src="/isotipo.webp" alt="Nexus" width={26} height={26} style={{ objectFit: "contain" }} />
+          <Image src="/isotipo.webp" alt="Guaca" width={26} height={26} style={{ objectFit: "contain" }} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1 }}>
-            Nexus
+            Guaca
           </div>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, color: "var(--brand-accent)", marginTop: 4, letterSpacing: "0.12em", textTransform: "uppercase" }}>
             Admin
@@ -110,7 +110,7 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
                 display: "flex", alignItems: "center", gap: 9,
                 padding: "9px 12px", borderRadius: 8, marginBottom: 2,
                 textDecoration: "none", fontSize: 13, fontWeight: isActive ? 600 : 500,
-                color: isActive ? "#fff" : "rgba(255,255,255,0.5)",
+                color: isActive ? "#fff" : "rgba(255,255,255,0.70)",
                 background: isActive
                   ? "linear-gradient(90deg, rgba(27,110,148,0.22) 0%, rgba(27,110,148,0.06) 100%)"
                   : "transparent",
@@ -129,7 +129,7 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
                 if (!isActive) {
                   const el = e.currentTarget as HTMLAnchorElement;
                   el.style.background = "transparent";
-                  el.style.color = "rgba(255,255,255,0.5)";
+                  el.style.color = "rgba(255,255,255,0.70)";
                 }
               }}
             >
@@ -141,7 +141,7 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
                 transition: "all 0.12s",
               }}>
                 <item.icon size={14} strokeWidth={isActive ? 2 : 1.75}
-                  style={{ color: isActive ? "var(--brand-primary)" : "rgba(255,255,255,0.4)", transition: "color 0.12s" }} />
+                  style={{ color: isActive ? "var(--brand-primary)" : "rgba(255,255,255,0.55)", transition: "color 0.12s" }} />
               </div>
               <span style={{ flex: 1 }}>{item.label}</span>
               {isActive && (
@@ -156,13 +156,13 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
       <div style={{ padding: "6px 16px 10px", borderTop: "1px solid rgba(255,255,255,0.05)", position: "relative", zIndex: 1 }}>
         <Link href="/chat" style={{
           display: "flex", alignItems: "center", gap: 7, padding: "7px 10px",
-          borderRadius: 7, color: "rgba(255,255,255,0.3)", textDecoration: "none",
+          borderRadius: 7, color: "rgba(255,255,255,0.52)", textDecoration: "none",
           fontSize: 11, fontWeight: 500, fontFamily: "var(--font-mono)",
           letterSpacing: "0.04em", textTransform: "uppercase",
           transition: "color 0.12s",
         }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.6)"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.3)"; }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.80)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = "rgba(255,255,255,0.52)"; }}
         >
           <MessageCircle size={10} strokeWidth={1.5} /> Ver chat
         </Link>
@@ -192,7 +192,7 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
           }}>
             {user?.display_name ?? "Administrador"}
           </div>
-          <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 10, fontFamily: "var(--font-mono)", letterSpacing: "0.06em", marginTop: 2 }}>
+          <div style={{ color: "rgba(255,255,255,0.52)", fontSize: 10, fontFamily: "var(--font-mono)", letterSpacing: "0.06em", marginTop: 2 }}>
             Admin
           </div>
         </div>
@@ -203,7 +203,7 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
             width: 28, height: 28, borderRadius: 7, flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "center",
             background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)",
-            cursor: "pointer", color: "rgba(255,255,255,0.3)",
+            cursor: "pointer", color: "rgba(255,255,255,0.48)",
             transition: "all 0.12s",
           }}
           onMouseEnter={(e) => {
@@ -216,7 +216,7 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
             const el = e.currentTarget as HTMLButtonElement;
             el.style.background = "rgba(255,255,255,0.04)";
             el.style.borderColor = "rgba(255,255,255,0.06)";
-            el.style.color = "rgba(255,255,255,0.3)";
+            el.style.color = "rgba(255,255,255,0.48)";
           }}
         >
           <LogOut size={13} />

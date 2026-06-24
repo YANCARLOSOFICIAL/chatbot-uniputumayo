@@ -115,7 +115,7 @@ export function ChatInput({
               placeholder={
                 isListening ? "Escuchando..."
                 : isLoading  ? "Buscando en el catalogo..."
-                : "Preguntale a Nexus sobre programas, sedes, requisitos..."
+                : "Preguntale a Guaca sobre programas, sedes, requisitos..."
               }
               rows={1}
               disabled={isLoading || isListening}
@@ -171,7 +171,7 @@ export function ChatInput({
 
         {!isListening && !isLoading && (
           <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 8, opacity: 0.6, textAlign: "center" }}>
-            Nexus puede equivocarse. Verifica informacion critica con admisiones.
+            Guaca puede equivocarse. Verifica informacion critica con admisiones.
           </p>
         )}
       </div>

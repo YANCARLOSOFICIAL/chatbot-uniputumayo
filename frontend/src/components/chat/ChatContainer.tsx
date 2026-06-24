@@ -177,7 +177,7 @@ export function ChatContainer() {
               className="flex-shrink-0"
             />
             <span className="text-[14px] font-semibold text-[var(--text-1)] truncate" style={{ fontFamily: "var(--font-display)" }}>
-              Nexus
+              Guaca
             </span>
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)] flex-shrink-0" />
           </div>

@@ -21,9 +21,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nexus — Asistente IA · UniPutumayo",
+  title: "Guaca — Asistente IA · UniPutumayo",
   description:
-    "Nexus, el asistente virtual inteligente de la Institución Universitaria del Putumayo. Consulta programas académicos, requisitos de admisión y más.",
+    "Guaca, el asistente virtual inteligente de la Institución Universitaria del Putumayo. Consulta programas académicos, requisitos de admisión y más.",
   keywords: ["chatbot", "UniPutumayo", "asistente virtual", "educación", "Putumayo"],
 };
 

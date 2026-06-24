@@ -85,7 +85,7 @@ export default function AdminPage() {
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
       <AdminHeader
         title="Resumen"
-        subtitle="Panel de control · Nexus UniPutumayo"
+        subtitle="Panel de control · Guaca UniPutumayo"
         action={
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn btn-secondary btn-sm" onClick={() => load()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -131,8 +131,8 @@ export default function AdminPage() {
             <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(20px,2.2vw,28px)", fontWeight: 900, color: "#fff", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
               {greeting}, {user?.display_name ?? "Administrador"}
             </div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginTop: 6 }}>
-              Nexus · UniPutumayo — Sistema RAG institucional
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.68)", marginTop: 6 }}>
+              Guaca · UniPutumayo — Sistema RAG institucional
             </div>
           </div>
 
