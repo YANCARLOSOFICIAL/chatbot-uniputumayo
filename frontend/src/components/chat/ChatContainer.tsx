@@ -140,8 +140,13 @@ export function ChatContainer() {
                 >
                   <LogOut size={13} /> Salir
                 </button>
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[11px] font-bold uppercase flex-shrink-0" style={{ background: "var(--brand-accent)" }}>
-                  {user.display_name?.[0] ?? "U"}
+                <div style={{
+                  width: 30, height: 30, borderRadius: 9, flexShrink: 0,
+                  background: "linear-gradient(135deg, #1B6E94, #7BB52E)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 11, fontWeight: 800, color: "#fff", letterSpacing: "0.01em", textTransform: "uppercase",
+                }}>
+                  {(user.display_name?.split(" ").map((w) => w[0]).join("").slice(0, 2)) ?? "U"}
                 </div>
               </>
             )}

@@ -2,7 +2,6 @@
 
 import { useState, useRef, type FormEvent, type KeyboardEvent } from "react";
 import { ArrowUp, Mic, Square } from "lucide-react";
-import { Spinner } from "@/components/ui/Spinner";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -158,7 +157,15 @@ export function ChatInput({
               transition: "all 0.15s",
             }}
           >
-            {isLoading ? <Spinner size="sm" /> : <ArrowUp size={17} strokeWidth={2.5} />}
+            {isLoading ? (
+              <span style={{ display: "inline-flex", gap: 2, alignItems: "center" }}>
+                {[0, 0.1, 0.2].map((d) => (
+                  <span key={d} style={{ width: 3, height: 3, borderRadius: "50%", background: "rgba(255,255,255,0.7)", display: "inline-block", animation: `pulse-soft 1s ${d}s ease-in-out infinite` }} />
+                ))}
+              </span>
+            ) : (
+              <ArrowUp size={17} strokeWidth={2.5} />
+            )}
           </button>
         </div>
 

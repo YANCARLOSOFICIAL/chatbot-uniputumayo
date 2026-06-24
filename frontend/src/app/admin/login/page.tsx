@@ -7,8 +7,6 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, AlertCircle, Check } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { setToken, setUser } from "@/lib/auth";
-import { Spinner } from "@/components/ui/Spinner";
-
 type Tab = "login" | "register";
 
 function DarkInputField({
@@ -260,7 +258,13 @@ export default function LoginPage() {
                   transition: "background 0.15s",
                 }}
               >
-                {loading ? <><Spinner size="sm" /> Ingresando</> : "Iniciar sesion"}
+                {loading ? (
+                  <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
+                    {[0, 0.12, 0.24].map((d) => (
+                      <span key={d} style={{ width: 4, height: 4, borderRadius: "50%", background: "#fff", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
+                    ))}
+                  </span>
+                ) : "Iniciar sesion"}
               </button>
             </form>
           ) : (
@@ -299,7 +303,13 @@ export default function LoginPage() {
                   transition: "background 0.15s",
                 }}
               >
-                {loading ? <><Spinner size="sm" /> Registrando</> : "Crear cuenta"}
+                {loading ? (
+                  <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
+                    {[0, 0.12, 0.24].map((d) => (
+                      <span key={d} style={{ width: 4, height: 4, borderRadius: "50%", background: "#fff", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
+                    ))}
+                  </span>
+                ) : "Crear cuenta"}
               </button>
             </form>
           )}

@@ -254,12 +254,13 @@ export const ConversationSidebar = memo(function ConversationSidebar({
           {user ? (
             <>
               <div style={{
-                width: 26, height: 26, borderRadius: "50%",
-                background: "#1B6E94",
+                width: 28, height: 28, borderRadius: 8,
+                background: "linear-gradient(135deg, #1B6E94, #7BB52E)",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase", flexShrink: 0,
+                fontSize: 10, fontWeight: 800, color: "#fff", textTransform: "uppercase",
+                letterSpacing: "0.01em", flexShrink: 0,
               }}>
-                {user.display_name?.[0] ?? "U"}
+                {(user.display_name?.split(" ").map((w: string) => w[0]).join("").slice(0, 2)) ?? "U"}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.75)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

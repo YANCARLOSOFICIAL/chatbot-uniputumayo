@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import {
-  FileText, Settings, Users, Activity,
+  FileText, Settings, Users,
   CheckCircle2, XCircle, Clock, MessageSquare,
-  Upload, Download, BarChart3,
+  Upload, RefreshCw, BarChart3,
 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { getUser } from "@/lib/auth";
@@ -32,25 +32,6 @@ interface ConvItem {
 }
 
 
-function StatCard({ label, value, color, icon: Icon }: {
-  label: string; value: string | number; color?: string; icon: React.ElementType;
-}) {
-  return (
-    <div className="card" style={{ padding: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-        <div style={{
-          width: 40, height: 40, borderRadius: "var(--r)",
-          background: (color ?? "var(--brand-primary)") + "18",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <Icon size={20} style={{ color: color ?? "var(--brand-primary)" }} />
-        </div>
-      </div>
-      <div style={{ fontSize: 12, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".06em", fontWeight: 600, marginBottom: 6 }}>{label}</div>
-      <div style={{ fontFamily: "var(--font-display)", fontSize: 32, fontWeight: 700, color: color ?? "var(--text-1)", lineHeight: 1 }}>{value}</div>
-    </div>
-  );
-}
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "completed" || status === "indexed")
@@ -107,8 +88,8 @@ export default function AdminPage() {
         subtitle="Panel de control · Nexus UniPutumayo"
         action={
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-secondary btn-sm" onClick={() => load()}>
-              <Download size={13} /> Actualizar
+            <button className="btn btn-secondary btn-sm" onClick={() => load()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <RefreshCw size={12} /> Actualizar
             </button>
             <Link href="/admin/documents" className="btn btn-primary btn-sm" style={{ textDecoration: "none" }}>
               <Upload size={13} /> Subir documento
@@ -121,46 +102,76 @@ export default function AdminPage() {
 
         {/* Welcome banner */}
         <div style={{
-          borderRadius: "var(--r-lg)", overflow: "hidden",
-          background: "var(--brand-primary-darker)",
-          marginBottom: 24, padding: "24px 28px",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          position: "relative",
+          borderRadius: 16, overflow: "hidden",
+          background: "#0B3447",
+          marginBottom: 24, padding: "28px 32px",
+          display: "grid", gridTemplateColumns: "1fr auto",
+          alignItems: "center", gap: 20,
+          position: "relative", minHeight: 120,
         }}>
-          <div style={{ position: "absolute", inset: 0, backgroundImage: "url('/hero-fondo.png')", backgroundSize: "cover", backgroundPosition: "center", opacity: .12 }} />
+          {/* Background image */}
+          <div style={{ position: "absolute", inset: 0, backgroundImage: "url('/estudiantes.jpg')", backgroundSize: "cover", backgroundPosition: "center top", opacity: 0.09 }} />
+          {/* Gradient overlay left-to-right */}
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(11,52,71,0.95) 55%, rgba(11,52,71,0.6) 100%)" }} />
+
+          {/* Left: greeting */}
           <div style={{ position: "relative", zIndex: 1 }}>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,.6)", marginBottom: 2 }}>{greeting},</div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 700, color: "#fff" }}>
-              {user?.display_name ?? "Administrador"}
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 5, marginBottom: 10,
+              padding: "3px 10px", borderRadius: 9999,
+              border: "1px solid rgba(123,181,46,0.3)",
+              background: "rgba(123,181,46,0.08)",
+              fontSize: 10, fontWeight: 700, letterSpacing: "0.09em",
+              textTransform: "uppercase", color: "#7BB52E",
+              fontFamily: "var(--font-mono)",
+            }}>
+              <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#7BB52E", display: "inline-block", animation: "pulse-soft 2s ease-in-out infinite" }} />
+              Panel de control
             </div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,.8)", marginTop: 2 }}>
-              Panel de control de Nexus · UniPutumayo
+            <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(20px,2.2vw,28px)", fontWeight: 900, color: "#fff", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
+              {greeting}, {user?.display_name ?? "Administrador"}
+            </div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", marginTop: 6 }}>
+              Nexus · UniPutumayo — Sistema RAG institucional
             </div>
           </div>
+
+          {/* Right: system status pill */}
           <div style={{ position: "relative", zIndex: 1 }}>
             {loading ? (
-              <div style={{ width: 80, height: 28, borderRadius: 6, background: "rgba(255,255,255,.1)" }} />
+              <div style={{ width: 90, height: 30, borderRadius: 8, background: "rgba(255,255,255,0.08)", animation: "shimmer 1.5s ease-in-out infinite" }} />
             ) : health ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: "rgba(255,255,255,.1)", borderRadius: "var(--r-pill)", fontSize: 12, color: "#fff" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "rgba(255,255,255,0.07)", backdropFilter: "blur(8px)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)", fontSize: 13, color: "#fff", fontWeight: 500 }}>
                 {health.status === "healthy"
-                  ? <CheckCircle2 size={13} style={{ color: "#7BB52E" }} />
-                  : <XCircle size={13} style={{ color: "#E5484D" }} />}
+                  ? <CheckCircle2 size={14} style={{ color: "#7BB52E" }} />
+                  : <XCircle size={14} style={{ color: "#E5484D" }} />}
                 Sistema {health.status === "healthy" ? "activo" : "con problemas"}
               </div>
             ) : (
-              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: "rgba(255,255,255,.1)", borderRadius: "var(--r-pill)", fontSize: 12, color: "rgba(255,255,255,.6)" }}>
-                <XCircle size={13} /> Sin conexión
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "rgba(255,255,255,0.06)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", fontSize: 13, color: "rgba(255,255,255,0.5)" }}>
+                <XCircle size={14} /> Sin conexion
               </div>
             )}
           </div>
         </div>
 
-        {/* Stats grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
-          <StatCard label="Conversaciones" value={loading ? "…" : conversations.length > 0 ? `${conversations.length}+` : "0"} icon={MessageSquare} color="var(--brand-primary)" />
-          <StatCard label="Usuarios"       value={loading ? "…" : userCount ?? "—"}    icon={Users}         color="#8B5CF6" />
-          <StatCard label="Documentos RAG" value={loading ? "…" : documents.length > 0 ? `${documents.length}+` : "0"} icon={FileText} color="var(--warning)" />
-          <StatCard label="Sistema"        value={loading ? "…" : health?.status === "healthy" ? "OK" : "—"} icon={Activity}  color="var(--success)" />
+        {/* Editorial number strip — NOT 4 equal icon cards */}
+        <div style={{ display: "flex", borderRadius: 14, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface)", marginBottom: 24 }}>
+          {[
+            { label: "Conversaciones", value: loading ? "..." : conversations.length > 0 ? `${conversations.length}+` : "0", color: "var(--brand-primary)" },
+            { label: "Usuarios",       value: loading ? "..." : userCount ?? "—",                                            color: "#8B5CF6" },
+            { label: "Documentos RAG", value: loading ? "..." : documents.length > 0 ? `${documents.length}+` : "0",        color: "var(--warning)" },
+            { label: "Sistema",        value: loading ? "..." : health?.status === "healthy" ? "OK" : "—",                   color: health?.status === "healthy" ? "var(--success)" : "var(--error)" },
+          ].map((s, i, arr) => (
+            <div key={s.label} style={{ flex: 1, padding: "22px 20px", borderRight: i < arr.length - 1 ? "1px solid var(--border)" : "none", textAlign: "center" }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(28px,3vw,40px)", fontWeight: 900, color: s.color, lineHeight: 1, letterSpacing: "-0.04em" }}>
+                {s.value}
+              </div>
+              <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 8, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                {s.label}
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* Two-col grid */}
@@ -239,12 +250,13 @@ export default function AdminPage() {
                     display: "flex", alignItems: "center", gap: 12,
                   }}>
                     <div style={{
-                      width: 34, height: 34, borderRadius: "50%",
-                      background: "var(--surface-2)", color: "var(--text-1)",
+                      width: 32, height: 32, borderRadius: 9,
+                      background: "var(--brand-dim)",
+                      border: "1px solid var(--brand-light)",
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 11, fontWeight: 700, flexShrink: 0,
+                      flexShrink: 0,
                     }}>
-                      <MessageSquare size={14} style={{ color: "var(--brand-primary)" }} />
+                      <MessageSquare size={13} style={{ color: "var(--brand-primary)" }} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -262,30 +274,41 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Service status */}
-        {health && (
+        {/* Service status — horizontal editorial bar */}
+        {health && Object.keys(health.services).length > 0 && (
           <div style={{ marginTop: 24 }}>
-            <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, margin: "0 0 12px", color: "var(--text-1)" }}>
-              Estado del sistema
-            </h3>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {Object.entries(health.services).map(([name, svc]) => (
-                <div key={name} style={{
-                  display: "flex", alignItems: "center", gap: 8, padding: "8px 14px",
-                  background: "var(--surface)", border: "1px solid var(--border)",
-                  borderRadius: "var(--r)", fontSize: 13,
-                }}>
-                  {svc.status === "healthy"
-                    ? <CheckCircle2 size={13} style={{ color: "var(--success)" }} />
-                    : <XCircle size={13} style={{ color: "var(--danger)" }} />}
-                  <span style={{ fontWeight: 500, color: "var(--text-1)", textTransform: "capitalize" }}>{name}</span>
-                  {svc.latency_ms != null && (
-                    <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--text-3)" }}>
-                      <Clock size={10} /> {svc.latency_ms}ms
-                    </span>
-                  )}
-                </div>
-              ))}
+            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "11px 18px", borderBottom: "1px solid var(--border)" }}>
+                <BarChart3 size={13} style={{ color: "var(--brand-primary)" }} />
+                <span style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>Estado del sistema</span>
+                <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 10, color: health.status === "healthy" ? "var(--success)" : "var(--error)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                  {health.status === "healthy" ? "Todos los servicios activos" : "Degradado"}
+                </span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap" }}>
+                {Object.entries(health.services).map(([name, svc], i, arr) => {
+                  const ok = svc.status === "healthy";
+                  return (
+                    <div key={name} style={{
+                      display: "flex", alignItems: "center", gap: 9,
+                      padding: "12px 18px", flex: "0 0 auto",
+                      borderRight: i < arr.length - 1 ? "1px solid var(--border)" : "none",
+                      transition: "background 0.1s",
+                    }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: ok ? "var(--success)" : "var(--error)", boxShadow: ok ? "0 0 5px var(--success)" : "0 0 5px var(--error)", flexShrink: 0 }} />
+                      <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text-1)", textTransform: "capitalize" }}>{name}</span>
+                      {svc.latency_ms != null && (
+                        <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
+                          <Clock size={9} /> {svc.latency_ms}ms
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
