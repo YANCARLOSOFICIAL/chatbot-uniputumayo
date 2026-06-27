@@ -1,3 +1,4 @@
+import asyncio
 import json
 from uuid import UUID
 
@@ -123,21 +124,58 @@ async def send_message_stream(
     conversation_id: UUID,
     data: MessageCreate,
 ):
-    """SSE streaming endpoint. Manages its own DB session to avoid connection leaks."""
+    """SSE streaming endpoint with periodic heartbeats for QUIC/Cloudflare.
+
+    Architecture note: _pump runs in a separate asyncio Task and creates its
+    OWN AsyncSession. This is required because SQLAlchemy's async sessions use
+    greenlets internally — sharing a session across asyncio tasks causes
+    greenlet context errors. The main generate() coroutine only reads from the
+    queue and yields heartbeat SSE comments when no event arrives within 15 s.
+    """
 
     async def generate():
-        # Own session lifecycle inside the generator ensures proper cleanup
-        async with create_session() as db:
+        q: asyncio.Queue[str | None] = asyncio.Queue()
+
+        async def _pump() -> None:
+            # Creates its own session — never reuse a session across tasks.
+            async with create_session() as db:
+                try:
+                    service = ChatService(db)
+                    conversation = await service.get_conversation(conversation_id)
+                    if not conversation:
+                        await q.put(
+                            f"data: {json.dumps({'type': 'error', 'message': 'Conversation not found'})}\n\n"
+                        )
+                        return
+                    async for chunk in service.process_message_stream(conversation_id, data):
+                        await q.put(chunk)
+                except Exception as e:
+                    await q.put(
+                        f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+                    )
+            await q.put(None)  # sentinel — session already closed at this point
+
+        pump_task = asyncio.create_task(_pump())
+
+        try:
+            while True:
+                try:
+                    item = await asyncio.wait_for(q.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    # No event for 15 s: send SSE comment to keep Cloudflare/QUIC alive.
+                    # SSE comment lines (': ...') are valid SSE but browsers ignore them.
+                    yield ": ping\n\n"
+                    continue
+
+                if item is None:
+                    break
+                yield item
+        finally:
+            pump_task.cancel()
             try:
-                service = ChatService(db)
-                conversation = await service.get_conversation(conversation_id)
-                if not conversation:
-                    yield f"data: {json.dumps({'type': 'error', 'message': 'Conversation not found'})}\n\n"
-                    return
-                async for chunk in service.process_message_stream(conversation_id, data):
-                    yield chunk
-            except Exception as e:
-                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+                await pump_task
+            except asyncio.CancelledError:
+                pass
 
     return StreamingResponse(
         generate(),
