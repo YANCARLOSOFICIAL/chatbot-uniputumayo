@@ -322,6 +322,10 @@ class ChatService:
         await self.db.flush()
 
         try:
+            # SSE heartbeat comments (lines starting with ':') are valid SSE but
+            # browsers/parsers ignore them. We yield them before each slow phase
+            # so Cloudflare/nginx don't close the connection thinking it's idle.
+            yield ": thinking\n\n"
             rag_ctx = await self._run_rag(data.content)
             history = await self._get_history(conversation_id, user_message.id)
             messages = self._build_messages(rag_ctx, history, data.content)
@@ -334,6 +338,9 @@ class ChatService:
             model = data.llm_model or runtime_config.resolve_model(provider_name)
             temperature = detect_temperature(data.content, default=runtime_config.default_temperature)
             messages_dicts = [{"role": m.role, "content": m.content} for m in messages]
+
+            # Second heartbeat: Ollama on CPU can take 10-20 s before the first token
+            yield ": generating\n\n"
 
             full_content = ""
             async for token in provider.generate_stream(

@@ -1,6 +1,4 @@
-import asyncio
 import json
-from typing import AsyncIterator
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -24,52 +22,6 @@ from app.auth import get_current_user
 from app.models.user import User
 
 router = APIRouter()
-
-
-async def _heartbeat_wrap(
-    inner: AsyncIterator[str],
-    interval: float = 20.0,
-) -> AsyncIterator[str]:
-    """Yield ': ping' SSE comments every `interval` seconds while waiting for
-    the next event from `inner`.
-
-    Keeps Cloudflare and nginx from closing idle SSE connections — the root
-    cause of ERR_QUIC_PROTOCOL_ERROR when Ollama (CPU) takes >20 s to emit
-    the first token or complete RAG search before streaming starts.
-    SSE comment lines (starting with ':') are valid events that browsers ignore.
-    """
-    q: asyncio.Queue[object] = asyncio.Queue()
-    _STOP = object()
-
-    async def _pump() -> None:
-        try:
-            async for chunk in inner:
-                await q.put(chunk)
-        except Exception as exc:
-            await q.put(exc)
-        finally:
-            await q.put(_STOP)
-
-    task = asyncio.create_task(_pump())
-    try:
-        while True:
-            try:
-                item = await asyncio.wait_for(q.get(), timeout=interval)
-            except asyncio.TimeoutError:
-                yield ": ping\n\n"
-                continue
-
-            if item is _STOP:
-                break
-            if isinstance(item, Exception):
-                raise item
-            yield item  # type: ignore[misc]
-    finally:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
 
 
 @router.post("/conversations", response_model=ConversationResponse)
@@ -182,13 +134,7 @@ async def send_message_stream(
                 if not conversation:
                     yield f"data: {json.dumps({'type': 'error', 'message': 'Conversation not found'})}\n\n"
                     return
-                # _heartbeat_wrap sends ': ping' SSE comments every 20 s while
-                # waiting for the next event, keeping Cloudflare/QUIC from
-                # dropping the connection during slow Ollama (CPU) responses.
-                async for chunk in _heartbeat_wrap(
-                    service.process_message_stream(conversation_id, data),
-                    interval=20.0,
-                ):
+                async for chunk in service.process_message_stream(conversation_id, data):
                     yield chunk
             except Exception as e:
                 yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
