@@ -10,6 +10,8 @@ from app.database import get_db
 from app.config import settings
 from app.schemas.common import HealthResponse, HealthServiceStatus
 from app.utils.cache import rag_cache, embedding_cache
+from app.auth import require_admin
+from app.models.user import User
 
 router = APIRouter()
 
@@ -52,8 +54,11 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     )
 
 
+_ALLOWED_TABLES = frozenset({"documents", "document_chunks", "conversations", "messages"})
+
+
 @router.get("/metrics")
-async def metrics(db: AsyncSession = Depends(get_db)):
+async def metrics(db: AsyncSession = Depends(get_db), admin: User = Depends(require_admin)):
     """Observable pipeline metrics: cache stats, vector index info, DB counts."""
     # Cache stats
     rag_entries = rag_cache.size()   # -1 means Redis backend (count unknown without SCAN)
@@ -62,8 +67,8 @@ async def metrics(db: AsyncSession = Depends(get_db)):
     # DB counts
     counts: dict = {}
     try:
-        for table in ("documents", "document_chunks", "conversations", "messages"):
-            row = await db.execute(text(f"SELECT COUNT(*) FROM {table}"))
+        for table in _ALLOWED_TABLES:
+            row = await db.execute(text("SELECT COUNT(*) FROM " + table))
             counts[table] = row.scalar()
     except Exception:
         pass

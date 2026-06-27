@@ -1,3 +1,6 @@
+import os
+import secrets
+
 from pydantic_settings import BaseSettings
 from typing import Optional
 
@@ -69,13 +72,37 @@ class Settings(BaseSettings):
     redis_url: str = ""
 
     # Auth / JWT
-    jwt_secret: str = "change-me-in-production"
+    jwt_secret: str = ""
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 480
     admin_email: str = "admin@iup.edu.co"
-    admin_password: str = "admin123"
+    admin_password: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 
 settings = Settings()
+
+# Generate a random JWT secret when none is configured (dev convenience).
+# In production JWT_SECRET MUST be set via environment variable so tokens
+# survive restarts.
+_INSECURE_SECRETS = {"", "change-me-in-production", "super-secret-change-me"}
+if settings.jwt_secret in _INSECURE_SECRETS:
+    _generated = secrets.token_urlsafe(64)
+    settings.jwt_secret = _generated
+    import logging as _logging
+    _logging.getLogger(__name__).warning(
+        "JWT_SECRET not configured — using an auto-generated ephemeral secret. "
+        "Set JWT_SECRET in your environment for production."
+    )
+
+_INSECURE_PASSWORDS = {"", "admin123", "CAMBIAR_PASSWORD_ADMIN"}
+if settings.admin_password in _INSECURE_PASSWORDS:
+    _generated_pw = secrets.token_urlsafe(16)
+    settings.admin_password = _generated_pw
+    import logging as _logging2
+    _logging2.getLogger(__name__).warning(
+        "ADMIN_PASSWORD not configured — using an auto-generated password: %s  "
+        "Set ADMIN_PASSWORD in your environment for production.",
+        _generated_pw,
+    )

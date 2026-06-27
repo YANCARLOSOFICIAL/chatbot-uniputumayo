@@ -3,22 +3,38 @@ import logging
 import os
 import tempfile
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from app.utils.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
+_MAX_TTS_CHARS = 2000
+
+
 class TTSRequest(BaseModel):
     text: str
     voice: str = "es-CO-SalomeNeural"
 
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("El texto no puede estar vacío")
+        if len(v) > _MAX_TTS_CHARS:
+            raise ValueError(f"El texto no puede superar {_MAX_TTS_CHARS} caracteres")
+        return v
+
 
 @router.post("/tts", response_class=Response)
-async def text_to_speech(body: TTSRequest):
+@limiter.limit("30/minute")
+async def text_to_speech(request: Request, body: TTSRequest):
     """Generate speech audio from text using Microsoft Edge TTS neural voices."""
     try:
         import edge_tts
@@ -46,8 +62,8 @@ async def text_to_speech(body: TTSRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error en TTS: {e}")
-        raise HTTPException(status_code=500, detail=f"Error generando audio: {str(e)}")
+        logger.error("Error en TTS: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Error generando audio")
 
 
 def _get_whisper_model():
@@ -66,8 +82,12 @@ def _get_whisper_model():
     return _get_whisper_model._model
 
 
+_MAX_AUDIO_BYTES = 25 * 1024 * 1024  # 25 MB
+
+
 @router.post("/stt")
-async def speech_to_text(audio: UploadFile = File(...)):
+@limiter.limit("20/minute")
+async def speech_to_text(request: Request, audio: UploadFile = File(...)):
     """Transcribe audio to text using Whisper (cross-browser STT fallback)."""
     model = _get_whisper_model()
     if model is None:
@@ -80,6 +100,8 @@ async def speech_to_text(audio: UploadFile = File(...)):
         audio_bytes = await audio.read()
         if not audio_bytes:
             raise HTTPException(status_code=400, detail="Audio vacío")
+        if len(audio_bytes) > _MAX_AUDIO_BYTES:
+            raise HTTPException(status_code=413, detail="Archivo de audio demasiado grande (máx 25 MB)")
 
         content_type = audio.content_type or ""
         suffix = ".webm" if "webm" in content_type else ".ogg"
@@ -104,5 +126,5 @@ async def speech_to_text(audio: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error en STT: {e}")
-        raise HTTPException(status_code=500, detail=f"Error transcribiendo audio: {str(e)}")
+        logger.error("Error en STT: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Error transcribiendo audio")

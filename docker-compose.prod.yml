@@ -98,14 +98,14 @@ services:
       RAG_CANDIDATES_MULTIPLIER: "3"
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_DIMENSIONS: "768"
-      CORS_ORIGINS: "*"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
       MAX_UPLOAD_SIZE_MB: "50"
       UPLOAD_DIR: /app/uploads
       REDIS_URL: redis://redis:6379/0
       LOG_LEVEL: info
-      JWT_SECRET: ${JWT_SECRET:-super-secret-change-me}
+      JWT_SECRET: ${JWT_SECRET:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@iup.edu.co}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     ports:
       - "8001:8000"
     volumes:

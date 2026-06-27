@@ -189,11 +189,16 @@ async def lifespan(app: FastAPI):
     logger.info("Cerrando Nexus UniPutumayo API...")
 
 
+_enable_docs = settings.log_level.lower() != "warning"
+
 app = FastAPI(
     title="Nexus UniPutumayo API",
     description="API del asistente virtual Nexus de la Institución Universitaria del Putumayo",
     version="1.0.0",
     lifespan=lifespan,
+    docs_url="/docs" if _enable_docs else None,
+    redoc_url="/redoc" if _enable_docs else None,
+    openapi_url="/openapi.json" if _enable_docs else None,
 )
 
 # Rate limiter
