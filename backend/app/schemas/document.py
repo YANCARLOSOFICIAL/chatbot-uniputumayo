@@ -4,7 +4,7 @@ from uuid import UUID
 
 
 class DocumentUploadResponse(BaseModel):
-    document_id: UUID
+    document_id: UUID | None = None
     status: str
     message: str
 

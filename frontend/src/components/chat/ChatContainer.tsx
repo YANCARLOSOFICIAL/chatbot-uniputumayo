@@ -39,6 +39,8 @@ export function ChatContainer() {
   const { speak, isSpeaking } = useSpeechSynthesis();
 
   const handleSendRef = useRef<((content: string, inputType: "text" | "voice") => Promise<void>) | null>(null);
+  // Prevents double-tap / rapid calls from creating two conversations simultaneously
+  const creatingConvRef = useRef(false);
 
   useEffect(() => {
     if (error) {
@@ -59,7 +61,13 @@ export function ChatContainer() {
     async (content: string, inputType: "text" | "voice" = "text") => {
       let convId = activeConversationId;
       if (!convId) {
-        convId = await createConversation();
+        if (creatingConvRef.current) return;
+        creatingConvRef.current = true;
+        try {
+          convId = await createConversation();
+        } finally {
+          creatingConvRef.current = false;
+        }
         if (!convId) return;
       }
       const response = await sendMessage(content, inputType, convId);
@@ -204,7 +212,7 @@ export function ChatContainer() {
                 </>
               ) : (
                 <Link
-                  href="/admin/login"
+                  href="/login"
                   className="flex items-center gap-1.5 text-[12px] text-[var(--text-2)] hover:text-[var(--brand-primary)] transition-colors px-2.5 py-1.5 rounded-md border border-[var(--border)] hover:border-[var(--brand-primary)] font-medium"
                   style={{ whiteSpace: "nowrap" }}
                 >
@@ -235,7 +243,7 @@ export function ChatContainer() {
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderRadius: 10, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", fontSize: 12 }}>
               <span style={{ color: "var(--text-2)", flex: 1 }}>
                 Esta conversacion no se guardara.{" "}
-                <Link href="/admin/login" style={{ color: "var(--brand-primary)", fontWeight: 600, textDecoration: "none" }}>
+                <Link href="/login" style={{ color: "var(--brand-primary)", fontWeight: 600, textDecoration: "none" }}>
                   Inicia sesion
                 </Link>{" "}
                 para guardar tu historial.

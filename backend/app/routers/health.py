@@ -56,7 +56,7 @@ async def health_check(db: AsyncSession = Depends(get_db)):
 async def metrics(db: AsyncSession = Depends(get_db)):
     """Observable pipeline metrics: cache stats, vector index info, DB counts."""
     # Cache stats
-    rag_entries = len(rag_cache._store)
+    rag_entries = rag_cache.size()   # -1 means Redis backend (count unknown without SCAN)
     emb_entries = len(embedding_cache._store)
 
     # DB counts

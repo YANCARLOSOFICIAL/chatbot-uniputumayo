@@ -1,11 +1,14 @@
 import json
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy import delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, async_session as create_session
+from app.models.conversation import Conversation
+from app.utils.rate_limit import limiter
 from app.schemas.chat import (
     ConversationCreate,
     ConversationUpdate,
@@ -86,13 +89,15 @@ async def guest_close_conversation(
     conversation_id: UUID, db: AsyncSession = Depends(get_db)
 ):
     """Called via navigator.sendBeacon when a guest closes the tab.
-    Only deletes conversations with user_id IS NULL (guest-owned).
+    Hard-deletes the conversation only when user_id IS NULL.
     Always returns 200 — sendBeacon ignores the response body anyway.
     """
-    service = ChatService(db)
-    conv = await service.get_conversation(conversation_id)
-    if conv is not None and conv.user_id is None:
-        await service.delete_conversation(conversation_id)
+    await db.execute(
+        sql_delete(Conversation)
+        .where(Conversation.id == conversation_id)
+        .where(Conversation.user_id.is_(None))
+    )
+    await db.commit()
     return {"success": True}
 
 
@@ -112,7 +117,9 @@ async def send_message(
 
 
 @router.post("/conversations/{conversation_id}/messages/stream")
+@limiter.limit("30/minute")
 async def send_message_stream(
+    request: Request,
     conversation_id: UUID,
     data: MessageCreate,
 ):

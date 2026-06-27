@@ -78,8 +78,8 @@ jobs:
       - name: Cleanup old containers
         run: |
           docker compose -f docker-compose.prod.yml down --remove-orphans --volumes=false || true
-          docker rm -f chatbotuniputumayo-backend-1 chatbotuniputumayo-frontend-1 chatbotuniputumayo-postgres-1 chatbotuniputumayo-nginx-1 chatbotuniputumayo-ollama-1 2>/dev/null || true
-          docker rm -f iup-chatbot-backend iup-chatbot-frontend iup-chatbot-db iup-chatbot-nginx iup-chatbot-ollama 2>/dev/null || true
+          docker rm -f chatbotuniputumayo-backend-1 chatbotuniputumayo-frontend-1 chatbotuniputumayo-postgres-1 chatbotuniputumayo-nginx-1 chatbotuniputumayo-ollama-1 chatbotuniputumayo-redis-1 2>/dev/null || true
+          docker rm -f iup-chatbot-backend iup-chatbot-frontend iup-chatbot-db iup-chatbot-nginx iup-chatbot-ollama iup-chatbot-redis 2>/dev/null || true
           docker container prune -f || true
 
       - name: Deploy with docker compose
@@ -111,7 +111,8 @@ jobs:
           pull_if_missing() {
             local model="$1"
             local label="$2"
-            if docker exec iup-chatbot-ollama ollama list | grep -q "^${model}"; then
+            # Use fixed-string match (not anchored ^) — "ollama list" output includes tag suffix
+            if docker exec iup-chatbot-ollama ollama list | grep -qF "${model}"; then
               echo "✓ $label ya existe: $model"
             else
               echo "⬇ Descargando $label: $model"
@@ -131,3 +132,21 @@ jobs:
         run: |
           echo "Estado de los contenedores:"
           docker ps --filter "name=iup-chatbot" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+      - name: Health check — backend API
+        run: |
+          echo "Verificando health del backend..."
+          for i in $(seq 1 12); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8001/ 2>/dev/null || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "✓ Backend responde (HTTP $STATUS)"
+              break
+            fi
+            echo "Intento $i/12... backend devuelve $STATUS, esperando 5s"
+            sleep 5
+          done
+          if [ "$STATUS" != "200" ]; then
+            echo "❌ Backend no respondió después de 60s"
+            docker logs iup-chatbot-backend --tail 50
+            exit 1
+          fi

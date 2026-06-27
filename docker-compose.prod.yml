@@ -26,6 +26,25 @@ services:
     networks:
       - chatbot-net
 
+  # ── Redis (RAG cache persistente) ──
+  redis:
+    image: redis:7-alpine
+    container_name: iup-chatbot-redis
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no --maxmemory 256mb --maxmemory-policy allkeys-lru
+    # No port mapping in prod — only accessible within the docker network
+    networks:
+      - chatbot-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
   # ── Ollama (LLM local) ──
   ollama:
     image: ollama/ollama:latest
@@ -82,6 +101,7 @@ services:
       CORS_ORIGINS: "*"
       MAX_UPLOAD_SIZE_MB: "50"
       UPLOAD_DIR: /app/uploads
+      REDIS_URL: redis://redis:6379/0
       LOG_LEVEL: info
       JWT_SECRET: ${JWT_SECRET:-super-secret-change-me}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@iup.edu.co}
@@ -94,6 +114,8 @@ services:
       postgres:
         condition: service_healthy
       ollama:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/ || exit 1"]

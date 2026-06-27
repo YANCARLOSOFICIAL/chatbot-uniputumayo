@@ -171,7 +171,7 @@ class RAGService:
             filters=request.filters.model_dump() if request.filters else None,
             hyde=settings.rag_hyde_enabled,
         )
-        cached = rag_cache.get(cache_key)
+        cached = await rag_cache.get(cache_key)
         if cached is not None:
             logger.debug("RAG cache hit: %.60s…", request.query)
             return cached
@@ -279,7 +279,7 @@ class RAGService:
         )
 
         if final_results:
-            rag_cache.set(cache_key, response)
+            await rag_cache.set(cache_key, response)
 
         # Write retrieval log — enables analytics on query patterns and RAG quality over time
         try:

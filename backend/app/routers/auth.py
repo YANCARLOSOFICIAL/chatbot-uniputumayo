@@ -1,7 +1,7 @@
 import re
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +15,7 @@ from app.auth import (
     require_auth,
     require_admin,
 )
+from app.utils.rate_limit import limiter
 
 router = APIRouter()
 
@@ -73,7 +74,8 @@ class RoleUpdate(BaseModel):
 
 
 @router.post("/register", response_model=AuthResponse)
-async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/hour")
+async def register(request: Request, data: RegisterRequest, db: AsyncSession = Depends(get_db)):
     # Check if email already exists
     result = await db.execute(select(User).where(User.email == data.email))
     if result.scalar_one_or_none():
@@ -107,7 +109,8 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("10/5minutes")
+async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
 

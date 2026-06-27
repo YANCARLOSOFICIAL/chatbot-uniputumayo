@@ -1,19 +1,26 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.config import settings
 from app.schemas.document import DocumentUploadResponse, DocumentResponse, ChunkResponse
 from app.services.document_service import DocumentService
 from app.auth import require_admin
 from app.models.user import User
+from app.utils.file_parsers import SUPPORTED_EXTENSIONS, normalize_extension
+from app.utils.rate_limit import limiter
 
 router = APIRouter()
 
+_MAX_BYTES = settings.max_upload_size_mb * 1024 * 1024
+
 
 @router.post("/upload", response_model=DocumentUploadResponse)
+@limiter.limit("20/hour")
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     title: str = Form(...),
     faculty: str | None = Form(None),
@@ -22,6 +29,18 @@ async def upload_document(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
+    # Validate file extension before touching the payload
+    raw_name = file.filename or ""
+    ext = raw_name.rsplit(".", 1)[-1].lower() if "." in raw_name else ""
+    if not normalize_extension(ext):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Formato '.{ext}' no soportado. "
+                f"Formatos válidos: {', '.join(e.upper() for e in SUPPORTED_EXTENSIONS)}"
+            ),
+        )
+
     service = DocumentService(db)
     return await service.upload_and_process(
         file=file,
@@ -48,7 +67,11 @@ async def list_documents(
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
-async def get_document(document_id: UUID, db: AsyncSession = Depends(get_db), admin: User = Depends(require_admin)):
+async def get_document(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
     service = DocumentService(db)
     doc = await service.get_document(document_id)
     if not doc:
@@ -57,7 +80,11 @@ async def get_document(document_id: UUID, db: AsyncSession = Depends(get_db), ad
 
 
 @router.delete("/{document_id}")
-async def delete_document(document_id: UUID, db: AsyncSession = Depends(get_db), admin: User = Depends(require_admin)):
+async def delete_document(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
     service = DocumentService(db)
     success = await service.delete_document(document_id)
     if not success:
@@ -78,6 +105,10 @@ async def get_chunks(
 
 
 @router.post("/{document_id}/reindex", response_model=DocumentUploadResponse)
-async def reindex_document(document_id: UUID, db: AsyncSession = Depends(get_db), admin: User = Depends(require_admin)):
+async def reindex_document(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
     service = DocumentService(db)
     return await service.reindex(document_id)

@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.schemas.document import DocumentUploadResponse
-from app.utils.file_parsers import extract_text
+from app.utils.file_parsers import extract_text, normalize_extension
 from app.utils.text_processing import clean_text
 from app.utils.chunking import chunk_text
 from app.utils.cache import rag_cache
@@ -134,24 +134,31 @@ class DocumentService:
             return ""
 
     async def _build_enriched_text(self, file_path: str, file_type: str) -> str:
-        """Extract, clean, and optionally enrich document text with a structured summary."""
+        """Extract, clean, and optionally enrich document text with a structured summary.
+
+        Curriculum enrichment (LLM call) is skipped for tabular formats (XLSX, XLS, CSV,
+        PPTX, TXT) since they are unlikely to be academic pensum documents and the prompt
+        is designed for paragraphic/grid PDF/DOCX content.
+        """
         raw_text = extract_text(file_path, file_type)
         cleaned_text = clean_text(raw_text)
 
-        structured_summary = ""
-        if file_type == "pdf":
-            structured_summary = await self._extract_pdf_with_vision(file_path)
-        if not structured_summary:
-            structured_summary = await self._enrich_curriculum_text(cleaned_text)
+        if file_type in ("pdf", "docx"):
+            structured_summary = ""
+            if file_type == "pdf":
+                structured_summary = await self._extract_pdf_with_vision(file_path)
+            if not structured_summary:
+                structured_summary = await self._enrich_curriculum_text(cleaned_text)
 
-        if structured_summary:
-            logger.info("Prepending structured curriculum summary to document text")
-            cleaned_text = (
-                "=== RESUMEN DE MATERIAS POR SEMESTRE ===\n"
-                + structured_summary
-                + "\n=== FIN DEL RESUMEN ===\n\n"
-                + cleaned_text
-            )
+            if structured_summary:
+                logger.info("Prepending structured curriculum summary to document text")
+                cleaned_text = (
+                    "=== RESUMEN DE MATERIAS POR SEMESTRE ===\n"
+                    + structured_summary
+                    + "\n=== FIN DEL RESUMEN ===\n\n"
+                    + cleaned_text
+                )
+
         return cleaned_text
 
     async def _embed_chunks(self, chunks: list[dict]) -> list:
@@ -178,7 +185,21 @@ class DocumentService:
         document_type: str | None = None,
     ) -> DocumentUploadResponse:
         content_bytes = await file.read()
-        file_type = file.filename.rsplit(".", 1)[-1].lower() if file.filename else "txt"
+
+        # Enforce file size limit (MAX_UPLOAD_SIZE_MB from config)
+        max_bytes = settings.max_upload_size_mb * 1024 * 1024
+        if len(content_bytes) > max_bytes:
+            size_mb = len(content_bytes) / (1024 * 1024)
+            return DocumentUploadResponse(
+                status="failed",
+                message=(
+                    f"Archivo demasiado grande: {size_mb:.1f} MB. "
+                    f"Máximo permitido: {settings.max_upload_size_mb} MB."
+                ),
+            )
+
+        raw_ext = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else ""
+        file_type = normalize_extension(raw_ext) or "txt"
         content_hash = hashlib.sha256(content_bytes).hexdigest()
 
         os.makedirs(settings.upload_dir, exist_ok=True)
@@ -250,7 +271,7 @@ class DocumentService:
             # Store actual saved path for reindex
             document.file_name = safe_name
             await self.db.commit()
-            rag_cache.invalidate_all()
+            await rag_cache.invalidate_all()
 
             return DocumentUploadResponse(
                 document_id=document.id,
@@ -357,7 +378,7 @@ class DocumentService:
             doc.ingestion_status = "completed"
             doc.total_chunks = len(chunks)
             await self.db.commit()
-            rag_cache.invalidate_all()
+            await rag_cache.invalidate_all()
 
             return DocumentUploadResponse(
                 document_id=doc.id,

@@ -6,11 +6,14 @@ from datetime import datetime, timezone, timedelta
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 from sqlalchemy import select, delete as sql_delete
 
 from app.config import settings
 from app.routers import health, chat, rag, llm, documents, config, auth, audio, analytics
 from app.middleware.error_handler import global_exception_handler
+from app.utils.rate_limit import limiter
 
 # Configure logging
 logging.basicConfig(
@@ -173,6 +176,13 @@ async def lifespan(app: FastAPI):
     await _cleanup_guest_conversations()
     # Repeat cleanup every 2 h in background
     asyncio.create_task(_periodic_guest_cleanup())
+    # Connect RAG cache to Redis if configured
+    from app.utils.cache import rag_cache
+    if settings.redis_url:
+        await rag_cache.connect_redis(settings.redis_url)
+    else:
+        logger.info("REDIS_URL not set — RAG cache using in-memory store")
+
     # Pull models in background so it doesn't block startup/healthcheck
     asyncio.create_task(_ensure_ollama_models())
     yield
@@ -185,6 +195,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Rate limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS
 origins = [origin.strip() for origin in settings.cors_origins.split(",")]

@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 50
     upload_dir: str = "./uploads"
 
+    # Redis (optional — enables persistent RAG cache across restarts)
+    # Set to empty string "" to use in-memory fallback
+    redis_url: str = ""
+
     # Auth / JWT
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
