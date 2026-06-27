@@ -12,8 +12,14 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# NEXT_PUBLIC_API_URL: baked into the client bundle (browser-side fetch target)
+# INTERNAL_API_URL:    used by next.config.ts rewrites() at build time — sets the
+#                      server-side proxy target for /api/* when no nginx is in front
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
+ARG INTERNAL_API_URL=http://localhost:8000
+ENV INTERNAL_API_URL=${INTERNAL_API_URL}
 
 RUN npm run build
 

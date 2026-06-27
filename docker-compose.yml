@@ -116,15 +116,23 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Empty string = relative URLs → nginx proxies /api/ to backend (works on any host)
-        # Change to http://<host> if you need to access the API from a different domain
+        # NEXT_PUBLIC_API_URL="" → browser uses relative /api/* URLs (proxied by nginx or by the rewrite below)
         NEXT_PUBLIC_API_URL: ""
+        # INTERNAL_API_URL → where Next.js server proxies /api/* when no nginx is in front
+        # Uses docker-internal hostname so the rewrite works when accessing port 3001 directly
+        INTERNAL_API_URL: "http://backend:8000"
     container_name: iup-chatbot-frontend
     ports:
       - "3001:3000"
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ > /dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - chatbot-net
 
@@ -137,8 +145,10 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - frontend
-      - backend
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
     networks:
       - chatbot-net
 
