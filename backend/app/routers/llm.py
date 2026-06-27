@@ -19,13 +19,13 @@ router = APIRouter()
 
 
 @router.post("/generate", response_model=GenerateResponse)
-async def generate(request: GenerateRequest):
+async def generate(request: GenerateRequest, _: User = Depends(require_admin)):
     service = LLMService()
     return await service.generate(request)
 
 
 @router.post("/embed", response_model=EmbedResponse)
-async def embed(request: EmbedRequest):
+async def embed(request: EmbedRequest, _: User = Depends(require_admin)):
     service = LLMService()
     return await service.embed(request)
 

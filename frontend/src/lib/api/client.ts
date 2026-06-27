@@ -32,14 +32,18 @@ async function request<T>(
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: "Error del servidor" }));
 
-    // 401 on non-auth endpoints → session expired, redirect to login
+    // 401 on non-auth endpoints → session expired, redirect to the right login page
     const isAuthEndpoint = endpoint.includes("/auth/login") || endpoint.includes("/auth/register");
     if (response.status === 401 && !isAuthEndpoint) {
       if (typeof window !== "undefined") {
         localStorage.removeItem("auth_token");
         localStorage.removeItem("auth_user");
         if (!window.location.pathname.includes("/login")) {
-          window.location.href = "/admin/login";
+          // Admin paths go to admin login; everything else to the regular login
+          const loginUrl = window.location.pathname.startsWith("/admin")
+            ? "/admin/login"
+            : "/login";
+          window.location.href = loginUrl;
         }
       }
     }
@@ -122,7 +126,8 @@ export const apiClient = {
     conversationId: string,
     content: string,
     inputType: string = "text",
-    llmProvider?: string
+    llmProvider?: string,
+    llmModel?: string,
   ) =>
     request<{
       user_message: { id: string; role: string; content: string; created_at: string };
@@ -134,6 +139,7 @@ export const apiClient = {
         content,
         input_type: inputType,
         llm_provider: llmProvider,
+        llm_model: llmModel,
       }),
     }),
 
@@ -141,7 +147,9 @@ export const apiClient = {
     conversationId: string,
     content: string,
     inputType: string = "text",
-    onEvent: (event: Record<string, unknown>) => void
+    onEvent: (event: Record<string, unknown>) => void,
+    llmProvider?: string,
+    llmModel?: string,
   ): Promise<void> => {
     const url = `${API_BASE}/api/v1/chat/conversations/${conversationId}/messages/stream`;
     const token = getStoredToken();
@@ -153,7 +161,12 @@ export const apiClient = {
     const response = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify({ content, input_type: inputType }),
+      body: JSON.stringify({
+        content,
+        input_type: inputType,
+        llm_provider: llmProvider,
+        llm_model: llmModel,
+      }),
     });
 
     if (!response.ok) {
@@ -256,6 +269,15 @@ export const apiClient = {
 
   getApiKeyStatus: () =>
     request<{ has_key: boolean; masked_key: string | null }>("/api/v1/llm/api-key-status"),
+
+  // ── Guest session cleanup ──
+  // Uses sendBeacon so the request survives tab close (fire-and-forget).
+  guestClose: (conversationId: string): boolean => {
+    if (typeof navigator === "undefined" || !navigator.sendBeacon) return false;
+    return navigator.sendBeacon(
+      `${API_BASE}/api/v1/chat/conversations/${conversationId}/guest-close`
+    );
+  },
 
   // ── Analytics ──
   getAnalytics: () =>

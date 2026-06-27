@@ -1,15 +1,58 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useChatContext } from "@/context/ChatContext";
 import { apiClient } from "@/lib/api/client";
 import { isAuthenticated } from "@/lib/auth";
 import type { Message } from "@/types/chat";
 
+const _GUEST_CONV_KEY = "guest_conv_id";
+
 export function useChat() {
   const { state, dispatch } = useChatContext();
   const messagesRef = useRef(state.messages);
   messagesRef.current = state.messages;
+
+  // ── Guest session lifecycle ──────────────────────────────────────────────
+
+  // Ref keeps a stable pointer to selectConversation so the mount effect
+  // doesn't need it in its dependency array (avoids re-running on each render).
+  const selectConvRef = useRef<((id: string) => Promise<void>) | null>(null);
+
+  // 1. On mount: restore a guest conversation saved in sessionStorage (e.g. after page refresh)
+  useEffect(() => {
+    if (isAuthenticated()) return;
+    const savedId = sessionStorage.getItem(_GUEST_CONV_KEY);
+    if (savedId && selectConvRef.current) {
+      selectConvRef.current(savedId);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 2. Keep sessionStorage in sync with the active guest conversation
+  useEffect(() => {
+    if (isAuthenticated()) {
+      sessionStorage.removeItem(_GUEST_CONV_KEY);
+      return;
+    }
+    if (state.activeConversationId) {
+      sessionStorage.setItem(_GUEST_CONV_KEY, state.activeConversationId);
+    }
+  }, [state.activeConversationId]);
+
+  // 3. On tab/window close: delete the guest conversation via sendBeacon
+  useEffect(() => {
+    const handleUnload = () => {
+      const guestId = sessionStorage.getItem(_GUEST_CONV_KEY);
+      if (guestId) {
+        apiClient.guestClose(guestId);
+        sessionStorage.removeItem(_GUEST_CONV_KEY);
+      }
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    return () => window.removeEventListener("beforeunload", handleUnload);
+  }, []);
+
+  // ────────────────────────────────────────────────────────────────────────
 
   const loadConversations = useCallback(async () => {
     if (!isAuthenticated()) return; // guests don't have persistent history
@@ -75,9 +118,17 @@ export function useChat() {
     },
     [dispatch]
   );
+  // Keep the mount-effect ref current after selectConversation is defined
+  selectConvRef.current = selectConversation;
 
   const sendMessage = useCallback(
-    async (content: string, inputType: "text" | "voice" = "text", conversationId?: string) => {
+    async (
+      content: string,
+      inputType: "text" | "voice" = "text",
+      conversationId?: string,
+      llmProvider?: string,
+      llmModel?: string,
+    ) => {
       const convId = conversationId || state.activeConversationId;
       if (!convId) return;
 
@@ -133,6 +184,7 @@ export function useChat() {
               assistant_message?: unknown;
               message?: string;
             };
+
             if (e.type === "sources" && e.sources) {
               dispatch({
                 type: "SET_SOURCES",
@@ -174,7 +226,9 @@ export function useChat() {
             } else if (e.type === "error") {
               throw new Error(e.message || "Error del servidor");
             }
-          }
+          },
+          llmProvider,
+          llmModel,
         );
 
         return assistantContent;

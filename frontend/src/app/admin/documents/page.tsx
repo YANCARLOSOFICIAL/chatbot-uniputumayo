@@ -80,9 +80,17 @@ export default function DocumentsPage() {
       if (program) formData.append("program", program);
       if (docType) formData.append("document_type", docType);
       const result = await apiClient.uploadDocument(formData);
-      toast.success(result.message || "Documento subido correctamente");
-      setFile(null); setTitle(""); setFaculty(""); setProgram(""); setDocType("");
-      await loadDocuments();
+      if (result.status === "completed") {
+        toast.success(result.message || "Documento procesado correctamente");
+        setFile(null); setTitle(""); setFaculty(""); setProgram(""); setDocType("");
+        await loadDocuments();
+      } else if (result.status === "duplicate") {
+        toast.warning(result.message || "El documento ya existe en la base de conocimientos");
+        setFile(null); setTitle(""); setFaculty(""); setProgram(""); setDocType("");
+      } else {
+        // status === "failed"
+        throw new Error(result.message || "Error procesando el documento");
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error subiendo documento";
       setError(msg); toast.error(msg);

@@ -16,6 +16,7 @@ from app.schemas.document import DocumentUploadResponse
 from app.utils.file_parsers import extract_text
 from app.utils.text_processing import clean_text
 from app.utils.chunking import chunk_text
+from app.utils.cache import rag_cache
 from app.services.llm_service import LLMService
 from app.schemas.llm import EmbedRequest
 from app.config import settings
@@ -30,11 +31,16 @@ class DocumentService:
     # ── Private helpers ──────────────────────────────────────────────────────
 
     async def _extract_pdf_with_vision(self, file_path: str) -> str:
-        """Render PDF pages as images and send them to the vision model for structured extraction."""
+        """Render PDF pages as images and pass them to a multimodal model.
+
+        Routes through the Ollama vision model when available (gemma4:e4b or similar).
+        Fails gracefully and returns "" if Ollama is unavailable or no vision model
+        is configured, allowing the text-based extraction path to take over.
+        """
         if not settings.ollama_vision_model:
             return ""
         try:
-            import fitz  # PyMuPDF already in requirements
+            import fitz  # PyMuPDF
 
             images_b64: list[str] = []
             with fitz.open(file_path) as doc:
@@ -60,25 +66,24 @@ class DocumentService:
                 "- Responde ÚNICAMENTE con las líneas 'SEMESTRE N: ...' sin texto adicional."
             )
 
+            # Ollama multimodal API: images are embedded in the message
             async with httpx.AsyncClient(timeout=180.0) as client:
                 response = await client.post(
                     f"{settings.ollama_base_url}/api/chat",
                     json={
                         "model": settings.ollama_vision_model,
-                        "messages": [
-                            {
-                                "role": "user",
-                                "content": prompt,
-                                "images": images_b64,
-                            }
-                        ],
+                        "messages": [{
+                            "role": "user",
+                            "content": prompt,
+                            "images": images_b64,
+                        }],
                         "stream": False,
                         "options": {"temperature": 0.0, "num_predict": 1200},
                     },
                 )
 
             if response.status_code != 200:
-                logger.warning(f"Vision model returned {response.status_code}")
+                logger.warning("Vision model returned HTTP %s", response.status_code)
                 return ""
 
             result = response.json().get("message", {}).get("content", "").strip()
@@ -86,20 +91,22 @@ class DocumentService:
                 logger.warning("Vision model did not return expected curriculum format")
                 return ""
 
-            logger.info(f"Vision extraction OK — {len(result)} chars extracted")
+            logger.info("Vision extraction OK — %d chars extracted", len(result))
             return result
 
         except Exception as e:
-            logger.warning(f"PDF vision extraction failed: {e}")
+            logger.warning("PDF vision extraction failed (will use text fallback): %s", e)
             return ""
 
     async def _enrich_curriculum_text(self, text: str) -> str:
-        """Use Ollama to generate a structured semester-by-semester summary from curriculum text."""
+        """Use the active LLM to generate a structured semester-by-semester summary."""
         try:
             from app.providers.provider_factory import ProviderFactory
             from app.runtime_config import runtime_config
 
-            provider = ProviderFactory.get_provider("ollama")
+            provider_name = runtime_config.default_llm_provider
+            provider = ProviderFactory.get_provider(provider_name)
+            model = runtime_config.resolve_model(provider_name)
             extraction_prompt = (
                 "Analiza este texto extraído de un plan de estudios universitario y extrae las materias por semestre.\n"
                 "INSTRUCCIONES:\n"
@@ -113,7 +120,7 @@ class DocumentService:
             )
             result = await provider.generate(
                 messages=[{"role": "user", "content": extraction_prompt + text[:4000]}],
-                model=runtime_config.ollama_default_model,
+                model=model,
                 temperature=0.0,
                 max_tokens=800,
             )
@@ -176,6 +183,29 @@ class DocumentService:
 
         os.makedirs(settings.upload_dir, exist_ok=True)
 
+        # Deduplication: reject identical file content that was already ingested
+        existing = await self.db.execute(
+            select(Document).where(
+                Document.content_hash == content_hash,
+                Document.ingestion_status == "completed",
+            )
+        )
+        duplicate = existing.scalar_one_or_none()
+        if duplicate:
+            logger.info(
+                "Duplicate document detected (hash=%s), skipping re-ingestion. "
+                "Existing id=%s title='%s'",
+                content_hash[:12], duplicate.id, duplicate.title,
+            )
+            return DocumentUploadResponse(
+                document_id=duplicate.id,
+                status="duplicate",
+                message=(
+                    f"El documento ya existe en la base de conocimientos "
+                    f"('{duplicate.title}'). No es necesario volver a procesarlo."
+                ),
+            )
+
         document = Document(
             title=title,
             file_name=file.filename or "document.txt",
@@ -220,6 +250,7 @@ class DocumentService:
             # Store actual saved path for reindex
             document.file_name = safe_name
             await self.db.commit()
+            rag_cache.invalidate_all()
 
             return DocumentUploadResponse(
                 document_id=document.id,
@@ -265,6 +296,7 @@ class DocumentService:
             return False
         await self.db.delete(doc)
         await self.db.commit()
+        rag_cache.invalidate_all()
         return True
 
     async def get_chunks(
@@ -325,6 +357,7 @@ class DocumentService:
             doc.ingestion_status = "completed"
             doc.total_chunks = len(chunks)
             await self.db.commit()
+            rag_cache.invalidate_all()
 
             return DocumentUploadResponse(
                 document_id=doc.id,

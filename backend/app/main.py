@@ -1,10 +1,12 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone, timedelta
 
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+from sqlalchemy import select, delete as sql_delete
 
 from app.config import settings
 from app.routers import health, chat, rag, llm, documents, config, auth, audio, analytics
@@ -65,6 +67,33 @@ async def _ensure_ollama_models():
             asyncio.create_task(_pull_single_model(model))
 
 
+async def _cleanup_guest_conversations() -> None:
+    """Delete guest conversations (user_id IS NULL) older than 2 hours."""
+    from app.database import async_session
+    from app.models.conversation import Conversation
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
+    try:
+        async with async_session() as db:
+            result = await db.execute(
+                sql_delete(Conversation)
+                .where(Conversation.user_id.is_(None))
+                .where(Conversation.created_at < cutoff)
+            )
+            await db.commit()
+            if result.rowcount:
+                logger.info("Guest cleanup: %d conversaciones huérfanas eliminadas", result.rowcount)
+    except Exception as e:
+        logger.warning("Guest conversation cleanup failed: %s", e)
+
+
+async def _periodic_guest_cleanup() -> None:
+    """Repeat guest cleanup every 2 hours as a background task."""
+    while True:
+        await asyncio.sleep(7200)
+        await _cleanup_guest_conversations()
+
+
 async def _seed_admin():
     """Create default admin user if it doesn't exist."""
     from app.database import async_session
@@ -117,14 +146,34 @@ async def lifespan(app: FastAPI):
         logger.error(
             "❌ NO LLM PROVIDERS AVAILABLE! Configure OpenAI from /admin/config or start Ollama."
         )
-    
+
+    # Ensure HNSW vector index exists (idempotent - safe to call on every startup)
+    try:
+        from app.database import async_session
+        from sqlalchemy import text as sql_text
+        async with async_session() as db:
+            await db.execute(sql_text("""
+                CREATE INDEX IF NOT EXISTS idx_dc_embedding_hnsw
+                ON document_chunks
+                USING hnsw (embedding vector_cosine_ops)
+                WITH (m = 16, ef_construction = 64)
+                WHERE embedding IS NOT NULL
+            """))
+            await db.commit()
+        logger.info("HNSW index verified/created on document_chunks.embedding")
+    except Exception as e:
+        logger.warning("Could not ensure HNSW index (non-fatal): %s", e)
+
     # Seed admin user
     try:
         await _seed_admin()
     except Exception as e:
         logger.warning(f"No se pudo crear admin seed (DB no disponible?): {e}")
+    # Delete orphaned guest conversations from previous sessions
+    await _cleanup_guest_conversations()
+    # Repeat cleanup every 2 h in background
+    asyncio.create_task(_periodic_guest_cleanup())
     # Pull models in background so it doesn't block startup/healthcheck
-    import asyncio
     asyncio.create_task(_ensure_ollama_models())
     yield
     logger.info("Cerrando Nexus UniPutumayo API...")

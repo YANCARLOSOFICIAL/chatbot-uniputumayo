@@ -81,6 +81,21 @@ async def delete_conversation(
     return {"success": True}
 
 
+@router.post("/conversations/{conversation_id}/guest-close")
+async def guest_close_conversation(
+    conversation_id: UUID, db: AsyncSession = Depends(get_db)
+):
+    """Called via navigator.sendBeacon when a guest closes the tab.
+    Only deletes conversations with user_id IS NULL (guest-owned).
+    Always returns 200 — sendBeacon ignores the response body anyway.
+    """
+    service = ChatService(db)
+    conv = await service.get_conversation(conversation_id)
+    if conv is not None and conv.user_id is None:
+        await service.delete_conversation(conversation_id)
+    return {"success": True}
+
+
 @router.post(
     "/conversations/{conversation_id}/messages", response_model=ChatResponse
 )

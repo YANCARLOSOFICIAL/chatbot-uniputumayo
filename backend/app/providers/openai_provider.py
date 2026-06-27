@@ -5,6 +5,7 @@ from openai import AsyncOpenAI
 
 from app.providers.base import BaseLLMProvider
 from app.runtime_config import runtime_config
+from app.utils.cache import embedding_cache
 
 logger = logging.getLogger(__name__)
 
@@ -75,12 +76,30 @@ class OpenAIProvider(BaseLLMProvider):
 
     async def embed(self, texts: list[str], model: str) -> dict:
         client = self._ensure_client()
-        response = await client.embeddings.create(
-            model=model,
-            input=texts,
-        )
-        embeddings = [item.embedding for item in response.data]
-        return {"embeddings": embeddings}
+
+        # Check cache for each text; only call API for uncached ones
+        results: list[list[float] | None] = [None] * len(texts)
+        uncached_indices: list[int] = []
+        uncached_texts: list[str] = []
+
+        for i, text in enumerate(texts):
+            cache_key = embedding_cache.make_key(text=text, model=model)
+            cached = embedding_cache.get(cache_key)
+            if cached is not None:
+                results[i] = cached
+            else:
+                uncached_indices.append(i)
+                uncached_texts.append(text)
+
+        if uncached_texts:
+            response = await client.embeddings.create(model=model, input=uncached_texts)
+            for idx, item in zip(uncached_indices, response.data):
+                vector = item.embedding
+                results[idx] = vector
+                cache_key = embedding_cache.make_key(text=texts[idx], model=model)
+                embedding_cache.set(cache_key, vector)
+
+        return {"embeddings": results}
 
     async def is_available(self) -> bool:
         key = runtime_config.openai_api_key

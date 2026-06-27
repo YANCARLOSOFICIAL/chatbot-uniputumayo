@@ -1,5 +1,7 @@
 import json
+import logging
 import time
+from dataclasses import dataclass
 from typing import AsyncIterator
 from uuid import UUID
 
@@ -20,13 +22,31 @@ from app.services.llm_service import LLMService
 from app.schemas.rag import SearchRequest
 from app.schemas.llm import GenerateRequest, LLMMessage
 from app.utils.prompts import build_chat_prompt
+from app.utils.query_utils import detect_temperature
 from app.runtime_config import runtime_config
 from app.providers.provider_factory import ProviderFactory
+
+logger = logging.getLogger(__name__)
+
+_MAX_HISTORY_MESSAGES = 10
+_MAX_HISTORY_CHARS = 600  # truncate long messages in history to save tokens
+
+
+@dataclass
+class _RAGContext:
+    context_text: str
+    sources_payload: list[dict]
+    source_infos: list[SourceInfo]
+    quality: str          # "none" | "weak" | "good"
+    embed_ms: int
+    search_ms: int
 
 
 class ChatService:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    # ── Conversation CRUD ────────────────────────────────────────────────────
 
     async def create_conversation(self, data: ConversationCreate) -> Conversation:
         conversation = Conversation(
@@ -62,7 +82,9 @@ class ChatService:
         await self.db.commit()
         return True
 
-    async def update_conversation_title(self, conversation_id: UUID, title: str) -> Conversation | None:
+    async def update_conversation_title(
+        self, conversation_id: UUID, title: str
+    ) -> Conversation | None:
         conversation = await self.get_conversation(conversation_id)
         if not conversation:
             return None
@@ -83,12 +105,143 @@ class ChatService:
         )
         return list(result.scalars().all())
 
+    # ── Shared pipeline helpers ──────────────────────────────────────────────
+
+    async def _run_rag(self, query: str) -> _RAGContext:
+        """Run RAG search and return structured context ready for prompt building."""
+        rag_service = RAGService(self.db)
+        search_results = await rag_service.search(SearchRequest(query=query))
+        quality = rag_service.evaluate_context_quality(search_results.results)
+
+        context_text = "\n\n---\n\n".join(r.content for r in search_results.results)
+
+        sources_payload = [
+            {
+                "chunk_id": str(r.chunk_id),
+                "document_title": r.document_title,
+                "content_preview": r.content[:200],
+                "score": r.score,
+                "program": r.program,
+                "faculty": r.faculty,
+            }
+            for r in search_results.results
+        ]
+
+        source_infos = [
+            SourceInfo(
+                chunk_id=r.chunk_id,
+                document_title=r.document_title or "Documento IUP",
+                content_preview=r.content[:200],
+                score=r.score,
+                program=r.program,
+                faculty=r.faculty,
+            )
+            for r in search_results.results
+        ]
+
+        return _RAGContext(
+            context_text=context_text,
+            sources_payload=sources_payload,
+            source_infos=source_infos,
+            quality=quality,
+            embed_ms=search_results.query_embedding_time_ms,
+            search_ms=search_results.search_time_ms,
+        )
+
+    async def _get_history(
+        self, conversation_id: UUID, exclude_message_id: UUID
+    ) -> list[LLMMessage]:
+        """Fetch last N turns, truncating long messages to reduce token usage."""
+        recent = await self.db.execute(
+            select(Message)
+            .where(Message.conversation_id == conversation_id)
+            .where(Message.id != exclude_message_id)
+            .order_by(desc(Message.created_at))
+            .limit(_MAX_HISTORY_MESSAGES)
+        )
+        history: list[LLMMessage] = []
+        for m in reversed(recent.scalars().all()):
+            content = m.content
+            if len(content) > _MAX_HISTORY_CHARS:
+                content = content[:_MAX_HISTORY_CHARS] + "…"
+            history.append(LLMMessage(role=m.role, content=content))
+        return history
+
+    def _build_messages(
+        self,
+        rag_ctx: _RAGContext,
+        history: list[LLMMessage],
+        user_content: str,
+    ) -> list[LLMMessage]:
+        """Assemble system prompt + history + current user turn.
+
+        Uses a stricter no-context system prompt when RAG returned nothing ('none')
+        or very low-quality results ('weak') to prevent hallucinations.
+        """
+        context_for_prompt = rag_ctx.context_text if rag_ctx.quality == "good" else ""
+        system_prompt = build_chat_prompt(context_for_prompt)
+
+        messages = [LLMMessage(role="system", content=system_prompt)]
+        messages.extend(history)
+        messages.append(LLMMessage(role="user", content=user_content))
+        return messages
+
+    async def _generate_conversation_title(
+        self, user_content: str, assistant_content: str, provider_name: str
+    ) -> str:
+        """Generate a concise 4-6 word conversation title from the first exchange."""
+        try:
+            provider = ProviderFactory.get_provider(provider_name)
+            model = runtime_config.resolve_model(provider_name)
+            result = await provider.generate(
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        "Genera un título corto (4 a 6 palabras) para esta consulta sobre la IUP.\n"
+                        f"Pregunta: {user_content[:120]}\n"
+                        f"Respuesta resumida: {assistant_content[:120]}\n\n"
+                        "Responde SOLO con el título, sin comillas, sin punto final."
+                    ),
+                }],
+                model=model,
+                temperature=0.3,
+                max_tokens=20,
+            )
+            title = result.get("content", "").strip().split("\n")[0].strip("\"'").strip()
+            if len(title) > 8:
+                return title[:100]
+        except Exception as e:
+            logger.debug("Title generation failed: %s", e)
+        return user_content[:60]
+
+    async def _maybe_set_title(
+        self,
+        conversation_id: UUID,
+        user_content: str,
+        assistant_content: str = "",
+        provider_name: str = "",
+    ) -> None:
+        """Auto-title the conversation from the first exchange using the LLM."""
+        conversation = await self.get_conversation(conversation_id)
+        if not conversation or conversation.title != "Nueva conversación":
+            return
+
+        if assistant_content and provider_name:
+            title = await self._generate_conversation_title(
+                user_content, assistant_content, provider_name
+            )
+        else:
+            title = user_content[:60]
+
+        conversation.title = title
+
+    # ── Non-streaming ────────────────────────────────────────────────────────
+
     async def process_message(
         self, conversation_id: UUID, data: MessageCreate
     ) -> ChatResponse:
-        start_time = time.time()
+        t0 = time.time()
 
-        # 1. Save user message
         user_message = Message(
             conversation_id=conversation_id,
             role="user",
@@ -98,44 +251,25 @@ class ChatService:
         self.db.add(user_message)
         await self.db.flush()
 
-        # 2. RAG search
-        rag_service = RAGService(self.db)
-        search_request = SearchRequest(query=data.content)
-        search_results = await rag_service.search(search_request)
+        rag_ctx = await self._run_rag(data.content)
+        history = await self._get_history(conversation_id, user_message.id)
+        messages = self._build_messages(rag_ctx, history, data.content)
 
-        # 3. Build context from RAG results
-        context = "\n\n---\n\n".join(
-            r.content for r in search_results.results
-        )
+        provider_name = data.llm_provider or runtime_config.default_llm_provider
+        temperature = detect_temperature(data.content, default=runtime_config.default_temperature)
 
-        # 4. Get conversation history (last 10 messages, most recent first then reversed)
-        recent = await self.db.execute(
-            select(Message)
-            .where(Message.conversation_id == conversation_id)
-            .where(Message.id != user_message.id)
-            .order_by(desc(Message.created_at))
-            .limit(10)
-        )
-        history = [
-            LLMMessage(role=m.role, content=m.content)
-            for m in reversed(recent.scalars().all())
-        ]
-
-        # 5. Build prompt and generate response
-        system_prompt = build_chat_prompt(context)
-        messages = [LLMMessage(role="system", content=system_prompt)]
-        messages.extend(history)
-        messages.append(LLMMessage(role="user", content=data.content))
-
-        provider = data.llm_provider or runtime_config.default_llm_provider
         llm_service = LLMService()
         llm_response = await llm_service.generate(
-            GenerateRequest(messages=messages, provider=provider, model=data.llm_model)
+            GenerateRequest(
+                messages=messages,
+                provider=provider_name,
+                model=data.llm_model,
+                temperature=temperature,
+            )
         )
 
-        response_time = int((time.time() - start_time) * 1000)
+        response_time = int((time.time() - t0) * 1000)
 
-        # 6. Save assistant message
         assistant_message = Message(
             conversation_id=conversation_id,
             role="assistant",
@@ -150,41 +284,34 @@ class ChatService:
         )
         self.db.add(assistant_message)
 
-        # 7. Update conversation title if first message
-        conversation = await self.get_conversation(conversation_id)
-        if conversation and conversation.title == "Nueva conversación":
-            conversation.title = data.content[:100]
-
+        await self._maybe_set_title(
+            conversation_id, data.content, llm_response.content, provider_name
+        )
         await self.db.commit()
         await self.db.refresh(user_message)
         await self.db.refresh(assistant_message)
 
-        # 8. Build sources
-        sources = [
-            SourceInfo(
-                chunk_id=r.chunk_id,
-                document_title=r.document_title,
-                content_preview=r.content[:200],
-                score=r.score,
-                program=r.program,
-                faculty=r.faculty,
-            )
-            for r in search_results.results
-        ]
+        logger.info(
+            "Chat | conv=%s | provider=%s | model=%s | quality=%s | temp=%.2f | "
+            "rag=%d | total_ms=%d",
+            conversation_id, provider_name, llm_response.model,
+            rag_ctx.quality, temperature, len(rag_ctx.source_infos), response_time,
+        )
 
         return ChatResponse(
             user_message=MessageResponse.model_validate(user_message),
             assistant_message=MessageResponse.model_validate(assistant_message),
-            sources=sources,
+            sources=rag_ctx.source_infos,
         )
+
+    # ── Streaming ────────────────────────────────────────────────────────────
 
     async def process_message_stream(
         self, conversation_id: UUID, data: MessageCreate
     ) -> AsyncIterator[str]:
-        """Stream the assistant response via SSE. Yields SSE-formatted strings."""
-        start_time = time.time()
+        """Stream the assistant response via SSE."""
+        t0 = time.time()
 
-        # 1. Save user message
         user_message = Message(
             conversation_id=conversation_id,
             role="user",
@@ -195,62 +322,28 @@ class ChatService:
         await self.db.flush()
 
         try:
-            # 2. RAG search
-            rag_service = RAGService(self.db)
-            search_results = await rag_service.search(SearchRequest(query=data.content))
+            rag_ctx = await self._run_rag(data.content)
+            history = await self._get_history(conversation_id, user_message.id)
+            messages = self._build_messages(rag_ctx, history, data.content)
 
-            # 3. Build context
-            context = "\n\n---\n\n".join(r.content for r in search_results.results)
+            # Send sources immediately so UI renders them while LLM streams
+            yield f"data: {json.dumps({'type': 'sources', 'sources': rag_ctx.sources_payload})}\n\n"
 
-            # 4. Get conversation history (most recent, then re-order chronologically)
-            recent = await self.db.execute(
-                select(Message)
-                .where(Message.conversation_id == conversation_id)
-                .where(Message.id != user_message.id)
-                .order_by(desc(Message.created_at))
-                .limit(10)
-            )
-            history = [
-                LLMMessage(role=m.role, content=m.content)
-                for m in reversed(recent.scalars().all())
-            ]
-
-            # 5. Build prompt
-            system_prompt = build_chat_prompt(context)
-            messages = [LLMMessage(role="system", content=system_prompt)]
-            messages.extend(history)
-            messages.append(LLMMessage(role="user", content=data.content))
-
-            # Send sources event immediately (before LLM starts generating)
-            sources_payload = [
-                {
-                    "chunk_id": str(r.chunk_id),
-                    "document_title": r.document_title,
-                    "content_preview": r.content[:200],
-                    "score": r.score,
-                    "program": r.program,
-                    "faculty": r.faculty,
-                }
-                for r in search_results.results
-            ]
-            yield f"data: {json.dumps({'type': 'sources', 'sources': sources_payload})}\n\n"
-
-            # 6. Stream LLM response token by token
             provider_name = data.llm_provider or runtime_config.default_llm_provider
             provider = ProviderFactory.get_provider(provider_name)
             model = data.llm_model or runtime_config.resolve_model(provider_name)
-            temperature = runtime_config.default_temperature
-            max_tokens = runtime_config.default_max_tokens
+            temperature = detect_temperature(data.content, default=runtime_config.default_temperature)
             messages_dicts = [{"role": m.role, "content": m.content} for m in messages]
 
             full_content = ""
-            async for token in provider.generate_stream(messages_dicts, model, temperature, max_tokens):
+            async for token in provider.generate_stream(
+                messages_dicts, model, temperature, runtime_config.default_max_tokens
+            ):
                 full_content += token
                 yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
 
-            response_time = int((time.time() - start_time) * 1000)
+            response_time = int((time.time() - t0) * 1000)
 
-            # 7. Save assistant message
             assistant_message = Message(
                 conversation_id=conversation_id,
                 role="assistant",
@@ -262,16 +355,21 @@ class ChatService:
             )
             self.db.add(assistant_message)
 
-            # 8. Update conversation title if first message
-            conversation = await self.get_conversation(conversation_id)
-            if conversation and conversation.title == "Nueva conversación":
-                conversation.title = data.content[:100]
-
+            await self._maybe_set_title(
+                conversation_id, data.content, full_content, provider_name
+            )
             await self.db.commit()
             await self.db.refresh(user_message)
             await self.db.refresh(assistant_message)
 
-            # 9. Done event with persisted message IDs
+            logger.info(
+                "Chat stream | conv=%s | provider=%s | model=%s | quality=%s | "
+                "temp=%.2f | rag=%d | total_ms=%d",
+                conversation_id, provider_name, model,
+                rag_ctx.quality, temperature,
+                len(rag_ctx.source_infos), response_time,
+            )
+
             done_payload = {
                 "type": "done",
                 "user_message": {
@@ -302,5 +400,8 @@ class ChatService:
             yield f"data: {json.dumps(done_payload)}\n\n"
 
         except Exception as e:
+            logger.error(
+                "Stream error for conv=%s: %s", conversation_id, e, exc_info=True
+            )
             await self.db.rollback()
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Error procesando tu mensaje. Intenta de nuevo.'})}\n\n"

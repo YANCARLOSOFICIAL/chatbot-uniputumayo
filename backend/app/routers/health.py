@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.config import settings
 from app.schemas.common import HealthResponse, HealthServiceStatus
+from app.utils.cache import rag_cache, embedding_cache
 
 router = APIRouter()
 
@@ -17,7 +18,7 @@ router = APIRouter()
 async def health_check(db: AsyncSession = Depends(get_db)):
     services = {}
 
-    # Check database
+    # Database
     try:
         start = time.time()
         result = await db.execute(text("SELECT 1"))
@@ -27,14 +28,13 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     except Exception:
         services["database"] = HealthServiceStatus(status="unhealthy")
 
-    # Check Ollama
+    # Ollama
     try:
         start = time.time()
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(f"{settings.ollama_base_url}/api/tags")
             latency = round((time.time() - start) * 1000, 1)
             if resp.status_code == 200:
-                models = [m["name"] for m in resp.json().get("models", [])]
                 services["ollama"] = HealthServiceStatus(status="healthy", latency_ms=latency)
             else:
                 services["ollama"] = HealthServiceStatus(status="unhealthy")
@@ -50,3 +50,43 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         services=services,
         timestamp=datetime.now(timezone.utc).isoformat(),
     )
+
+
+@router.get("/metrics")
+async def metrics(db: AsyncSession = Depends(get_db)):
+    """Observable pipeline metrics: cache stats, vector index info, DB counts."""
+    # Cache stats
+    rag_entries = len(rag_cache._store)
+    emb_entries = len(embedding_cache._store)
+
+    # DB counts
+    counts: dict = {}
+    try:
+        for table in ("documents", "document_chunks", "conversations", "messages"):
+            row = await db.execute(text(f"SELECT COUNT(*) FROM {table}"))
+            counts[table] = row.scalar()
+    except Exception:
+        pass
+
+    # Vector index presence
+    index_exists = False
+    try:
+        row = await db.execute(text(
+            "SELECT 1 FROM pg_indexes "
+            "WHERE tablename='document_chunks' AND indexname='idx_dc_embedding_hnsw'"
+        ))
+        index_exists = row.scalar() is not None
+    except Exception:
+        pass
+
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "cache": {
+            "rag_entries": rag_entries,
+            "embedding_entries": emb_entries,
+        },
+        "database": counts,
+        "vector_index": {
+            "hnsw_index_present": index_exists,
+        },
+    }
