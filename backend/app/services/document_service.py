@@ -174,6 +174,34 @@ class DocumentService:
             all_embeddings.extend(embed_response.embeddings)
         return all_embeddings
 
+    async def _process_and_store_chunks(
+        self, document: Document, file_path: str, file_type: str
+    ) -> int:
+        """Shared pipeline: extract text → chunk → embed → store. Returns chunk count."""
+        cleaned_text = await self._build_enriched_text(file_path, file_type)
+        chunks = chunk_text(
+            cleaned_text,
+            chunk_size=settings.chunk_size,
+            chunk_overlap=settings.chunk_overlap,
+        )
+        all_embeddings = await self._embed_chunks(chunks)
+
+        for idx, (chunk, embedding) in enumerate(zip(chunks, all_embeddings)):
+            self.db.add(DocumentChunk(
+                document_id=document.id,
+                chunk_index=idx,
+                content=chunk["content"],
+                token_count=chunk.get("token_count"),
+                embedding=embedding,
+                metadata_=chunk.get("metadata", {}),
+            ))
+
+        document.ingestion_status = "completed"
+        document.total_chunks = len(chunks)
+        await self.db.commit()
+        await rag_cache.invalidate_all()
+        return len(chunks)
+
     # ── Public API ───────────────────────────────────────────────────────────
 
     async def upload_and_process(
@@ -248,35 +276,15 @@ class DocumentService:
             f.write(content_bytes)
 
         try:
-            cleaned_text = await self._build_enriched_text(file_path, file_type)
-            chunks = chunk_text(
-                cleaned_text,
-                chunk_size=settings.chunk_size,
-                chunk_overlap=settings.chunk_overlap,
-            )
-            all_embeddings = await self._embed_chunks(chunks)
-
-            for idx, (chunk, embedding) in enumerate(zip(chunks, all_embeddings)):
-                self.db.add(DocumentChunk(
-                    document_id=document.id,
-                    chunk_index=idx,
-                    content=chunk["content"],
-                    token_count=chunk.get("token_count"),
-                    embedding=embedding,
-                    metadata_=chunk.get("metadata", {}),
-                ))
-
-            document.ingestion_status = "completed"
-            document.total_chunks = len(chunks)
+            num_chunks = await self._process_and_store_chunks(document, file_path, file_type)
             # Store actual saved path for reindex
             document.file_name = safe_name
             await self.db.commit()
-            await rag_cache.invalidate_all()
 
             return DocumentUploadResponse(
                 document_id=document.id,
                 status="completed",
-                message=f"Document processed successfully. {len(chunks)} chunks created.",
+                message=f"Document processed successfully. {num_chunks} chunks created.",
             )
 
         except Exception as e:
@@ -357,33 +365,12 @@ class DocumentService:
         await self.db.flush()
 
         try:
-            cleaned_text = await self._build_enriched_text(file_path, doc.file_type)
-            chunks = chunk_text(
-                cleaned_text,
-                chunk_size=settings.chunk_size,
-                chunk_overlap=settings.chunk_overlap,
-            )
-            all_embeddings = await self._embed_chunks(chunks)
-
-            for idx, (chunk, embedding) in enumerate(zip(chunks, all_embeddings)):
-                self.db.add(DocumentChunk(
-                    document_id=doc.id,
-                    chunk_index=idx,
-                    content=chunk["content"],
-                    token_count=chunk.get("token_count"),
-                    embedding=embedding,
-                    metadata_=chunk.get("metadata", {}),
-                ))
-
-            doc.ingestion_status = "completed"
-            doc.total_chunks = len(chunks)
-            await self.db.commit()
-            await rag_cache.invalidate_all()
+            num_chunks = await self._process_and_store_chunks(doc, file_path, doc.file_type)
 
             return DocumentUploadResponse(
                 document_id=doc.id,
                 status="completed",
-                message=f"Reindexed successfully. {len(chunks)} chunks created.",
+                message=f"Reindexed successfully. {num_chunks} chunks created.",
             )
         except Exception as e:
             doc.ingestion_status = "failed"

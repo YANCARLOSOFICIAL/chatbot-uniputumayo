@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Upload, FileText, CheckCircle2, Clock, XCircle, AlertCircle, Trash2, X, ArrowUp, RefreshCw } from "lucide-react";
+import { Upload, FileText, CheckCircle2, Clock, XCircle, Trash2, X, ArrowUp, RefreshCw } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "@/components/ui/Toast";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { LoadingDots } from "@/components/ui/LoadingDots";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface DocumentItem {
   id: string;
@@ -129,12 +132,7 @@ export default function DocumentsPage() {
 
       <div style={{ padding: "28px 32px 48px", flex: 1 }}>
 
-        {error && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: "var(--r)", background: "var(--error-dim)", border: "1px solid rgba(200,54,44,0.2)", color: "var(--error)", fontSize: 13, marginBottom: 20 }}>
-            <AlertCircle size={14} style={{ flexShrink: 0 }} /> {error}
-            <button onClick={() => setError(null)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={13} /></button>
-          </div>
-        )}
+        {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}
 
         {/* Two-col: upload card (sticky) + docs table */}
         <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 24, alignItems: "start" }}>
@@ -233,7 +231,7 @@ export default function DocumentsPage() {
               <button type="submit" disabled={!file || !title || uploading} className="btn btn-primary"
                 style={{ width: "100%", justifyContent: "center", display: "flex", alignItems: "center", gap: 7 }}>
                 {uploading ? (
-                  <>{[0, 0.1, 0.2].map((d) => <span key={d} style={{ width: 3, height: 3, borderRadius: "50%", background: "rgba(255,255,255,0.8)", display: "inline-block", animation: `pulse-soft 1s ${d}s ease-in-out infinite` }} />)} Procesando...</>
+                  <><LoadingDots size={3} color="rgba(255,255,255,0.8)" delays={[0, 0.1, 0.2]} /> Procesando...</>
                 ) : (
                   <><Upload size={13} /> Subir Documento</>
                 )}
@@ -252,18 +250,10 @@ export default function DocumentsPage() {
 
               {loading ? (
                 <div style={{ padding: "56px 0", display: "flex", justifyContent: "center", gap: 5 }}>
-                  {[0, 0.12, 0.24].map((d) => (
-                    <span key={d} style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
-                  ))}
+                  <LoadingDots />
                 </div>
               ) : documents.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "56px 0" }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 14, background: "var(--surface-2)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
-                    <FileText size={22} style={{ color: "var(--text-3)" }} strokeWidth={1.5} />
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-2)", marginBottom: 4 }}>Sin documentos</div>
-                  <div style={{ fontSize: 12, color: "var(--text-3)" }}>Sube el primer documento desde el panel izquierdo.</div>
-                </div>
+                <EmptyState icon={FileText} title="Sin documentos" description="Sube el primer documento desde el panel izquierdo." />
               ) : (
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>

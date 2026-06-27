@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { LoadingDots } from "@/components/ui/LoadingDots";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
 
 interface ProviderInfo {
   name: string;
@@ -111,9 +113,7 @@ export default function ConfigPage() {
 
         {loading ? (
           <div style={{ padding: "64px 0", display: "flex", justifyContent: "center", gap: 6 }}>
-            {[0, 0.12, 0.24].map((d) => (
-              <span key={d} style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
-            ))}
+            <LoadingDots size={6} />
           </div>
         ) : (
           <>
@@ -137,12 +137,7 @@ export default function ConfigPage() {
             )}
 
             {/* Alerts */}
-            {error && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: "var(--r)", background: "var(--error-dim)", border: "1px solid rgba(200,54,44,0.2)", color: "var(--error)", fontSize: 13, marginBottom: 16 }}>
-                <AlertCircle size={14} style={{ flexShrink: 0 }} /> {error}
-                <button onClick={() => setError(null)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={13} /></button>
-              </div>
-            )}
+            {error && <ErrorAlert message={error} onDismiss={() => setError(null)} marginBottom={16} />}
             {success && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: "var(--r)", background: "var(--brand-dim)", border: "1px solid var(--brand-light)", color: "var(--text-1)", fontSize: 13, marginBottom: 16 }}>
                 <Check size={14} style={{ flexShrink: 0, color: "var(--brand-primary)" }} /> {success}

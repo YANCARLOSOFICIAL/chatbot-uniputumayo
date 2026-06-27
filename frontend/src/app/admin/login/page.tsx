@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, AlertCircle, Check } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { setToken, setUser } from "@/lib/auth";
+import { LoadingDots } from "@/components/ui/LoadingDots";
 import { FooterCredit } from "@/components/ui/SiteFooter";
 type Tab = "login" | "register";
 
@@ -268,9 +269,7 @@ export default function LoginPage() {
               >
                 {loading ? (
                   <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
-                    {[0, 0.12, 0.24].map((d) => (
-                      <span key={d} style={{ width: 4, height: 4, borderRadius: "50%", background: "#fff", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
-                    ))}
+                    <LoadingDots size={4} color="#fff" />
                   </span>
                 ) : "Iniciar sesion"}
               </button>
@@ -313,9 +312,7 @@ export default function LoginPage() {
               >
                 {loading ? (
                   <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
-                    {[0, 0.12, 0.24].map((d) => (
-                      <span key={d} style={{ width: 4, height: 4, borderRadius: "50%", background: "#fff", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
-                    ))}
+                    <LoadingDots size={4} color="#fff" />
                   </span>
                 ) : "Crear cuenta"}
               </button>

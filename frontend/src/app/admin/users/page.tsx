@@ -1,10 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Users, AlertCircle, X, Shield, User, RefreshCw } from "lucide-react";
+import { Users, Shield, User, RefreshCw } from "lucide-react";
 import { apiClient, type AuthUser } from "@/lib/api/client";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { toast } from "@/components/ui/Toast";
+import { LoadingDots } from "@/components/ui/LoadingDots";
+import { StatsStrip } from "@/components/admin/StatsStrip";
+import { ErrorAlert } from "@/components/ui/ErrorAlert";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export default function UsersPage() {
   const [users, setUsers]       = useState<AuthUser[]>([]);
@@ -53,30 +57,13 @@ export default function UsersPage() {
 
       <div style={{ padding: "28px 32px 48px", flex: 1 }}>
 
-        {error && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: "var(--r)", background: "var(--error-dim)", border: "1px solid rgba(200,54,44,0.2)", color: "var(--error)", fontSize: 13, marginBottom: 20 }}>
-            <AlertCircle size={14} style={{ flexShrink: 0 }} /> {error}
-            <button onClick={() => setError(null)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "inherit" }}><X size={13} /></button>
-          </div>
-        )}
+        {error && <ErrorAlert message={error} onDismiss={() => setError(null)} />}
 
-        {/* Editorial stats strip — NOT 3 equal cards */}
-        <div style={{ display: "flex", borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface)", marginBottom: 24 }}>
-          {[
-            { label: "Total",         value: loading ? "..." : users.length,                color: "var(--brand-primary)" },
-            { label: "Admins",        value: loading ? "..." : adminCount,                  color: "#8B5CF6" },
-            { label: "Estudiantes",   value: loading ? "..." : users.length - adminCount,   color: "var(--success)" },
-          ].map((s, i, arr) => (
-            <div key={s.label} style={{ flex: 1, padding: "22px 24px", borderRight: i < arr.length - 1 ? "1px solid var(--border)" : "none", textAlign: "center" }}>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(28px,3vw,38px)", fontWeight: 900, color: s.color, lineHeight: 1, letterSpacing: "-0.04em" }}>
-                {s.value}
-              </div>
-              <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 7, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                {s.label}
-              </div>
-            </div>
-          ))}
-        </div>
+        <StatsStrip items={[
+          { label: "Total",         value: loading ? "..." : users.length,                color: "var(--brand-primary)" },
+          { label: "Admins",        value: loading ? "..." : adminCount,                  color: "#8B5CF6" },
+          { label: "Estudiantes",   value: loading ? "..." : users.length - adminCount,   color: "var(--success)" },
+        ]} />
 
         {/* Users table */}
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
@@ -87,18 +74,10 @@ export default function UsersPage() {
 
           {loading ? (
             <div style={{ padding: "56px 0", display: "flex", justifyContent: "center", gap: 5 }}>
-              {[0, 0.12, 0.24].map((d) => (
-                <span key={d} style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
-              ))}
+              <LoadingDots />
             </div>
           ) : users.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "56px 0" }}>
-              <div style={{ width: 48, height: 48, borderRadius: 14, background: "var(--surface-2)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
-                <Users size={22} style={{ color: "var(--text-3)" }} strokeWidth={1.5} />
-              </div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-2)", marginBottom: 4 }}>Sin usuarios</div>
-              <div style={{ fontSize: 12, color: "var(--text-3)" }}>Nadie se ha registrado aun.</div>
-            </div>
+            <EmptyState icon={Users} title="Sin usuarios" description="Nadie se ha registrado aun." />
           ) : (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -161,9 +140,7 @@ export default function UsersPage() {
                       <td style={{ padding: "14px 18px", textAlign: "right" }}>
                         {updating === user.id ? (
                           <div style={{ display: "inline-flex", gap: 3, justifyContent: "flex-end" }}>
-                            {[0, 0.1, 0.2].map((d) => (
-                              <span key={d} style={{ width: 3, height: 3, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block", animation: `pulse-soft 1s ${d}s ease-in-out infinite` }} />
-                            ))}
+                            <LoadingDots size={3} delays={[0, 0.1, 0.2]} />
                           </div>
                         ) : (
                           <select

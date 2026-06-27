@@ -10,6 +10,8 @@ import {
 import { apiClient } from "@/lib/api/client";
 import { getUser } from "@/lib/auth";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { timeAgo } from "@/lib/utils/format";
+import { StatsStrip } from "@/components/admin/StatsStrip";
 
 interface HealthData {
   status: string;
@@ -39,14 +41,6 @@ function StatusBadge({ status }: { status: string }) {
   if (status === "processing")
     return <span className="badge badge-pri">● Procesando</span>;
   return <span className="badge badge-err">● Falló</span>;
-}
-
-function timeAgo(iso: string) {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diff < 60) return "ahora";
-  if (diff < 3600) return `${Math.floor(diff / 60)} min`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} h`;
-  return `${Math.floor(diff / 86400)} d`;
 }
 
 export default function AdminPage() {
@@ -155,24 +149,12 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Editorial number strip — NOT 4 equal icon cards */}
-        <div style={{ display: "flex", borderRadius: 14, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface)", marginBottom: 24 }}>
-          {[
-            { label: "Conversaciones", value: loading ? "..." : conversations.length > 0 ? `${conversations.length}+` : "0", color: "var(--brand-primary)" },
-            { label: "Usuarios",       value: loading ? "..." : userCount ?? "—",                                            color: "#8B5CF6" },
-            { label: "Documentos RAG", value: loading ? "..." : documents.length > 0 ? `${documents.length}+` : "0",        color: "var(--warning)" },
-            { label: "Sistema",        value: loading ? "..." : health?.status === "healthy" ? "OK" : "—",                   color: health?.status === "healthy" ? "var(--success)" : "var(--error)" },
-          ].map((s, i, arr) => (
-            <div key={s.label} style={{ flex: 1, padding: "22px 20px", borderRight: i < arr.length - 1 ? "1px solid var(--border)" : "none", textAlign: "center" }}>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(28px,3vw,40px)", fontWeight: 900, color: s.color, lineHeight: 1, letterSpacing: "-0.04em" }}>
-                {s.value}
-              </div>
-              <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 8, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                {s.label}
-              </div>
-            </div>
-          ))}
-        </div>
+        <StatsStrip borderRadius={14} items={[
+          { label: "Conversaciones", value: loading ? "..." : conversations.length > 0 ? `${conversations.length}+` : "0", color: "var(--brand-primary)" },
+          { label: "Usuarios",       value: loading ? "..." : userCount ?? "—",                                            color: "#8B5CF6" },
+          { label: "Documentos RAG", value: loading ? "..." : documents.length > 0 ? `${documents.length}+` : "0",        color: "var(--warning)" },
+          { label: "Sistema",        value: loading ? "..." : health?.status === "healthy" ? "OK" : "—",                   color: health?.status === "healthy" ? "var(--success)" : "var(--error)" },
+        ]} />
 
         {/* Two-col grid */}
         <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6">

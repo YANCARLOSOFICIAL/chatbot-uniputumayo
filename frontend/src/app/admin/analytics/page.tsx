@@ -5,6 +5,7 @@ import { BarChart3, TrendingUp, TrendingDown, MessageSquare, Users, Activity, Cl
 import { apiClient } from "@/lib/api/client";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { toast } from "@/components/ui/Toast";
+import { LoadingDots } from "@/components/ui/LoadingDots";
 
 type Analytics = Awaited<ReturnType<typeof apiClient.getAnalytics>>;
 
@@ -53,9 +54,7 @@ export default function AnalyticsPage() {
 
         {loading && !data ? (
           <div style={{ padding: "72px 0", display: "flex", justifyContent: "center", gap: 6 }}>
-            {[0, 0.12, 0.24].map((d) => (
-              <span key={d} style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
-            ))}
+            <LoadingDots size={6} />
           </div>
         ) : !data ? null : (
           <>

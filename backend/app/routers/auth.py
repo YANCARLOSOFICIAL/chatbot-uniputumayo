@@ -59,6 +59,17 @@ class UserResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @classmethod
+    def from_model(cls, user: "User") -> "UserResponse":
+        return cls(
+            id=str(user.id),
+            email=user.email,
+            display_name=user.display_name,
+            role=user.role,
+            is_active=user.is_active,
+            created_at=user.created_at.isoformat(),
+        )
+
 
 class AuthResponse(BaseModel):
     access_token: str
@@ -97,14 +108,7 @@ async def register(request: Request, data: RegisterRequest, db: AsyncSession = D
     token = create_access_token(str(user.id), user.role)
     return AuthResponse(
         access_token=token,
-        user=UserResponse(
-            id=str(user.id),
-            email=user.email,
-            display_name=user.display_name,
-            role=user.role,
-            is_active=user.is_active,
-            created_at=user.created_at.isoformat(),
-        ),
+        user=UserResponse.from_model(user),
     )
 
 
@@ -129,27 +133,13 @@ async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends
     token = create_access_token(str(user.id), user.role)
     return AuthResponse(
         access_token=token,
-        user=UserResponse(
-            id=str(user.id),
-            email=user.email,
-            display_name=user.display_name,
-            role=user.role,
-            is_active=user.is_active,
-            created_at=user.created_at.isoformat(),
-        ),
+        user=UserResponse.from_model(user),
     )
 
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(user: User = Depends(require_auth)):
-    return UserResponse(
-        id=str(user.id),
-        email=user.email,
-        display_name=user.display_name,
-        role=user.role,
-        is_active=user.is_active,
-        created_at=user.created_at.isoformat(),
-    )
+    return UserResponse.from_model(user)
 
 
 @router.get("/users", response_model=list[UserResponse])
@@ -159,17 +149,7 @@ async def list_users(
 ):
     result = await db.execute(select(User).order_by(User.created_at.desc()))
     users = result.scalars().all()
-    return [
-        UserResponse(
-            id=str(u.id),
-            email=u.email,
-            display_name=u.display_name,
-            role=u.role,
-            is_active=u.is_active,
-            created_at=u.created_at.isoformat(),
-        )
-        for u in users
-    ]
+    return [UserResponse.from_model(u) for u in users]
 
 
 @router.put("/users/{user_id}/role")

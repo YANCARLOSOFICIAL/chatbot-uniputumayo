@@ -5,6 +5,10 @@ import { MessageCircle, Search, CheckCircle2, Clock, User, RefreshCw, X } from "
 import { apiClient } from "@/lib/api/client";
 import { toast } from "@/components/ui/Toast";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { timeAgo } from "@/lib/utils/format";
+import { LoadingDots } from "@/components/ui/LoadingDots";
+import { StatsStrip } from "@/components/admin/StatsStrip";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface ConvItem {
   id: string;
@@ -12,14 +16,6 @@ interface ConvItem {
   created_at: string;
   updated_at: string;
   message_count?: number;
-}
-
-function timeAgo(iso: string) {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diff < 60)    return "ahora";
-  if (diff < 3600)  return `${Math.floor(diff / 60)} min`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} h`;
-  return `${Math.floor(diff / 86400)} d`;
 }
 
 export default function ConversationsPage() {
@@ -66,23 +62,11 @@ export default function ConversationsPage() {
 
       <div style={{ padding: "28px 32px 48px", flex: 1 }}>
 
-        {/* Editorial stats strip — moved above table, NOT 3 equal cards below */}
-        <div style={{ display: "flex", borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface)", marginBottom: 24 }}>
-          {[
-            { label: "Total",        value: loading ? "..." : conversations.length, color: "var(--brand-primary)" },
-            { label: "Esta semana",  value: loading ? "..." : weekCount,            color: "var(--brand-accent)" },
-            { label: "Hoy",          value: loading ? "..." : todayCount,           color: "var(--success)" },
-          ].map((s, i, arr) => (
-            <div key={s.label} style={{ flex: 1, padding: "22px 24px", borderRight: i < arr.length - 1 ? "1px solid var(--border)" : "none", textAlign: "center" }}>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(28px,3vw,38px)", fontWeight: 900, color: s.color, lineHeight: 1, letterSpacing: "-0.04em" }}>
-                {s.value}
-              </div>
-              <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 7, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                {s.label}
-              </div>
-            </div>
-          ))}
-        </div>
+        <StatsStrip items={[
+          { label: "Total",        value: loading ? "..." : conversations.length, color: "var(--brand-primary)" },
+          { label: "Esta semana",  value: loading ? "..." : weekCount,            color: "var(--brand-accent)" },
+          { label: "Hoy",          value: loading ? "..." : todayCount,           color: "var(--success)" },
+        ]} />
 
         {/* Search */}
         <div style={{ position: "relative", maxWidth: 380, marginBottom: 16 }}>
@@ -104,22 +88,14 @@ export default function ConversationsPage() {
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
           {loading ? (
             <div style={{ padding: "56px 0", display: "flex", justifyContent: "center", gap: 5 }}>
-              {[0, 0.12, 0.24].map((d) => (
-                <span key={d} style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
-              ))}
+              <LoadingDots />
             </div>
           ) : filtered.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "56px 0" }}>
-              <div style={{ width: 48, height: 48, borderRadius: 14, background: "var(--surface-2)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
-                <MessageCircle size={22} style={{ color: "var(--text-3)" }} strokeWidth={1.5} />
-              </div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-2)", marginBottom: 4 }}>
-                {search ? "Sin resultados" : "Sin conversaciones"}
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text-3)" }}>
-                {search ? "Prueba con otro termino." : "Las conversaciones apareceran aqui."}
-              </div>
-            </div>
+            <EmptyState
+              icon={MessageCircle}
+              title={search ? "Sin resultados" : "Sin conversaciones"}
+              description={search ? "Prueba con otro termino." : "Las conversaciones apareceran aqui."}
+            />
           ) : (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>

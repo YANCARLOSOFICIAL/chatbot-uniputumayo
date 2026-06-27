@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Menu } from "lucide-react";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { isAuthenticated, getUser } from "@/lib/auth";
+import { LoadingDots } from "@/components/ui/LoadingDots";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -33,9 +34,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div style={{ width: 18, height: 18, borderRadius: 4, background: "var(--brand-primary)" }} />
           </div>
           <div style={{ display: "flex", gap: 5 }}>
-            {[0, 0.12, 0.24].map((d) => (
-              <span key={d} style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
-            ))}
+            <LoadingDots size={4} />
           </div>
         </div>
       </div>
