@@ -1,3 +1,4 @@
+import logging
 import time
 from datetime import datetime, timezone
 
@@ -10,6 +11,8 @@ from app.database import get_db
 from app.config import settings
 from app.schemas.common import HealthResponse, HealthServiceStatus
 from app.utils.cache import rag_cache, embedding_cache
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -25,7 +28,8 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         result.scalar()
         latency = round((time.time() - start) * 1000, 1)
         services["database"] = HealthServiceStatus(status="healthy", latency_ms=latency)
-    except Exception:
+    except Exception as e:
+        logger.warning("Database health check failed: %s", e)
         services["database"] = HealthServiceStatus(status="unhealthy")
 
     # Ollama
@@ -38,7 +42,8 @@ async def health_check(db: AsyncSession = Depends(get_db)):
                 services["ollama"] = HealthServiceStatus(status="healthy", latency_ms=latency)
             else:
                 services["ollama"] = HealthServiceStatus(status="unhealthy")
-    except Exception:
+    except Exception as e:
+        logger.warning("Ollama health check failed: %s", e)
         services["ollama"] = HealthServiceStatus(status="unhealthy")
 
     overall = "healthy" if all(
@@ -65,8 +70,8 @@ async def metrics(db: AsyncSession = Depends(get_db)):
         for table in ("documents", "document_chunks", "conversations", "messages"):
             row = await db.execute(text(f"SELECT COUNT(*) FROM {table}"))
             counts[table] = row.scalar()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Metrics DB count query failed: %s", e)
 
     # Vector index presence
     index_exists = False
@@ -76,8 +81,8 @@ async def metrics(db: AsyncSession = Depends(get_db)):
             "WHERE tablename='document_chunks' AND indexname='idx_dc_embedding_hnsw'"
         ))
         index_exists = row.scalar() is not None
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Metrics vector index check failed: %s", e)
 
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),

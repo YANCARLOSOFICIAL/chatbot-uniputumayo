@@ -280,12 +280,13 @@ class DocumentService:
             )
 
         except Exception as e:
+            logger.error("Document ingestion failed (id=%s): %s", document.id, e, exc_info=True)
             document.ingestion_status = "failed"
             await self.db.commit()
             return DocumentUploadResponse(
                 document_id=document.id,
                 status="failed",
-                message=f"Error processing document: {str(e)}",
+                message=f"Error processing document: {e}",
             )
 
     async def list_documents(
@@ -317,7 +318,7 @@ class DocumentService:
             return False
         await self.db.delete(doc)
         await self.db.commit()
-        rag_cache.invalidate_all()
+        await rag_cache.invalidate_all()
         return True
 
     async def get_chunks(
@@ -386,10 +387,11 @@ class DocumentService:
                 message=f"Reindexed successfully. {len(chunks)} chunks created.",
             )
         except Exception as e:
+            logger.error("Document reindex failed (id=%s): %s", doc.id, e, exc_info=True)
             doc.ingestion_status = "failed"
             await self.db.commit()
             return DocumentUploadResponse(
                 document_id=doc.id,
                 status="failed",
-                message=f"Reindex failed: {str(e)}",
+                message=f"Reindex failed: {e}",
             )

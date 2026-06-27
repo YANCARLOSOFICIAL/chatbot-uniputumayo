@@ -53,7 +53,7 @@ class RAGService:
             doc = result.get("content", "").strip()
             return doc if doc else query
         except Exception as e:
-            logger.debug("HyDE generation failed, using original query: %s", e)
+            logger.warning("HyDE generation failed, using original query: %s", e)
             return query
 
     # ── Diversity filter ─────────────────────────────────────────────────────
@@ -295,6 +295,6 @@ class RAGService:
             # flush without commit — caller's transaction boundary handles the commit
             await self.db.flush()
         except Exception as log_err:
-            logger.debug("Retrieval log write skipped: %s", log_err)
+            logger.warning("Retrieval log write failed: %s", log_err)
 
         return response

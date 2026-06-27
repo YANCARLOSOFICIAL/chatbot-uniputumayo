@@ -1,4 +1,5 @@
 import json
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -20,6 +21,8 @@ from app.schemas.chat import (
 from app.services.chat_service import ChatService
 from app.auth import get_current_user
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -137,7 +140,8 @@ async def send_message_stream(
                 async for chunk in service.process_message_stream(conversation_id, data):
                     yield chunk
             except Exception as e:
-                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+                logger.error("Streaming session error for conv=%s: %s", conversation_id, e, exc_info=True)
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Error procesando tu mensaje. Intenta de nuevo.'})}\n\n"
 
     return StreamingResponse(
         generate(),

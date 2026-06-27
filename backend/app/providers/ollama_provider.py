@@ -170,7 +170,8 @@ class OllamaProvider(BaseLLMProvider):
                     name for name in all_names
                     if not any(kw in name.lower() for kw in OLLAMA_EMBEDDING_KEYWORDS)
                 ]
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to fetch installed Ollama models: %s", e)
             return []
 
     async def is_available(self) -> bool:

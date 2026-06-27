@@ -211,7 +211,7 @@ class ChatService:
             if len(title) > 8:
                 return title[:100]
         except Exception as e:
-            logger.debug("Title generation failed: %s", e)
+            logger.warning("Title generation failed: %s", e)
         return user_content[:60]
 
     async def _maybe_set_title(

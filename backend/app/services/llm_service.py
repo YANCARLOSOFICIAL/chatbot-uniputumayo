@@ -1,3 +1,4 @@
+import logging
 import time
 
 from app.schemas.llm import (
@@ -12,6 +13,8 @@ from app.schemas.llm import (
 from app.providers.provider_factory import ProviderFactory
 from app.runtime_config import runtime_config
 from app.config import OPENAI_CHAT_MODELS
+
+logger = logging.getLogger(__name__)
 
 
 class LLMService:
@@ -48,9 +51,10 @@ class LLMService:
                 response_time_ms=response_time,
             )
         except ValueError as e:
-            raise ValueError(f"Cannot use provider '{provider_name}': {str(e)}")
+            raise ValueError(f"Cannot use provider '{provider_name}': {e}") from e
         except Exception as e:
-            raise Exception(f"Error generating response with {provider_name}: {str(e)}")
+            logger.error("LLM generation failed (provider=%s): %s", provider_name, e, exc_info=True)
+            raise RuntimeError(f"Error generating response with {provider_name}: {e}") from e
 
     async def embed(self, request: EmbedRequest) -> EmbedResponse:
         # Use dedicated embedding_provider (separate from chat provider) to avoid
@@ -60,16 +64,20 @@ class LLMService:
         try:
             provider = ProviderFactory.get_provider(provider_name)
         except ValueError as e:
-            raise ValueError(f"Cannot use embedding provider '{provider_name}': {str(e)}")
+            raise ValueError(f"Cannot use embedding provider '{provider_name}': {e}") from e
 
         if provider_name == "openai":
             model = runtime_config.openai_embedding_model
         else:
             model = runtime_config.ollama_embedding_model
 
-        start_time = time.time()
-        result = await provider.embed(texts=request.texts, model=model)
-        response_time = int((time.time() - start_time) * 1000)
+        try:
+            start_time = time.time()
+            result = await provider.embed(texts=request.texts, model=model)
+            response_time = int((time.time() - start_time) * 1000)
+        except Exception as e:
+            logger.error("Embedding failed (provider=%s, model=%s): %s", provider_name, model, e, exc_info=True)
+            raise RuntimeError(f"Error generating embeddings with {provider_name}: {e}") from e
 
         return EmbedResponse(
             embeddings=result["embeddings"],
@@ -86,7 +94,8 @@ class LLMService:
             ollama = ProviderFactory.get_provider("ollama")
             is_available = await ollama.is_available()
             installed_models = await ollama.get_installed_models() if is_available else []
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to query Ollama provider: %s", e)
             is_available = False
             installed_models = []
 
@@ -102,7 +111,8 @@ class LLMService:
         try:
             openai_p = ProviderFactory.get_provider("openai")
             openai_available = await openai_p.is_available()
-        except ValueError:
+        except Exception as e:
+            logger.warning("Failed to query OpenAI provider: %s", e)
             openai_available = False
 
         providers.append(ProviderInfo(
