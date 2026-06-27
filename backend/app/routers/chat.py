@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, async_session as create_session
 from app.models.conversation import Conversation
-from app.utils.rate_limit import limiter
 from app.schemas.chat import (
     ConversationCreate,
     ConversationUpdate,
@@ -118,7 +117,6 @@ async def send_message(
 
 
 @router.post("/conversations/{conversation_id}/messages/stream")
-@limiter.limit("30/minute")
 async def send_message_stream(
     request: Request,
     conversation_id: UUID,
@@ -138,22 +136,34 @@ async def send_message_stream(
 
         async def _pump() -> None:
             # Creates its own session — never reuse a session across tasks.
-            async with create_session() as db:
-                try:
-                    service = ChatService(db)
-                    conversation = await service.get_conversation(conversation_id)
-                    if not conversation:
+            try:
+                async with create_session() as db:
+                    try:
+                        service = ChatService(db)
+                        conversation = await service.get_conversation(conversation_id)
+                        if not conversation:
+                            await q.put(
+                                f"data: {json.dumps({'type': 'error', 'message': 'Conversation not found'})}\n\n"
+                            )
+                            return
+                        async for chunk in service.process_message_stream(conversation_id, data):
+                            await q.put(chunk)
+                    except Exception as e:
                         await q.put(
-                            f"data: {json.dumps({'type': 'error', 'message': 'Conversation not found'})}\n\n"
+                            f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
                         )
-                        return
-                    async for chunk in service.process_message_stream(conversation_id, data):
-                        await q.put(chunk)
-                except Exception as e:
-                    await q.put(
-                        f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
-                    )
-            await q.put(None)  # sentinel — session already closed at this point
+            except Exception as e:
+                await q.put(
+                    f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+                )
+            finally:
+                # Guarantee the sentinel always reaches the queue so generate()
+                # never hangs waiting. Use put_nowait as fallback in case the
+                # task is being cancelled while we try to await q.put().
+                try:
+                    await q.put(None)
+                except Exception:
+                    q.put_nowait(None)
 
         pump_task = asyncio.create_task(_pump())
 
