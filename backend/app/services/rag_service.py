@@ -146,15 +146,24 @@ class RAGService:
     def evaluate_context_quality(self, results: list[SearchResultItem]) -> str:
         """Classify the retrieval quality for downstream prompt selection.
 
+        The "good" cutoff mirrors settings.rag_score_threshold — the same bar
+        candidates already had to clear to survive retrieval (see `search()`).
+        Using a stricter, independent cutoff here previously caused chunks that
+        passed retrieval (and were shown to the user as sources) to be silently
+        dropped from the LLM prompt, producing false "no tengo información"
+        refusals even when relevant context had been found.
+
         Returns:
             "none"   — no results
-            "weak"   — results found but all scores below 0.42
-            "good"   — at least one result above 0.42
+            "weak"   — results found but all scores below the retrieval threshold
+                       (only reachable if a caller passes a lower score_threshold
+                       to search() than settings.rag_score_threshold)
+            "good"   — at least one result meets the retrieval threshold
         """
         if not results:
             return "none"
         top = results[0].score
-        if top < 0.42:
+        if top < settings.rag_score_threshold:
             return "weak"
         return "good"
 

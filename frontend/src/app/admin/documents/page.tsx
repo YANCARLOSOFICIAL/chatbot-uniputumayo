@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Upload, FileText, CheckCircle2, Clock, XCircle, AlertCircle, Trash2, X, ArrowUp, RefreshCw } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "@/components/ui/Toast";
@@ -45,17 +45,41 @@ export default function DocumentsPage() {
   const [program, setProgram]           = useState("");
   const [docType, setDocType]           = useState("");
 
-  const loadDocuments = useCallback(async () => {
+  // Tracks last-seen status per document id so polling can toast on processing → completed/failed transitions
+  const lastStatusRef = useRef<Map<string, string>>(new Map());
+
+  const loadDocuments = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
-      const data = await apiClient.getDocuments();
-      setDocuments(data as unknown as DocumentItem[]);
+      if (!silent) setLoading(true);
+      const data = await apiClient.getDocuments() as unknown as DocumentItem[];
+
+      for (const doc of data) {
+        const prev = lastStatusRef.current.get(doc.id);
+        if (prev === "processing" && doc.ingestion_status === "completed") {
+          toast.success(`"${doc.title}" procesado correctamente (${doc.total_chunks} chunks)`);
+        } else if (prev === "processing" && doc.ingestion_status === "failed") {
+          toast.error(`Error procesando "${doc.title}". Revisa el documento o intenta reindexar.`);
+        }
+        lastStatusRef.current.set(doc.id, doc.ingestion_status);
+      }
+
+      setDocuments(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error cargando documentos");
-    } finally { setLoading(false); }
+    } finally { if (!silent) setLoading(false); }
   }, []);
 
   useEffect(() => { loadDocuments(); }, [loadDocuments]);
+
+  // Poll (without the loading spinner) while any document is still processing in the
+  // background — upload/reindex now return immediately with status "processing"
+  // (see documents.py / document_service.py) instead of blocking the HTTP request.
+  const hasProcessing = documents.some((d) => d.ingestion_status === "processing");
+  useEffect(() => {
+    if (!hasProcessing) return;
+    const interval = setInterval(() => { loadDocuments(true); }, 4000);
+    return () => clearInterval(interval);
+  }, [hasProcessing, loadDocuments]);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false);
@@ -80,7 +104,14 @@ export default function DocumentsPage() {
       if (program) formData.append("program", program);
       if (docType) formData.append("document_type", docType);
       const result = await apiClient.uploadDocument(formData);
-      if (result.status === "completed") {
+      if (result.status === "processing") {
+        // Upload accepted; extraction/embeddings run in the background (see
+        // hasProcessing polling above) so the request doesn't block on slow
+        // Ollama calls and time out at the proxy/edge.
+        toast.info(result.message || "Documento recibido. Procesando en segundo plano...");
+        setFile(null); setTitle(""); setFaculty(""); setProgram(""); setDocType("");
+        await loadDocuments();
+      } else if (result.status === "completed") {
         toast.success(result.message || "Documento procesado correctamente");
         setFile(null); setTitle(""); setFaculty(""); setProgram(""); setDocType("");
         await loadDocuments();
@@ -120,7 +151,7 @@ export default function DocumentsPage() {
         title="Base de conocimiento"
         subtitle={loading ? "Cargando..." : `${documents.length} documento${documents.length !== 1 ? "s" : ""} indexados`}
         action={
-          <button onClick={loadDocuments} disabled={loading} className="btn btn-secondary btn-sm"
+          <button onClick={() => loadDocuments()} disabled={loading} className="btn btn-secondary btn-sm"
             style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Actualizar
           </button>

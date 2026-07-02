@@ -1,3 +1,4 @@
+import asyncio
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
@@ -15,6 +16,25 @@ from app.utils.rate_limit import limiter
 router = APIRouter()
 
 _MAX_BYTES = settings.max_upload_size_mb * 1024 * 1024
+
+# Strong references to background ingestion tasks so GC doesn't collect them
+# mid-flight (same pattern as app.main._pull_tasks).
+_ingestion_tasks: set[asyncio.Task] = set()
+
+
+def _spawn_ingestion(document_id: UUID, name: str) -> None:
+    """Fire-and-forget the heavy extraction/embedding pipeline for a document.
+
+    Uses a fresh DocumentService bound to its own DB session (see
+    DocumentService.process_document_background) since the request-scoped
+    session passed to the router closes when this request returns.
+    """
+    task = asyncio.create_task(
+        DocumentService(db=None).process_document_background(document_id),
+        name=f"ingest-{name}-{document_id}",
+    )
+    _ingestion_tasks.add(task)
+    task.add_done_callback(_ingestion_tasks.discard)
 
 
 @router.post("/upload", response_model=DocumentUploadResponse)
@@ -42,13 +62,16 @@ async def upload_document(
         )
 
     service = DocumentService(db)
-    return await service.upload_and_process(
+    response = await service.upload_and_process(
         file=file,
         title=title,
         faculty=faculty,
         program=program,
         document_type=document_type,
     )
+    if response.status == "processing" and response.document_id:
+        _spawn_ingestion(response.document_id, "upload")
+    return response
 
 
 @router.get("", response_model=list[DocumentResponse])
@@ -111,4 +134,7 @@ async def reindex_document(
     admin: User = Depends(require_admin),
 ):
     service = DocumentService(db)
-    return await service.reindex(document_id)
+    response = await service.reindex(document_id)
+    if response.status == "processing" and response.document_id:
+        _spawn_ingestion(response.document_id, "reindex")
+    return response

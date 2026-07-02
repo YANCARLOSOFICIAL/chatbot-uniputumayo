@@ -231,10 +231,21 @@ export const apiClient = {
       `/api/v1/documents?page=${page}&per_page=${perPage}`
     ),
 
+  getDocument: (id: string) =>
+    request<{ id: string; title: string; ingestion_status: string; total_chunks: number }>(
+      `/api/v1/documents/${id}`
+    ),
+
   deleteDocument: (id: string) =>
     request<{ success: boolean }>(`/api/v1/documents/${id}`, {
       method: "DELETE",
     }),
+
+  reindexDocument: (id: string) =>
+    request<{ document_id: string; status: string; message: string }>(
+      `/api/v1/documents/${id}/reindex`,
+      { method: "POST" }
+    ),
 
   // ── Health ──
   checkHealth: () =>

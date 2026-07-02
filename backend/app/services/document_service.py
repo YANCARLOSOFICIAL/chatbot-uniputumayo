@@ -25,7 +25,9 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession | None):
+        # `db` is None only when constructed solely to call
+        # process_document_background(), which opens its own session.
         self.db = db
 
     # ── Private helpers ──────────────────────────────────────────────────────
@@ -184,6 +186,16 @@ class DocumentService:
         program: str | None = None,
         document_type: str | None = None,
     ) -> DocumentUploadResponse:
+        """Validate, save, and register the upload; returns immediately with status
+        "processing" (or "duplicate"/"failed" for the fast-path cases below).
+
+        The slow part (text extraction, LLM enrichment, embeddings — all of which
+        can involve several sequential Ollama calls on CPU taking minutes) runs
+        separately via `process_document_background`, kicked off as a fire-and-forget
+        asyncio task by the caller. Keeping it out of this request/response cycle
+        avoids proxy/edge timeouts (e.g. Cloudflare's ~100s edge limit) aborting the
+        upload mid-flight and leaving the client with an uncontrolled network error.
+        """
         content_bytes = await file.read()
 
         # Enforce file size limit (MAX_UPLOAD_SIZE_MB from config)
@@ -247,46 +259,65 @@ class DocumentService:
         with open(file_path, "wb") as f:
             f.write(content_bytes)
 
-        try:
-            cleaned_text = await self._build_enriched_text(file_path, file_type)
-            chunks = chunk_text(
-                cleaned_text,
-                chunk_size=settings.chunk_size,
-                chunk_overlap=settings.chunk_overlap,
-            )
-            all_embeddings = await self._embed_chunks(chunks)
+        document.file_name = safe_name
+        await self.db.commit()
+        await self.db.refresh(document)
 
-            for idx, (chunk, embedding) in enumerate(zip(chunks, all_embeddings)):
-                self.db.add(DocumentChunk(
-                    document_id=document.id,
-                    chunk_index=idx,
-                    content=chunk["content"],
-                    token_count=chunk.get("token_count"),
-                    embedding=embedding,
-                    metadata_=chunk.get("metadata", {}),
-                ))
+        return DocumentUploadResponse(
+            document_id=document.id,
+            status="processing",
+            message="Documento recibido. Procesando en segundo plano (extracción, análisis y embeddings).",
+        )
 
-            document.ingestion_status = "completed"
-            document.total_chunks = len(chunks)
-            # Store actual saved path for reindex
-            document.file_name = safe_name
-            await self.db.commit()
-            await rag_cache.invalidate_all()
+    async def process_document_background(self, document_id: UUID) -> None:
+        """Heavy ingestion pipeline, run outside the request/response cycle.
 
-            return DocumentUploadResponse(
-                document_id=document.id,
-                status="completed",
-                message=f"Document processed successfully. {len(chunks)} chunks created.",
-            )
+        Opens its own AsyncSession — this coroutine runs in a detached asyncio
+        Task (see routers/documents.py), and SQLAlchemy async sessions are not
+        safe to share across tasks/greenlets.
+        """
+        from app.database import async_session
 
-        except Exception as e:
-            document.ingestion_status = "failed"
-            await self.db.commit()
-            return DocumentUploadResponse(
-                document_id=document.id,
-                status="failed",
-                message=f"Error processing document: {str(e)}",
-            )
+        async with async_session() as db:
+            result = await db.execute(select(Document).where(Document.id == document_id))
+            document = result.scalar_one_or_none()
+            if not document:
+                logger.warning("Background processing skipped: document %s not found", document_id)
+                return
+
+            file_path = os.path.join(settings.upload_dir, document.file_name)
+            try:
+                cleaned_text = await self._build_enriched_text(file_path, document.file_type)
+                chunks = chunk_text(
+                    cleaned_text,
+                    chunk_size=settings.chunk_size,
+                    chunk_overlap=settings.chunk_overlap,
+                )
+                all_embeddings = await self._embed_chunks(chunks)
+
+                for idx, (chunk, embedding) in enumerate(zip(chunks, all_embeddings)):
+                    db.add(DocumentChunk(
+                        document_id=document.id,
+                        chunk_index=idx,
+                        content=chunk["content"],
+                        token_count=chunk.get("token_count"),
+                        embedding=embedding,
+                        metadata_=chunk.get("metadata", {}),
+                    ))
+
+                document.ingestion_status = "completed"
+                document.total_chunks = len(chunks)
+                await db.commit()
+                await rag_cache.invalidate_all()
+                logger.info(
+                    "Document %s ('%s') processed successfully — %d chunks",
+                    document.id, document.title, len(chunks),
+                )
+
+            except Exception as e:
+                logger.error("Background processing failed for document %s: %s", document.id, e, exc_info=True)
+                document.ingestion_status = "failed"
+                await db.commit()
 
     async def list_documents(
         self,
@@ -333,6 +364,12 @@ class DocumentService:
         return list(result.scalars().all())
 
     async def reindex(self, document_id: UUID) -> DocumentUploadResponse:
+        """Mark the document for reindexing and return immediately.
+
+        Deletes existing chunks synchronously (cheap) but defers the slow
+        extraction/embedding pipeline to `process_document_background`,
+        same as `upload_and_process` — for the same proxy-timeout reasons.
+        """
         doc = await self.get_document(document_id)
         if not doc:
             return DocumentUploadResponse(
@@ -354,42 +391,11 @@ class DocumentService:
             delete(DocumentChunk).where(DocumentChunk.document_id == document_id)
         )
         doc.ingestion_status = "processing"
-        await self.db.flush()
+        doc.total_chunks = 0
+        await self.db.commit()
 
-        try:
-            cleaned_text = await self._build_enriched_text(file_path, doc.file_type)
-            chunks = chunk_text(
-                cleaned_text,
-                chunk_size=settings.chunk_size,
-                chunk_overlap=settings.chunk_overlap,
-            )
-            all_embeddings = await self._embed_chunks(chunks)
-
-            for idx, (chunk, embedding) in enumerate(zip(chunks, all_embeddings)):
-                self.db.add(DocumentChunk(
-                    document_id=doc.id,
-                    chunk_index=idx,
-                    content=chunk["content"],
-                    token_count=chunk.get("token_count"),
-                    embedding=embedding,
-                    metadata_=chunk.get("metadata", {}),
-                ))
-
-            doc.ingestion_status = "completed"
-            doc.total_chunks = len(chunks)
-            await self.db.commit()
-            await rag_cache.invalidate_all()
-
-            return DocumentUploadResponse(
-                document_id=doc.id,
-                status="completed",
-                message=f"Reindexed successfully. {len(chunks)} chunks created.",
-            )
-        except Exception as e:
-            doc.ingestion_status = "failed"
-            await self.db.commit()
-            return DocumentUploadResponse(
-                document_id=doc.id,
-                status="failed",
-                message=f"Reindex failed: {str(e)}",
-            )
+        return DocumentUploadResponse(
+            document_id=doc.id,
+            status="processing",
+            message="Reindexado iniciado. Procesando en segundo plano.",
+        )
