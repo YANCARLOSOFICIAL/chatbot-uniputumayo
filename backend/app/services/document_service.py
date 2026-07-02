@@ -317,7 +317,7 @@ class DocumentService:
             return False
         await self.db.delete(doc)
         await self.db.commit()
-        rag_cache.invalidate_all()
+        await rag_cache.invalidate_all()
         return True
 
     async def get_chunks(

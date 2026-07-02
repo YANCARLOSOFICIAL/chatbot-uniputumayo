@@ -51,7 +51,7 @@ async def upload_document(
     )
 
 
-@router.get("/", response_model=list[DocumentResponse])
+@router.get("", response_model=list[DocumentResponse])
 async def list_documents(
     status: str | None = None,
     program: str | None = None,

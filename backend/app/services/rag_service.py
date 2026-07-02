@@ -195,7 +195,6 @@ class RAGService:
 
         filters: list[str] = []
         params: dict = {
-            "threshold": request.score_threshold,
             "top_k": candidate_k,
         }
 

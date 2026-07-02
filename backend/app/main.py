@@ -15,6 +15,9 @@ from app.routers import health, chat, rag, llm, documents, config, auth, audio, 
 from app.middleware.error_handler import global_exception_handler
 from app.utils.rate_limit import limiter
 
+# Strong references to background pull tasks so GC doesn't collect them mid-flight
+_pull_tasks: set[asyncio.Task] = set()
+
 # Configure logging
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper()),
@@ -61,13 +64,17 @@ async def _ensure_ollama_models():
         logger.warning(f"No se pudo conectar con Ollama: {e}")
         return
 
-    # Launch each missing model as an independent concurrent task
+    # Launch each missing model as an independent concurrent task.
+    # Tasks are stored in a module-level set so they are not garbage-collected
+    # before the event loop has a chance to schedule them.
     for model in models_needed:
         if model in existing or f"{model}:latest" in existing:
             logger.info(f"Modelo Ollama '{model}' ya disponible")
         else:
             logger.info(f"Descargando modelo Ollama '{model}'...")
-            asyncio.create_task(_pull_single_model(model))
+            task = asyncio.create_task(_pull_single_model(model), name=f"pull-{model}")
+            _pull_tasks.add(task)
+            task.add_done_callback(_pull_tasks.discard)
 
 
 async def _cleanup_guest_conversations() -> None:
@@ -174,8 +181,8 @@ async def lifespan(app: FastAPI):
         logger.warning(f"No se pudo crear admin seed (DB no disponible?): {e}")
     # Delete orphaned guest conversations from previous sessions
     await _cleanup_guest_conversations()
-    # Repeat cleanup every 2 h in background
-    asyncio.create_task(_periodic_guest_cleanup())
+    # Repeat cleanup every 2 h in background (store ref so GC doesn't collect it)
+    _pull_tasks.add(asyncio.create_task(_periodic_guest_cleanup(), name="guest-cleanup"))
     # Connect RAG cache to Redis if configured
     from app.utils.cache import rag_cache
     if settings.redis_url:
@@ -184,7 +191,7 @@ async def lifespan(app: FastAPI):
         logger.info("REDIS_URL not set — RAG cache using in-memory store")
 
     # Pull models in background so it doesn't block startup/healthcheck
-    asyncio.create_task(_ensure_ollama_models())
+    _pull_tasks.add(asyncio.create_task(_ensure_ollama_models(), name="ensure-models"))
     yield
     logger.info("Cerrando Nexus UniPutumayo API...")
 

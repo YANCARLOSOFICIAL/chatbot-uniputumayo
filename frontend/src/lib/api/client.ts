@@ -228,7 +228,7 @@ export const apiClient = {
 
   getDocuments: (page = 1, perPage = 20) =>
     request<Array<{ id: string; title: string; ingestion_status: string; total_chunks: number }>>(
-      `/api/v1/documents/?page=${page}&per_page=${perPage}`
+      `/api/v1/documents?page=${page}&per_page=${perPage}`
     ),
 
   deleteDocument: (id: string) =>
