@@ -235,7 +235,7 @@ app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytic
 @app.get("/")
 async def root():
     return {
-        "name": "Nexus UniPutumayo API",
+        "name": "guaca bot UniPutumayo API",
         "version": "1.0.0",
         "docs": "/docs",
     }

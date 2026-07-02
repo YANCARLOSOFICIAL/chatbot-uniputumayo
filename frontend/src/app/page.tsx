@@ -125,7 +125,7 @@ export default function LandingPage() {
                 <div style={{ marginBottom: 28 }}>
                   <span className="eyebrow-pill">
                     <span className="dot" />
-                    NEXUS · UniPutumayo 2026
+                    Guaca · UniPutumayo 2026
                   </span>
                 </div>
 
