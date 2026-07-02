@@ -50,6 +50,11 @@ services:
     image: ollama/ollama:latest
     container_name: iup-chatbot-ollama
     restart: unless-stopped
+    environment:
+      # CPU sin AVX2 (Xeon E5-2670 v2): recargar un modelo desde disco cuesta
+      # ~18s. Mantenerlo en memoria más tiempo evita pagar ese costo en cada
+      # mensaje tras 5 min de inactividad (default de Ollama).
+      OLLAMA_KEEP_ALIVE: "30m"
     ports:
       - "11434:11434"
     volumes:
@@ -88,12 +93,18 @@ services:
       OPENAI_EMBEDDING_MODEL: text-embedding-3-small
       DEFAULT_LLM_PROVIDER: ollama
       DEFAULT_TEMPERATURE: "0.05"
-      DEFAULT_MAX_TOKENS: "2048"
+      # Bajado de 2048: en un CPU sin AVX2 (~5 tok/s) cada token de más es
+      # tiempo real perdido; 768 alcanza para respuestas RAG completas.
+      DEFAULT_MAX_TOKENS: "768"
       CHUNK_SIZE: "512"
       CHUNK_OVERLAP: "77"
       RAG_TOP_K: "5"
       RAG_SCORE_THRESHOLD: "0.35"
-      RAG_HYDE_ENABLED: "true"
+      # Desactivado en prod: HyDE agrega una llamada completa a Ollama por
+      # mensaje (generar un "documento hipotético" antes de embeder). En este
+      # hardware esa llamada de más es la diferencia entre responder y que el
+      # timeout de 300s la mate. Local (CPU con AVX2) puede seguir usándolo.
+      RAG_HYDE_ENABLED: "false"
       RAG_DIVERSITY_ENABLED: "true"
       RAG_CANDIDATES_MULTIPLIER: "3"
       EMBEDDING_PROVIDER: ollama
