@@ -20,10 +20,12 @@ from app.schemas.chat import (
 from app.services.rag_service import RAGService
 from app.services.llm_service import LLMService
 from app.schemas.rag import SearchRequest
-from app.schemas.llm import GenerateRequest, LLMMessage
+from app.schemas.llm import GenerateRequest, LLMMessage, EmbedRequest
 from app.utils.prompts import build_chat_prompt
 from app.utils.query_utils import detect_temperature
+from app.utils.cache import answer_cache
 from app.runtime_config import runtime_config
+from app.config import settings
 from app.providers.provider_factory import ProviderFactory
 
 logger = logging.getLogger(__name__)
@@ -148,6 +150,30 @@ class ChatService:
             search_ms=search_results.search_time_ms,
         )
 
+    async def _embed_query(self, query: str) -> list[float]:
+        """Embed the raw user query — independent of HyDE — for answer-cache lookups.
+
+        Always embeds the literal question (not a HyDE hypothetical doc) so
+        cache matching reflects what the user actually asked, regardless of
+        whether HyDE is enabled for retrieval.
+        """
+        llm_service = LLMService()
+        embed_response = await llm_service.embed(EmbedRequest(texts=[query]))
+        return embed_response.embeddings[0]
+
+    async def _check_answer_cache(self, query: str) -> tuple[list[float], dict | None]:
+        """Embed the query and look up a semantically similar cached answer.
+
+        Returns (embedding, cached_entry_or_None). The embedding is returned
+        even on a miss so the caller can reuse it as the cache key when
+        storing the freshly generated answer, without embedding twice.
+        """
+        embedding = await self._embed_query(query)
+        if not settings.answer_cache_enabled:
+            return embedding, None
+        cached = await answer_cache.find_similar(embedding)
+        return embedding, cached
+
     async def _get_history(
         self, conversation_id: UUID, exclude_message_id: UUID
     ) -> list[LLMMessage]:
@@ -220,13 +246,20 @@ class ChatService:
         user_content: str,
         assistant_content: str = "",
         provider_name: str = "",
+        use_llm_title: bool = True,
     ) -> None:
-        """Auto-title the conversation from the first exchange using the LLM."""
+        """Auto-title the conversation from the first exchange.
+
+        `use_llm_title=False` skips the extra LLM call and falls back to a
+        truncated-text title — used for answer-cache hits, where the whole
+        point is responding without invoking the (possibly very slow, on
+        CPU-only Ollama) LLM at all.
+        """
         conversation = await self.get_conversation(conversation_id)
         if not conversation or conversation.title != "Nueva conversación":
             return
 
-        if assistant_content and provider_name:
+        if use_llm_title and assistant_content and provider_name:
             title = await self._generate_conversation_title(
                 user_content, assistant_content, provider_name
             )
@@ -251,57 +284,79 @@ class ChatService:
         self.db.add(user_message)
         await self.db.flush()
 
-        rag_ctx = await self._run_rag(data.content)
-        history = await self._get_history(conversation_id, user_message.id)
-        messages = self._build_messages(rag_ctx, history, data.content)
+        query_embedding, cached = await self._check_answer_cache(data.content)
 
-        provider_name = data.llm_provider or runtime_config.default_llm_provider
-        temperature = detect_temperature(data.content, default=runtime_config.default_temperature)
+        if cached is not None:
+            content = cached["answer"]
+            provider_name = cached["llm_provider"]
+            model_name = cached["llm_model"]
+            quality = "cached"
+            sources_payload = cached["sources"]
+            source_infos = [SourceInfo(**s) for s in sources_payload]
+            tokens_used = None
+        else:
+            rag_ctx = await self._run_rag(data.content)
+            history = await self._get_history(conversation_id, user_message.id)
+            messages = self._build_messages(rag_ctx, history, data.content)
 
-        llm_service = LLMService()
-        llm_response = await llm_service.generate(
-            GenerateRequest(
-                messages=messages,
-                provider=provider_name,
-                model=data.llm_model,
-                temperature=temperature,
+            provider_name = data.llm_provider or runtime_config.default_llm_provider
+            temperature = detect_temperature(data.content, default=runtime_config.default_temperature)
+
+            llm_service = LLMService()
+            llm_response = await llm_service.generate(
+                GenerateRequest(
+                    messages=messages,
+                    provider=provider_name,
+                    model=data.llm_model,
+                    temperature=temperature,
+                )
             )
-        )
+            content = llm_response.content
+            provider_name = llm_response.provider
+            model_name = llm_response.model
+            quality = rag_ctx.quality
+            sources_payload = rag_ctx.sources_payload
+            source_infos = rag_ctx.source_infos
+            tokens_used = llm_response.tokens_used.total if llm_response.tokens_used else None
+
+            if settings.answer_cache_enabled and quality == "good" and content.strip():
+                await answer_cache.store(
+                    query_embedding, data.content, content,
+                    sources_payload, provider_name, model_name,
+                )
 
         response_time = int((time.time() - t0) * 1000)
 
         assistant_message = Message(
             conversation_id=conversation_id,
             role="assistant",
-            content=llm_response.content,
+            content=content,
             input_type="text",
-            tokens_used=(
-                llm_response.tokens_used.total if llm_response.tokens_used else None
-            ),
-            llm_provider=llm_response.provider,
-            llm_model=llm_response.model,
+            tokens_used=tokens_used,
+            llm_provider=provider_name,
+            llm_model=model_name,
             response_time_ms=response_time,
         )
         self.db.add(assistant_message)
 
         await self._maybe_set_title(
-            conversation_id, data.content, llm_response.content, provider_name
+            conversation_id, data.content, content, provider_name,
+            use_llm_title=(cached is None),
         )
         await self.db.commit()
         await self.db.refresh(user_message)
         await self.db.refresh(assistant_message)
 
         logger.info(
-            "Chat | conv=%s | provider=%s | model=%s | quality=%s | temp=%.2f | "
-            "rag=%d | total_ms=%d",
-            conversation_id, provider_name, llm_response.model,
-            rag_ctx.quality, temperature, len(rag_ctx.source_infos), response_time,
+            "Chat | conv=%s | provider=%s | model=%s | quality=%s | rag=%d | total_ms=%d",
+            conversation_id, provider_name, model_name,
+            quality, len(sources_payload), response_time,
         )
 
         return ChatResponse(
             user_message=MessageResponse.model_validate(user_message),
             assistant_message=MessageResponse.model_validate(assistant_message),
-            sources=rag_ctx.source_infos,
+            sources=source_infos or [],
         )
 
     # ── Streaming ────────────────────────────────────────────────────────────
@@ -326,28 +381,56 @@ class ChatService:
             # browsers/parsers ignore them. We yield them before each slow phase
             # so Cloudflare/nginx don't close the connection thinking it's idle.
             yield ": thinking\n\n"
-            rag_ctx = await self._run_rag(data.content)
-            history = await self._get_history(conversation_id, user_message.id)
-            messages = self._build_messages(rag_ctx, history, data.content)
 
-            # Send sources immediately so UI renders them while LLM streams
-            yield f"data: {json.dumps({'type': 'sources', 'sources': rag_ctx.sources_payload})}\n\n"
+            query_embedding, cached = await self._check_answer_cache(data.content)
 
-            provider_name = data.llm_provider or runtime_config.default_llm_provider
-            provider = ProviderFactory.get_provider(provider_name)
-            model = data.llm_model or runtime_config.resolve_model(provider_name)
-            temperature = detect_temperature(data.content, default=runtime_config.default_temperature)
-            messages_dicts = [{"role": m.role, "content": m.content} for m in messages]
+            if cached is not None:
+                # Semantic cache hit — skip RAG + LLM entirely. See AsyncAnswerCache
+                # docstring: matches paraphrased questions, not just exact text.
+                sources_payload = cached["sources"]
+                full_content = cached["answer"]
+                provider_name = cached["llm_provider"]
+                model = cached["llm_model"]
+                quality = "cached"
+                rag_count = len(sources_payload)
 
-            # Second heartbeat: Ollama on CPU can take 10-20 s before the first token
-            yield ": generating\n\n"
+                yield f"data: {json.dumps({'type': 'sources', 'sources': sources_payload})}\n\n"
+                yield f"data: {json.dumps({'type': 'token', 'content': full_content})}\n\n"
+            else:
+                rag_ctx = await self._run_rag(data.content)
+                history = await self._get_history(conversation_id, user_message.id)
+                messages = self._build_messages(rag_ctx, history, data.content)
 
-            full_content = ""
-            async for token in provider.generate_stream(
-                messages_dicts, model, temperature, runtime_config.default_max_tokens
-            ):
-                full_content += token
-                yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+                # Send sources immediately so UI renders them while LLM streams
+                yield f"data: {json.dumps({'type': 'sources', 'sources': rag_ctx.sources_payload})}\n\n"
+
+                provider_name = data.llm_provider or runtime_config.default_llm_provider
+                provider = ProviderFactory.get_provider(provider_name)
+                model = data.llm_model or runtime_config.resolve_model(provider_name)
+                temperature = detect_temperature(data.content, default=runtime_config.default_temperature)
+                messages_dicts = [{"role": m.role, "content": m.content} for m in messages]
+
+                # Second heartbeat: Ollama on CPU can take 10-20 s before the first token
+                yield ": generating\n\n"
+
+                full_content = ""
+                async for token in provider.generate_stream(
+                    messages_dicts, model, temperature, runtime_config.default_max_tokens
+                ):
+                    full_content += token
+                    yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+
+                sources_payload = rag_ctx.sources_payload
+                quality = rag_ctx.quality
+                rag_count = len(rag_ctx.source_infos)
+
+                # Only cache answers actually grounded in retrieved context — never
+                # cache "no tengo esa información" refusals or ungrounded guesses.
+                if settings.answer_cache_enabled and quality == "good" and full_content.strip():
+                    await answer_cache.store(
+                        query_embedding, data.content, full_content,
+                        sources_payload, provider_name, model,
+                    )
 
             response_time = int((time.time() - t0) * 1000)
 
@@ -363,7 +446,8 @@ class ChatService:
             self.db.add(assistant_message)
 
             await self._maybe_set_title(
-                conversation_id, data.content, full_content, provider_name
+                conversation_id, data.content, full_content, provider_name,
+                use_llm_title=(cached is None),
             )
             await self.db.commit()
             await self.db.refresh(user_message)
@@ -371,10 +455,9 @@ class ChatService:
 
             logger.info(
                 "Chat stream | conv=%s | provider=%s | model=%s | quality=%s | "
-                "temp=%.2f | rag=%d | total_ms=%d",
+                "rag=%d | total_ms=%d",
                 conversation_id, provider_name, model,
-                rag_ctx.quality, temperature,
-                len(rag_ctx.source_infos), response_time,
+                quality, rag_count, response_time,
             )
 
             done_payload = {

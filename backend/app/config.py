@@ -54,6 +54,26 @@ class Settings(BaseSettings):
     # nomic-embed-text=768 | text-embedding-3-small=1536
     embedding_dimensions: int = 768
 
+    # Answer cache: sirve respuestas completas ya generadas para preguntas con
+    # significado similar (no solo texto exacto), saltándose RAG + LLM por
+    # completo en un acierto. Clave en Ollama sin AVX2/GPU, donde la generación
+    # es el cuello de botella real (~3-5 tok/s) — un acierto responde en el
+    # tiempo de un embedding (~1-2s) en vez de minutos.
+    answer_cache_enabled: bool = True
+    # Umbral de similitud coseno entre embeddings de preguntas para considerar
+    # un acierto de caché. Medido empíricamente con nomic-embed-text sobre
+    # pares reales en español: parafraseos cercanos ("qué facultades tiene" vs
+    # "cuáles facultades ofrece") puntúan ~0.92; preguntas genuinamente
+    # distintas puntúan ~0.51-0.55. Parafraseos con redacción muy distinta
+    # ("requisitos de admisión" vs "qué necesito para admitirme") caen a
+    # ~0.58-0.69 — demasiado cerca de preguntas distintas para diferenciar de
+    # forma segura, así que este umbral solo atrapa reformulaciones cercanas,
+    # no parafraseos profundos. Ajustar según los logs de
+    # "Answer cache HIT (similarity=...)" en producción.
+    answer_cache_similarity_threshold: float = 0.90
+    answer_cache_ttl_seconds: int = 604800  # 7 días — preguntas de FAQ institucional cambian poco
+    answer_cache_max_entries: int = 300
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

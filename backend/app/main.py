@@ -183,12 +183,13 @@ async def lifespan(app: FastAPI):
     await _cleanup_guest_conversations()
     # Repeat cleanup every 2 h in background (store ref so GC doesn't collect it)
     _pull_tasks.add(asyncio.create_task(_periodic_guest_cleanup(), name="guest-cleanup"))
-    # Connect RAG cache to Redis if configured
-    from app.utils.cache import rag_cache
+    # Connect RAG + answer caches to Redis if configured
+    from app.utils.cache import rag_cache, answer_cache
     if settings.redis_url:
         await rag_cache.connect_redis(settings.redis_url)
+        await answer_cache.connect_redis(settings.redis_url)
     else:
-        logger.info("REDIS_URL not set — RAG cache using in-memory store")
+        logger.info("REDIS_URL not set — RAG and answer caches using in-memory store")
 
     # Pull models in background so it doesn't block startup/healthcheck
     _pull_tasks.add(asyncio.create_task(_ensure_ollama_models(), name="ensure-models"))

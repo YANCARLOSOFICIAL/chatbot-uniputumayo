@@ -16,7 +16,7 @@ from app.schemas.document import DocumentUploadResponse
 from app.utils.file_parsers import extract_text, normalize_extension
 from app.utils.text_processing import clean_text
 from app.utils.chunking import chunk_text
-from app.utils.cache import rag_cache
+from app.utils.cache import rag_cache, answer_cache
 from app.services.llm_service import LLMService
 from app.schemas.llm import EmbedRequest
 from app.config import settings
@@ -309,6 +309,9 @@ class DocumentService:
                 document.total_chunks = len(chunks)
                 await db.commit()
                 await rag_cache.invalidate_all()
+                # Answers cached before this document existed may now be stale
+                # or incomplete (missing this newly indexed content).
+                await answer_cache.invalidate_all()
                 logger.info(
                     "Document %s ('%s') processed successfully — %d chunks",
                     document.id, document.title, len(chunks),
@@ -349,6 +352,7 @@ class DocumentService:
         await self.db.delete(doc)
         await self.db.commit()
         await rag_cache.invalidate_all()
+        await answer_cache.invalidate_all()
         return True
 
     async def get_chunks(
