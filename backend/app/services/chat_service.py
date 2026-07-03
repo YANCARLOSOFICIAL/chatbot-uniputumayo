@@ -20,7 +20,7 @@ from app.schemas.chat import (
 from app.services.rag_service import RAGService
 from app.services.llm_service import LLMService
 from app.schemas.rag import SearchRequest
-from app.schemas.llm import GenerateRequest, LLMMessage, EmbedRequest
+from app.schemas.llm import GenerateRequest, LLMMessage
 from app.utils.prompts import build_chat_prompt
 from app.utils.query_utils import detect_temperature
 from app.utils.cache import answer_cache
@@ -151,15 +151,22 @@ class ChatService:
         )
 
     async def _embed_query(self, query: str) -> list[float]:
-        """Embed the raw user query — independent of HyDE — for answer-cache lookups.
+        """Embed the raw user query for answer-cache similarity lookups.
 
-        Always embeds the literal question (not a HyDE hypothetical doc) so
-        cache matching reflects what the user actually asked, regardless of
-        whether HyDE is enabled for retrieval.
+        Deliberately independent of both HyDE (always embeds the literal
+        question, not a hypothetical doc) and the RAG embedding model
+        (nomic-embed-text, tuned for document retrieval). Question-vs-question
+        paraphrase matching is a different task: empirically, nomic-embed-text
+        barely separates deep paraphrases (~0.58-0.69 similarity) from
+        unrelated questions (~0.51-0.55) — too close to threshold safely.
+        `answer_cache_embedding_model` (embeddinggemma) separates them
+        cleanly (~0.69-0.80 vs ~0.35-0.37), so the cache always uses that
+        model via Ollama directly, regardless of `embedding_provider` or
+        `default_llm_provider`.
         """
-        llm_service = LLMService()
-        embed_response = await llm_service.embed(EmbedRequest(texts=[query]))
-        return embed_response.embeddings[0]
+        provider = ProviderFactory.get_provider("ollama")
+        result = await provider.embed([query], model=settings.answer_cache_embedding_model)
+        return result["embeddings"][0]
 
     async def _check_answer_cache(self, query: str) -> tuple[list[float], dict | None]:
         """Embed the query and look up a semantically similar cached answer.

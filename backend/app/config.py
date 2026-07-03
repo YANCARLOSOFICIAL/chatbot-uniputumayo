@@ -60,19 +60,30 @@ class Settings(BaseSettings):
     # es el cuello de botella real (~3-5 tok/s) — un acierto responde en el
     # tiempo de un embedding (~1-2s) en vez de minutos.
     answer_cache_enabled: bool = True
-    # Umbral de similitud coseno entre embeddings de preguntas para considerar
-    # un acierto de caché. Medido empíricamente con nomic-embed-text sobre
-    # pares reales en español: parafraseos cercanos ("qué facultades tiene" vs
-    # "cuáles facultades ofrece") puntúan ~0.92; preguntas genuinamente
-    # distintas puntúan ~0.51-0.55. Parafraseos con redacción muy distinta
-    # ("requisitos de admisión" vs "qué necesito para admitirme") caen a
-    # ~0.58-0.69 — demasiado cerca de preguntas distintas para diferenciar de
-    # forma segura, así que este umbral solo atrapa reformulaciones cercanas,
-    # no parafraseos profundos. Ajustar según los logs de
-    # "Answer cache HIT (similarity=...)" en producción.
-    answer_cache_similarity_threshold: float = 0.90
-    answer_cache_ttl_seconds: int = 604800  # 7 días — preguntas de FAQ institucional cambian poco
-    answer_cache_max_entries: int = 300
+    # Modelo de embeddings dedicado para similitud de preguntas en la caché —
+    # separado de `ollama_embedding_model` (nomic-embed-text), que está
+    # afinado para RAG (buscar en documentos largos), no para distinguir
+    # parafraseos de preguntas cortas. Medido empíricamente con pares reales
+    # en español: nomic-embed-text no separaba "parafraseo profundo" (~0.58-
+    # 0.69) de "pregunta distinta" (~0.51-0.55) — margen casi nulo. Con
+    # embeddinggemma: "distinta" cae a ~0.35-0.37 y "parafraseo profundo" sube
+    # a ~0.69-0.80 — separación real y amplia.
+    answer_cache_embedding_model: str = "embeddinggemma"
+    # Umbral de similitud coseno para considerar un acierto de caché (ver
+    # medición arriba). 0.65 deja margen amplio por debajo del parafraseo
+    # profundo más bajo medido (0.69) y muy por encima de preguntas distintas
+    # (máx 0.37). Ajustar según los logs de "Answer cache HIT (similarity=...)"
+    # en producción.
+    answer_cache_similarity_threshold: float = 0.65
+    # 30 días — es solo una red de seguridad: la invalidación real ocurre al
+    # subir/borrar documentos (answer_cache.invalidate_all() en
+    # document_service.py), así que un TTL largo no arriesga servir
+    # respuestas desactualizadas mientras la base de conocimiento no cambie.
+    answer_cache_ttl_seconds: int = 2592000
+    # Subido junto con el TTL: con 30 días de vida, se acumulan más entradas
+    # antes de expirar. 1000 entradas ≈ 17 MB en Redis — insignificante
+    # frente al límite de 384 MB del contenedor.
+    answer_cache_max_entries: int = 1000
 
     # Server
     host: str = "0.0.0.0"

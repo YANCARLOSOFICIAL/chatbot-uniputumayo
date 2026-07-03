@@ -51,6 +51,7 @@ async def _ensure_ollama_models():
             settings.ollama_default_model,
             settings.ollama_embedding_model,
             settings.ollama_vision_model,
+            settings.answer_cache_embedding_model,
         ] if m
     ]
     try:
