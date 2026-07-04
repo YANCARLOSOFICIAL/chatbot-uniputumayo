@@ -178,7 +178,10 @@ export function MessageList({ messages, sources, isLoading, onQuickReply, onRege
       <div
         ref={scrollRef}
         className="h-full overflow-y-auto"
-        aria-live="polite"
+        // "off" while a response is streaming so screen readers don't try to
+        // announce every incoming token; back to "polite" once it settles so
+        // the finished message is announced exactly once.
+        aria-live={isLoading ? "off" : "polite"}
         aria-label="Mensajes"
       >
         {isEmpty ? (

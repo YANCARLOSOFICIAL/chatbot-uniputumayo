@@ -77,6 +77,63 @@ class RAGService:
                 break
         return filtered
 
+    # ── Keyword (full-text) search — recall widener ──────────────────────────
+
+    async def _keyword_search(
+        self,
+        query: str,
+        where_clause: str,
+        base_params: dict,
+        exclude_ids: set,
+        limit: int,
+    ) -> list[SearchResultItem]:
+        """Postgres full-text search over chunk content.
+
+        Catches chunks that share exact terms with the query (program names,
+        codes, acronyms) but whose embedding drifted below the cosine
+        threshold — pure-vector search has no way to recover these. Results
+        get a baseline score (the passing threshold) rather than ts_rank_cd
+        directly, since that score isn't on the same scale as cosine
+        similarity; `_rerank()` differentiates them afterwards using the same
+        keyword-overlap function applied to vector-sourced candidates.
+        """
+        params = {k: v for k, v in base_params.items() if k not in ("embedding", "top_k")}
+        params["query_text"] = query
+        params["limit"] = limit
+
+        sql = text(f"""
+            SELECT
+                dc.id          AS chunk_id,
+                dc.content,
+                d.title        AS document_title,
+                d.program,
+                d.faculty,
+                dc.metadata
+            FROM document_chunks dc
+            JOIN documents d ON dc.document_id = d.id
+            WHERE dc.embedding IS NOT NULL
+              AND {where_clause}
+              AND to_tsvector('spanish', dc.content) @@ plainto_tsquery('spanish', :query_text)
+            ORDER BY ts_rank_cd(to_tsvector('spanish', dc.content), plainto_tsquery('spanish', :query_text)) DESC
+            LIMIT :limit
+        """)
+        result = await self.db.execute(sql, params)
+
+        items: list[SearchResultItem] = []
+        for row in result.fetchall():
+            if row.chunk_id in exclude_ids:
+                continue
+            items.append(SearchResultItem(
+                chunk_id=row.chunk_id,
+                content=row.content,
+                score=settings.rag_score_threshold,
+                document_title=row.document_title,
+                program=row.program,
+                faculty=row.faculty,
+                metadata=row.metadata,
+            ))
+        return items
+
     # ── Re-ranking ───────────────────────────────────────────────────────────
 
     def _rerank(
@@ -245,6 +302,7 @@ class RAGService:
 
         # 3. Apply score threshold
         candidates: list[SearchResultItem] = []
+        seen_chunk_ids: set = set()
         for row in rows:
             if row.score >= request.score_threshold:
                 candidates.append(SearchResultItem(
@@ -256,6 +314,25 @@ class RAGService:
                     faculty=row.faculty,
                     metadata=row.metadata,
                 ))
+                seen_chunk_ids.add(row.chunk_id)
+
+        # 3b. Full-text keyword search — widens recall beyond what cosine
+        # similarity found. Pure-vector retrieval can miss chunks that share
+        # exact terms (program names, codes) with the query but whose overall
+        # embedding drifts below threshold. Candidates found here get a
+        # baseline score (the passing threshold) so they clear the quality
+        # gate below; `_rerank()` then differentiates them by actual keyword
+        # overlap against the real query, same as vector-sourced candidates.
+        try:
+            fts_candidates = await self._keyword_search(
+                request.query, where_clause, params, exclude_ids=seen_chunk_ids,
+                limit=request.top_k,
+            )
+            for item in fts_candidates:
+                candidates.append(item)
+                seen_chunk_ids.add(item.chunk_id)
+        except Exception as e:
+            logger.debug("Full-text keyword search skipped: %s", e)
 
         # 4. Re-rank with keyword overlap boost
         candidates = self._rerank(request.query, candidates)

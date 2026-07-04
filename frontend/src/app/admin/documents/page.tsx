@@ -39,6 +39,7 @@ export default function DocumentsPage() {
   const [error, setError]               = useState<string | null>(null);
   const [dragOver, setDragOver]         = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [reindexingId, setReindexingId] = useState<string | null>(null);
   const [file, setFile]                 = useState<File | null>(null);
   const [title, setTitle]               = useState("");
   const [faculty, setFaculty]           = useState("");
@@ -142,6 +143,22 @@ export default function DocumentsPage() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error eliminando documento";
       setError(msg); toast.error(msg);
+    }
+  };
+
+  const handleReindex = async (id: string, title: string) => {
+    setReindexingId(id);
+    try {
+      const result = await apiClient.reindexDocument(id);
+      toast.info(result.message || `Reindexando "${title}"...`);
+      // Status flips to "processing" server-side — the existing 4s poll picks
+      // up the completed/failed transition and toasts it.
+      await loadDocuments();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error al reindexar el documento";
+      toast.error(msg);
+    } finally {
+      setReindexingId(null);
     }
   };
 
@@ -337,21 +354,41 @@ export default function DocumentsPage() {
                             {new Date(doc.created_at).toLocaleDateString("es-CO")}
                           </td>
                           <td style={{ padding: "13px 16px", textAlign: "right" }}>
-                            <button
-                              onClick={() => handleDeleteClick(doc.id)}
-                              style={{
-                                display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11,
-                                padding: "3px 8px", borderRadius: 6, border: "none", cursor: "pointer",
-                                background: confirmDeleteId === doc.id ? "var(--error-dim)" : "transparent",
-                                color: confirmDeleteId === doc.id ? "var(--error)" : "var(--text-3)",
-                                transition: "all 0.1s",
-                              }}
-                              onMouseEnter={(e) => { if (confirmDeleteId !== doc.id) { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--error-dim)"; b.style.color = "var(--error)"; } }}
-                              onMouseLeave={(e) => { if (confirmDeleteId !== doc.id) { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--text-3)"; } }}
-                            >
-                              <Trash2 size={11} />
-                              {confirmDeleteId === doc.id ? "Confirmar?" : "Eliminar"}
-                            </button>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                              <button
+                                onClick={() => handleReindex(doc.id, doc.title)}
+                                disabled={reindexingId === doc.id || doc.ingestion_status === "processing"}
+                                title="Reprocesar y regenerar embeddings"
+                                style={{
+                                  display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11,
+                                  padding: "3px 8px", borderRadius: 6, border: "none",
+                                  cursor: reindexingId === doc.id || doc.ingestion_status === "processing" ? "not-allowed" : "pointer",
+                                  background: "transparent", color: "var(--text-3)",
+                                  opacity: reindexingId === doc.id || doc.ingestion_status === "processing" ? 0.5 : 1,
+                                  transition: "all 0.1s",
+                                }}
+                                onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--brand-dim)"; b.style.color = "var(--brand-primary)"; }}
+                                onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--text-3)"; }}
+                              >
+                                <RefreshCw size={11} className={reindexingId === doc.id ? "animate-spin" : ""} />
+                                Reindexar
+                              </button>
+                              <button
+                                onClick={() => handleDeleteClick(doc.id)}
+                                style={{
+                                  display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11,
+                                  padding: "3px 8px", borderRadius: 6, border: "none", cursor: "pointer",
+                                  background: confirmDeleteId === doc.id ? "var(--error-dim)" : "transparent",
+                                  color: confirmDeleteId === doc.id ? "var(--error)" : "var(--text-3)",
+                                  transition: "all 0.1s",
+                                }}
+                                onMouseEnter={(e) => { if (confirmDeleteId !== doc.id) { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--error-dim)"; b.style.color = "var(--error)"; } }}
+                                onMouseLeave={(e) => { if (confirmDeleteId !== doc.id) { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--text-3)"; } }}
+                              >
+                                <Trash2 size={11} />
+                                {confirmDeleteId === doc.id ? "Confirmar?" : "Eliminar"}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}

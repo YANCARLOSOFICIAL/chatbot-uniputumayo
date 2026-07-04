@@ -11,9 +11,22 @@ SEPARATORS = [
     " ",
 ]
 
+try:
+    import tiktoken
+    _ENCODING = tiktoken.get_encoding("cl100k_base")
+except Exception:
+    _ENCODING = None
+    logger.warning("tiktoken unavailable — falling back to chars/4 token estimate")
+
 
 def _count_tokens(text: str) -> int:
-    """Approximate token count. Uses ~4 chars per token for Spanish text."""
+    """Real BPE token count via tiktoken (cl100k_base — a reasonable proxy
+    even for non-OpenAI models, and far closer than a flat chars-per-token
+    ratio, which over/under-counts Spanish text with accents and compound
+    words). Falls back to the chars/4 heuristic only if tiktoken is missing.
+    """
+    if _ENCODING is not None:
+        return len(_ENCODING.encode(text))
     return len(text) // 4
 
 

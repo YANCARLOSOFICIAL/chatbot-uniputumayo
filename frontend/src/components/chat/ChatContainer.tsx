@@ -14,6 +14,7 @@ import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { QuickReplies } from "./QuickReplies";
 import { GuacamayaAvatar, type GuacamayaState } from "./GuacamayaAvatar";
+import { ModelSelector, type ModelSelection } from "./ModelSelector";
 
 const ConversationSidebar = dynamic(
   () => import("./ConversationSidebar").then((m) => ({ default: m.ConversationSidebar })),
@@ -26,6 +27,7 @@ export function ChatContainer() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authed, setAuthed] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [modelSelection, setModelSelection] = useState<ModelSelection>({ provider: null, model: null });
 
   const {
     conversations, activeConversationId, messages, sources,
@@ -70,10 +72,14 @@ export function ChatContainer() {
         }
         if (!convId) return;
       }
-      const response = await sendMessage(content, inputType, convId);
+      const response = await sendMessage(
+        content, inputType, convId,
+        modelSelection.provider ?? undefined,
+        modelSelection.model ?? undefined,
+      );
       if (response && inputType === "voice") speak(response);
     },
-    [activeConversationId, createConversation, sendMessage, speak]
+    [activeConversationId, createConversation, sendMessage, speak, modelSelection]
   );
 
   handleSendRef.current = handleSend;
@@ -192,6 +198,7 @@ export function ChatContainer() {
 
           {/* Right actions */}
           <div className="ml-auto flex items-center gap-1">
+            <ModelSelector onChange={setModelSelection} />
             <ThemeToggle />
             {mounted && (
               authed && user ? (
@@ -212,7 +219,7 @@ export function ChatContainer() {
                 </>
               ) : (
                 <Link
-                  href="/login"
+                  href="/admin/login"
                   className="flex items-center gap-1.5 text-[12px] text-[var(--text-2)] hover:text-[var(--brand-primary)] transition-colors px-2.5 py-1.5 rounded-md border border-[var(--border)] hover:border-[var(--brand-primary)] font-medium"
                   style={{ whiteSpace: "nowrap" }}
                 >
@@ -243,7 +250,7 @@ export function ChatContainer() {
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderRadius: 10, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", fontSize: 12 }}>
               <span style={{ color: "var(--text-2)", flex: 1 }}>
                 Esta conversacion no se guardara.{" "}
-                <Link href="/login" style={{ color: "var(--brand-primary)", fontWeight: 600, textDecoration: "none" }}>
+                <Link href="/admin/login" style={{ color: "var(--brand-primary)", fontWeight: 600, textDecoration: "none" }}>
                   Inicia sesion
                 </Link>{" "}
                 para guardar tu historial.

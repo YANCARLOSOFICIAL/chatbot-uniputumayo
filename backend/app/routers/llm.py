@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.llm import (
     GenerateRequest,
@@ -10,8 +11,10 @@ from app.schemas.llm import (
     LLMConfigUpdate,
 )
 from app.services.llm_service import LLMService
+from app.services.llm_config_store import persist_runtime_config
 from app.auth import require_admin
 from app.models.user import User
+from app.database import get_db
 from app.runtime_config import runtime_config
 from app.providers.provider_factory import ProviderFactory
 
@@ -37,9 +40,15 @@ async def get_providers():
 
 
 @router.put("/config")
-async def update_config(config: LLMConfigUpdate, admin: User = Depends(require_admin)):
+async def update_config(
+    config: LLMConfigUpdate,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
     service = LLMService()
-    return await service.update_config(config)
+    result = await service.update_config(config)
+    await persist_runtime_config(db)
+    return result
 
 
 # ── API Key management ──
@@ -51,7 +60,11 @@ class ApiKeyRequest(BaseModel):
 
 
 @router.post("/api-key")
-async def set_api_key(data: ApiKeyRequest, admin: User = Depends(require_admin)):
+async def set_api_key(
+    data: ApiKeyRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
     if data.provider != "openai":
         return {"success": False, "is_available": False, "detail": "Solo se soporta OpenAI"}
 
@@ -61,6 +74,8 @@ async def set_api_key(data: ApiKeyRequest, admin: User = Depends(require_admin))
     # Test connection
     provider = ProviderFactory.get_provider("openai")
     is_available = await provider.is_available()
+
+    await persist_runtime_config(db)
 
     return {"success": True, "is_available": is_available}
 

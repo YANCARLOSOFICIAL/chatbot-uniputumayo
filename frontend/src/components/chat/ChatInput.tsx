@@ -3,6 +3,10 @@
 import { useState, useRef, type FormEvent, type KeyboardEvent } from "react";
 import { ArrowUp, Mic, Square } from "lucide-react";
 
+// Mirrors backend MessageCreate._MAX_MESSAGE_LEN (schemas/chat.py) so the
+// user finds out before typing a message the server will reject.
+const MAX_MESSAGE_LEN = 4000;
+
 interface ChatInputProps {
   onSend: (message: string) => void;
   onVoiceStart: () => void;
@@ -45,8 +49,8 @@ export function ChatInput({
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
     const trimmed = value.trim();
-    if (!trimmed && !isLoading) { triggerShake(); return; }
-    if (!trimmed || isLoading) return;
+    if ((!trimmed || trimmed.length > MAX_MESSAGE_LEN) && !isLoading) { triggerShake(); return; }
+    if (!trimmed || trimmed.length > MAX_MESSAGE_LEN || isLoading) return;
     onSend(trimmed);
     reset();
     textareaRef.current?.focus();
@@ -56,8 +60,9 @@ export function ChatInput({
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
   };
 
-  const canSend = value.trim().length > 0 && !isLoading && !isListening;
+  const canSend = value.trim().length > 0 && value.length <= MAX_MESSAGE_LEN && !isLoading && !isListening;
   const showCounter = value.length > 200;
+  const overLimit = value.length > MAX_MESSAGE_LEN;
 
   return (
     <div
@@ -118,6 +123,7 @@ export function ChatInput({
                 : "Preguntale a Guaca sobre programas, sedes, requisitos..."
               }
               rows={1}
+              maxLength={MAX_MESSAGE_LEN}
               disabled={isLoading || isListening}
               aria-label="Mensaje"
               style={{
@@ -134,10 +140,10 @@ export function ChatInput({
               <span style={{
                 position: "absolute", bottom: 0, right: 0,
                 fontFamily: "var(--font-mono)", fontSize: 10,
-                color: value.length > 500 ? "var(--error)" : "var(--text-3)",
+                color: overLimit ? "var(--error)" : value.length > MAX_MESSAGE_LEN * 0.85 ? "var(--warning, var(--error))" : "var(--text-3)",
                 fontVariantNumeric: "tabular-nums",
               }}>
-                {value.length}
+                {value.length > MAX_MESSAGE_LEN * 0.85 ? `${value.length}/${MAX_MESSAGE_LEN}` : value.length}
               </span>
             )}
           </div>

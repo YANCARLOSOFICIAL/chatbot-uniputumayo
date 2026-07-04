@@ -131,7 +131,18 @@ async def _seed_admin():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Iniciando Nexus UniPutumayo API...")
-    
+
+    # Apply any persisted admin-panel config on top of the .env defaults —
+    # must happen before the availability checks below so a persisted OpenAI
+    # API key is actually picked up instead of showing a stale "not configured".
+    try:
+        from app.database import async_session
+        from app.services.llm_config_store import load_into_runtime_config
+        async with async_session() as db:
+            await load_into_runtime_config(db)
+    except Exception as e:
+        logger.warning("Could not load persisted LLM config (non-fatal): %s", e)
+
     # Check provider availability
     from app.providers.openai_provider import OpenAIProvider
     from app.providers.ollama_provider import OllamaProvider
@@ -174,6 +185,79 @@ async def lifespan(app: FastAPI):
         logger.info("HNSW index verified/created on document_chunks.embedding")
     except Exception as e:
         logger.warning("Could not ensure HNSW index (non-fatal): %s", e)
+
+    # Ensure high-traffic B-tree indexes exist (idempotent - safe on every startup)
+    try:
+        from app.database import async_session
+        from sqlalchemy import text as sql_text
+        async with async_session() as db:
+            await db.execute(sql_text(
+                "CREATE INDEX IF NOT EXISTS ix_conversations_user_id_updated_at "
+                "ON conversations (user_id, updated_at DESC)"
+            ))
+            await db.execute(sql_text(
+                "CREATE INDEX IF NOT EXISTS ix_conversations_is_active_updated_at "
+                "ON conversations (is_active, updated_at DESC)"
+            ))
+            await db.execute(sql_text(
+                "CREATE INDEX IF NOT EXISTS ix_messages_conversation_id_created_at "
+                "ON messages (conversation_id, created_at)"
+            ))
+            await db.execute(sql_text(
+                "CREATE INDEX IF NOT EXISTS ix_documents_uploaded_by "
+                "ON documents (uploaded_by)"
+            ))
+            await db.execute(sql_text(
+                "CREATE INDEX IF NOT EXISTS ix_documents_program "
+                "ON documents (program)"
+            ))
+            await db.execute(sql_text(
+                "CREATE INDEX IF NOT EXISTS ix_document_chunks_document_id "
+                "ON document_chunks (document_id)"
+            ))
+            await db.commit()
+        logger.info("High-traffic B-tree indexes verified/created")
+    except Exception as e:
+        logger.warning("Could not ensure B-tree indexes (non-fatal): %s", e)
+
+    # Ensure full-text GIN index exists (backs hybrid keyword+vector RAG retrieval)
+    try:
+        from app.database import async_session
+        from sqlalchemy import text as sql_text
+        async with async_session() as db:
+            await db.execute(sql_text(
+                "CREATE INDEX IF NOT EXISTS idx_dc_content_fts "
+                "ON document_chunks USING gin (to_tsvector('spanish', content))"
+            ))
+            await db.commit()
+        logger.info("Full-text GIN index verified/created on document_chunks.content")
+    except Exception as e:
+        logger.warning("Could not ensure full-text GIN index (non-fatal): %s", e)
+
+    # Warn loudly if the pgvector column dimension doesn't match settings.embedding_dimensions —
+    # this happens when embedding_provider/embedding_dimensions changes without a matching
+    # migration, and otherwise only surfaces as a cryptic pgvector insert error much later.
+    try:
+        from app.database import async_session
+        from sqlalchemy import text as sql_text
+        async with async_session() as db:
+            result = await db.execute(sql_text("""
+                SELECT atttypmod FROM pg_attribute
+                WHERE attrelid = 'document_chunks'::regclass
+                AND attname = 'embedding' AND NOT attisdropped
+            """))
+            row = result.first()
+            column_dim = row[0] if row else None
+            if column_dim and column_dim > 0 and column_dim != settings.embedding_dimensions:
+                logger.error(
+                    "⚠️ EMBEDDING DIMENSION MISMATCH: document_chunks.embedding is vector(%d) "
+                    "but settings.embedding_dimensions=%d (embedding_provider=%s). New chunks "
+                    "will fail to insert until you either revert embedding_provider or run a "
+                    "migration to alter the column and re-embed all documents.",
+                    column_dim, settings.embedding_dimensions, settings.embedding_provider,
+                )
+    except Exception as e:
+        logger.warning("Could not verify embedding column dimension (non-fatal): %s", e)
 
     # Seed admin user
     try:

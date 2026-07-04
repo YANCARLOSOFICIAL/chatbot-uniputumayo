@@ -20,8 +20,23 @@ from app.schemas.chat import (
 from app.services.chat_service import ChatService
 from app.auth import get_current_user
 from app.models.user import User
+from app.utils.rate_limit import limiter
 
 router = APIRouter()
+
+
+def _check_ownership(conversation: Conversation, current_user: User | None) -> None:
+    """Reject access to another user's conversation.
+
+    Returns 404 (not 403) so a guessed UUID can't be used to confirm a
+    conversation exists. Guest conversations (user_id IS NULL) have no
+    concept of ownership since there is no auth to check against — the
+    UUID itself is the only access control, same as an anonymous share link.
+    """
+    if conversation.user_id is not None and (
+        current_user is None or conversation.user_id != current_user.id
+    ):
+        raise HTTPException(status_code=404, detail="Conversation not found")
 
 
 @router.post("/conversations", response_model=ConversationResponse)
@@ -51,12 +66,15 @@ async def list_conversations(
 
 @router.get("/conversations/{conversation_id}", response_model=ConversationResponse)
 async def get_conversation(
-    conversation_id: UUID, db: AsyncSession = Depends(get_db)
+    conversation_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ):
     service = ChatService(db)
     conversation = await service.get_conversation(conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    _check_ownership(conversation, current_user)
     return conversation
 
 
@@ -65,22 +83,29 @@ async def rename_conversation(
     conversation_id: UUID,
     data: ConversationUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ):
     service = ChatService(db)
-    conversation = await service.update_conversation_title(conversation_id, data.title)
+    conversation = await service.get_conversation(conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    return conversation
+    _check_ownership(conversation, current_user)
+    updated = await service.update_conversation_title(conversation_id, data.title)
+    return updated
 
 
 @router.delete("/conversations/{conversation_id}")
 async def delete_conversation(
-    conversation_id: UUID, db: AsyncSession = Depends(get_db)
+    conversation_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ):
     service = ChatService(db)
-    success = await service.delete_conversation(conversation_id)
-    if not success:
+    conversation = await service.get_conversation(conversation_id)
+    if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    _check_ownership(conversation, current_user)
+    await service.delete_conversation(conversation_id)
     return {"success": True}
 
 
@@ -104,23 +129,29 @@ async def guest_close_conversation(
 @router.post(
     "/conversations/{conversation_id}/messages", response_model=ChatResponse
 )
+@limiter.limit("20/minute")
 async def send_message(
+    request: Request,
     conversation_id: UUID,
     data: MessageCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ):
     service = ChatService(db)
     conversation = await service.get_conversation(conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    _check_ownership(conversation, current_user)
     return await service.process_message(conversation_id, data)
 
 
 @router.post("/conversations/{conversation_id}/messages/stream")
+@limiter.limit("20/minute")
 async def send_message_stream(
     request: Request,
     conversation_id: UUID,
     data: MessageCreate,
+    current_user: User | None = Depends(get_current_user),
 ):
     """SSE streaming endpoint with periodic heartbeats for QUIC/Cloudflare.
 
@@ -142,6 +173,13 @@ async def send_message_stream(
                         service = ChatService(db)
                         conversation = await service.get_conversation(conversation_id)
                         if not conversation:
+                            await q.put(
+                                f"data: {json.dumps({'type': 'error', 'message': 'Conversation not found'})}\n\n"
+                            )
+                            return
+                        try:
+                            _check_ownership(conversation, current_user)
+                        except HTTPException:
                             await q.put(
                                 f"data: {json.dumps({'type': 'error', 'message': 'Conversation not found'})}\n\n"
                             )
@@ -203,6 +241,11 @@ async def get_messages(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ):
     service = ChatService(db)
+    conversation = await service.get_conversation(conversation_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    _check_ownership(conversation, current_user)
     return await service.get_messages(conversation_id, limit=limit, offset=offset)

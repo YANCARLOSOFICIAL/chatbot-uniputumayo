@@ -13,6 +13,12 @@ export function useChat() {
   const messagesRef = useRef(state.messages);
   messagesRef.current = state.messages;
 
+  // Aborts any in-flight stream if the component unmounts mid-response.
+  const activeStreamController = useRef<AbortController | null>(null);
+  useEffect(() => {
+    return () => activeStreamController.current?.abort();
+  }, []);
+
   // ── Guest session lifecycle ──────────────────────────────────────────────
 
   // Ref keeps a stable pointer to selectConversation so the mount effect
@@ -169,6 +175,8 @@ export function useChat() {
       dispatch({ type: "ADD_MESSAGE", payload: streamingMessage });
 
       let assistantContent = "";
+      const controller = new AbortController();
+      activeStreamController.current = controller;
 
       try {
         await apiClient.sendMessageStream(
@@ -229,15 +237,26 @@ export function useChat() {
           },
           llmProvider,
           llmModel,
+          controller.signal,
         );
 
         return assistantContent;
       } catch (error) {
+        // Keep the user's message and whatever partial answer already
+        // streamed in — losing both on a mid-stream failure is confusing and
+        // gives the user nothing to retry. An empty partial answer becomes a
+        // placeholder so the "last bot message" regenerate button still
+        // appears (MessageList only shows it when a bot message exists).
         dispatch({
           type: "SET_MESSAGES",
-          payload: messagesRef.current.filter(
-            (m) => m.id !== tempUserId && m.id !== streamingId
-          ),
+          payload: [
+            ...messagesRef.current.filter((m) => m.id !== tempUserId && m.id !== streamingId),
+            tempUserMessage,
+            {
+              ...streamingMessage,
+              content: assistantContent.trim() || "⚠️ No se pudo completar la respuesta.",
+            },
+          ],
         });
         dispatch({ type: "SET_AVATAR_STATE", payload: "idle" });
         dispatch({
@@ -246,6 +265,7 @@ export function useChat() {
         });
         return null;
       } finally {
+        activeStreamController.current = null;
         dispatch({ type: "SET_LOADING", payload: false });
       }
     },

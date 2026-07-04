@@ -39,11 +39,9 @@ async function request<T>(
         localStorage.removeItem("auth_token");
         localStorage.removeItem("auth_user");
         if (!window.location.pathname.includes("/login")) {
-          // Admin paths go to admin login; everything else to the regular login
-          const loginUrl = window.location.pathname.startsWith("/admin")
-            ? "/admin/login"
-            : "/login";
-          window.location.href = loginUrl;
+          // Single consolidated login page lives at /admin/login (handles
+          // both regular users and admins, redirecting post-login by role).
+          window.location.href = "/admin/login";
         }
       }
     }
@@ -150,6 +148,7 @@ export const apiClient = {
     onEvent: (event: Record<string, unknown>) => void,
     llmProvider?: string,
     llmModel?: string,
+    externalSignal?: AbortSignal,
   ): Promise<void> => {
     const url = `${API_BASE}/api/v1/chat/conversations/${conversationId}/messages/stream`;
     const token = getStoredToken();
@@ -158,24 +157,52 @@ export const apiClient = {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        content,
-        input_type: inputType,
-        llm_provider: llmProvider,
-        llm_model: llmModel,
-      }),
-    });
+    // The backend sends an SSE heartbeat comment every 15s while generating, so
+    // any longer silence means the connection is actually dead — abort instead
+    // of leaving the UI stuck on a spinner forever. Reset on every chunk (data
+    // or heartbeat) received.
+    const IDLE_TIMEOUT_MS = 35_000;
+    const controller = new AbortController();
+    let idleTimer: ReturnType<typeof setTimeout> = setTimeout(() => {}, 0);
+    const resetIdleTimer = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => controller.abort(), IDLE_TIMEOUT_MS);
+    };
+    externalSignal?.addEventListener("abort", () => controller.abort());
+    resetIdleTimer();
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers,
+        signal: controller.signal,
+        body: JSON.stringify({
+          content,
+          input_type: inputType,
+          llm_provider: llmProvider,
+          llm_model: llmModel,
+        }),
+      });
+    } catch (err) {
+      clearTimeout(idleTimer);
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error("La conexion con el servidor se interrumpio. Intenta de nuevo.");
+      }
+      throw err;
+    }
 
     if (!response.ok) {
+      clearTimeout(idleTimer);
       const error = await response.json().catch(() => ({ detail: "Error del servidor" }));
       throw new Error(error.detail || `Error ${response.status}`);
     }
 
     const reader = response.body?.getReader();
-    if (!reader) throw new Error("Sin cuerpo de respuesta del stream");
+    if (!reader) {
+      clearTimeout(idleTimer);
+      throw new Error("Sin cuerpo de respuesta del stream");
+    }
 
     const decoder = new TextDecoder();
     let buffer = "";
@@ -183,6 +210,7 @@ export const apiClient = {
     try {
       while (true) {
         const { done, value } = await reader.read();
+        resetIdleTimer();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
@@ -204,7 +232,13 @@ export const apiClient = {
           }
         }
       }
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error("La conexion con el servidor se interrumpio. Intenta de nuevo.");
+      }
+      throw err;
     } finally {
+      clearTimeout(idleTimer);
       reader.cancel().catch(() => {});
     }
   },

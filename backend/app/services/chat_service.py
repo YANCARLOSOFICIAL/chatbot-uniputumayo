@@ -150,7 +150,7 @@ class ChatService:
             search_ms=search_results.search_time_ms,
         )
 
-    async def _embed_query(self, query: str) -> list[float]:
+    async def _embed_query(self, query: str) -> list[float] | None:
         """Embed the raw user query for answer-cache similarity lookups.
 
         Deliberately independent of both HyDE (always embeds the literal
@@ -163,22 +163,35 @@ class ChatService:
         cleanly (~0.69-0.80 vs ~0.35-0.37), so the cache always uses that
         model via Ollama directly, regardless of `embedding_provider` or
         `default_llm_provider`.
-        """
-        provider = ProviderFactory.get_provider("ollama")
-        result = await provider.embed([query], model=settings.answer_cache_embedding_model)
-        return result["embeddings"][0]
 
-    async def _check_answer_cache(self, query: str) -> tuple[list[float], dict | None]:
-        """Embed the query and look up a semantically similar cached answer.
+        Returns None (instead of raising) when Ollama is unreachable, so a
+        deployment running only OpenAI for chat doesn't lose the ability to
+        chat at all just because the answer-cache's embedding call fails.
+        """
+        try:
+            provider = ProviderFactory.get_provider("ollama")
+            result = await provider.embed([query], model=settings.answer_cache_embedding_model)
+            return result["embeddings"][0]
+        except Exception as e:
+            logger.warning("Answer-cache embedding unavailable, skipping cache lookup: %s", e)
+            return None
+
+    async def _check_answer_cache(self, query: str) -> tuple[list[float] | None, dict | None]:
+        """Look up a semantically similar cached answer, if the cache is enabled.
 
         Returns (embedding, cached_entry_or_None). The embedding is returned
         even on a miss so the caller can reuse it as the cache key when
-        storing the freshly generated answer, without embedding twice.
+        storing the freshly generated answer, without embedding twice. Both
+        are None when the cache is disabled or the embedding call failed
+        (e.g. Ollama unreachable) — callers must skip `answer_cache.store`
+        in that case.
         """
-        embedding = await self._embed_query(query)
         if not settings.answer_cache_enabled:
-            return embedding, None
-        cached = await answer_cache.find_similar(embedding)
+            return None, None
+        embedding = await self._embed_query(query)
+        if embedding is None:
+            return None, None
+        cached = await answer_cache.find_similar(embedding, query_text=query)
         return embedding, cached
 
     async def _get_history(
@@ -326,7 +339,12 @@ class ChatService:
             source_infos = rag_ctx.source_infos
             tokens_used = llm_response.tokens_used.total if llm_response.tokens_used else None
 
-            if settings.answer_cache_enabled and quality == "good" and content.strip():
+            if (
+                settings.answer_cache_enabled
+                and query_embedding is not None
+                and quality == "good"
+                and content.strip()
+            ):
                 await answer_cache.store(
                     query_embedding, data.content, content,
                     sources_payload, provider_name, model_name,
@@ -433,7 +451,12 @@ class ChatService:
 
                 # Only cache answers actually grounded in retrieved context — never
                 # cache "no tengo esa información" refusals or ungrounded guesses.
-                if settings.answer_cache_enabled and quality == "good" and full_content.strip():
+                if (
+                    settings.answer_cache_enabled
+                    and query_embedding is not None
+                    and quality == "good"
+                    and full_content.strip()
+                ):
                     await answer_cache.store(
                         query_embedding, data.content, full_content,
                         sources_payload, provider_name, model,

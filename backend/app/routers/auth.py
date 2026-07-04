@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, field_validator
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -189,6 +189,16 @@ async def update_user_role(
     target_user = result.scalar_one_or_none()
     if not target_user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    if target_user.role == "admin" and data.role != "admin":
+        admin_count = await db.scalar(
+            select(func.count()).select_from(User).where(User.role == "admin")
+        )
+        if admin_count <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="No puedes quitar el rol de admin al único administrador restante",
+            )
 
     target_user.role = data.role
     await db.commit()

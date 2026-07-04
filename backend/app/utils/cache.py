@@ -15,11 +15,24 @@
 import hashlib
 import json
 import logging
+import re
 import time
+import unicodedata
 
 logger = logging.getLogger(__name__)
 
 _SENTINEL = object()
+
+
+def _normalize(text: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", text.lower())
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
+def _significant_words(text: str) -> set[str]:
+    """Words of length >= 4 from normalized text — cheap proxy for named entities
+    (program/faculty names) without needing a fixed vocabulary or extra calls."""
+    return {w for w in re.findall(r"[a-z0-9]+", _normalize(text)) if len(w) >= 4}
 
 
 # ── Sync in-memory cache (embeddings) ────────────────────────────────────────
@@ -233,10 +246,35 @@ class AsyncAnswerCache:
 
     # ── Core operations ───────────────────────────────────────────────────────
 
-    async def find_similar(self, embedding: list[float]) -> dict | None:
+    @staticmethod
+    def _entity_guard_passes(entry: dict, query_text: str) -> bool:
+        """Reject a cosine-similarity match when the cached answer is scoped to
+        a specific program/faculty that the new query doesn't name.
+
+        Cosine similarity on short questions can't reliably tell apart
+        "requisitos de admisión para medicina" from "...para enfermería" —
+        near-identical phrasing, different program. Guard against that by
+        requiring the query to mention at least one significant word from the
+        program/faculty the cached sources were scoped to. Skipped entirely
+        when the cached sources span multiple programs/faculties (a genuinely
+        general question), since there's no single entity to check against.
+        """
+        sources = entry.get("sources") or []
+        query_words = _significant_words(query_text)
+
+        for field in ("program", "faculty"):
+            values = {s.get(field) for s in sources if s.get(field)}
+            if len(values) != 1:
+                continue  # ambiguous/generic — nothing specific to guard
+            entity_words = _significant_words(next(iter(values)))
+            if entity_words and not (entity_words & query_words):
+                return False
+        return True
+
+    async def find_similar(self, embedding: list[float], query_text: str = "") -> dict | None:
         """Return the best-matching cached entry if similarity clears the
-        threshold, else None. Entry dict has: question, answer, sources,
-        llm_provider, llm_model."""
+        threshold AND it passes the entity guard, else None. Entry dict has:
+        question, answer, sources, llm_provider, llm_model."""
         entries = await self._load_entries()
         now = time.time()
         best: dict | None = None
@@ -249,6 +287,12 @@ class AsyncAnswerCache:
                 best_score = score
                 best = entry
         if best is not None and best_score >= self._threshold:
+            if query_text and not self._entity_guard_passes(best, query_text):
+                logger.info(
+                    "Answer cache guard rejected hit (similarity=%.3f, entity mismatch): '%.60s…'",
+                    best_score, query_text,
+                )
+                return None
             logger.info(
                 "Answer cache HIT (similarity=%.3f): '%.60s…'",
                 best_score, best.get("question", ""),
