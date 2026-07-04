@@ -14,7 +14,6 @@ import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { QuickReplies } from "./QuickReplies";
 import { GuacamayaAvatar, type GuacamayaState } from "./GuacamayaAvatar";
-import { ModelSelector, type ModelSelection } from "./ModelSelector";
 
 const ConversationSidebar = dynamic(
   () => import("./ConversationSidebar").then((m) => ({ default: m.ConversationSidebar })),
@@ -27,7 +26,6 @@ export function ChatContainer() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authed, setAuthed] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [modelSelection, setModelSelection] = useState<ModelSelection>({ provider: null, model: null });
 
   const {
     conversations, activeConversationId, messages, sources,
@@ -72,14 +70,10 @@ export function ChatContainer() {
         }
         if (!convId) return;
       }
-      const response = await sendMessage(
-        content, inputType, convId,
-        modelSelection.provider ?? undefined,
-        modelSelection.model ?? undefined,
-      );
+      const response = await sendMessage(content, inputType, convId);
       if (response && inputType === "voice") speak(response);
     },
-    [activeConversationId, createConversation, sendMessage, speak, modelSelection]
+    [activeConversationId, createConversation, sendMessage, speak]
   );
 
   handleSendRef.current = handleSend;
@@ -198,7 +192,6 @@ export function ChatContainer() {
 
           {/* Right actions */}
           <div className="ml-auto flex items-center gap-1">
-            <ModelSelector onChange={setModelSelection} />
             <ThemeToggle />
             {mounted && (
               authed && user ? (
