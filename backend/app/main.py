@@ -130,7 +130,7 @@ async def _seed_admin():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Iniciando Nexus UniPutumayo API...")
+    logger.info("Iniciando Guaca UniPutumayo API...")
 
     # Apply any persisted admin-panel config on top of the .env defaults —
     # must happen before the availability checks below so a persisted OpenAI
@@ -279,12 +279,12 @@ async def lifespan(app: FastAPI):
     # Pull models in background so it doesn't block startup/healthcheck
     _pull_tasks.add(asyncio.create_task(_ensure_ollama_models(), name="ensure-models"))
     yield
-    logger.info("Cerrando Nexus UniPutumayo API...")
+    logger.info("Cerrando Guaca UniPutumayo API...")
 
 
 app = FastAPI(
-    title="Nexus UniPutumayo API",
-    description="API del asistente virtual Nexus de la Institución Universitaria del Putumayo",
+    title="Guaca UniPutumayo API",
+    description="API del asistente virtual Guaca de la Institución Universitaria del Putumayo",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -321,7 +321,7 @@ app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytic
 @app.get("/")
 async def root():
     return {
-        "name": "guaca bot UniPutumayo API",
+        "name": "Guaca UniPutumayo API",
         "version": "1.0.0",
         "docs": "/docs",
     }
