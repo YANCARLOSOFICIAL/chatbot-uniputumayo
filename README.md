@@ -1,5 +1,7 @@
 # Chatbot Uniputumayo- Institución Universitaria del Putumayo
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/YANCARLOSOFICIAL/chatbot-uniputumayo)
+
 Chatbot interactivo basado en **RAG (Retrieval-Augmented Generation)** y **LLM (Large Language Models)** que brinda información precisa y accesible sobre los programas académicos de la Institución Universitaria del Putumayo.
 
 Soporta interacción por **texto y voz**, cuenta con un **avatar animado 2D** y permite alternar entre **Ollama (local)** y **OpenAI (nube)** como proveedores de IA.
