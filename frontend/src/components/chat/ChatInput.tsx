@@ -71,18 +71,6 @@ export function ChatInput({
     >
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
 
-        {/* Listening banner */}
-        {isListening && (
-          <div style={{
-            display: "flex", alignItems: "center", gap: 8,
-            marginBottom: 10, padding: "6px 10px", borderRadius: 8,
-            background: "rgba(123,181,46,0.08)", border: "1px solid rgba(123,181,46,0.2)",
-          }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--brand-accent)", display: "inline-block", animation: "pulse-soft 1s ease-in-out infinite" }} />
-            <span style={{ fontSize: 12, color: "var(--brand-accent)", fontWeight: 500 }}>Escuchando</span>
-          </div>
-        )}
-
         <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
 
           {/* Voice button */}

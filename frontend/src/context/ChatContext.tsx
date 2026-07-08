@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { Conversation, Message, SourceInfo } from "@/types/chat";
 import type { AvatarState } from "@/types/avatar";
+import { nextAvatarState, type AvatarEvent } from "@/lib/avatarMachine";
 
 interface ChatState {
   conversations: Conversation[];
@@ -29,7 +30,7 @@ type ChatAction =
   | { type: "UPDATE_MESSAGE_CONTENT"; payload: { id: string; append: string } }
   | { type: "SET_SOURCES"; payload: SourceInfo[] }
   | { type: "SET_LOADING"; payload: boolean }
-  | { type: "SET_AVATAR_STATE"; payload: AvatarState }
+  | { type: "AVATAR_EVENT"; payload: AvatarEvent }
   | { type: "SET_INPUT_MODE"; payload: "text" | "voice" }
   | { type: "SET_ERROR"; payload: string | null }
   | { type: "ADD_CONVERSATION"; payload: Conversation }
@@ -70,8 +71,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, sources: action.payload };
     case "SET_LOADING":
       return { ...state, isLoading: action.payload };
-    case "SET_AVATAR_STATE":
-      return { ...state, avatarState: action.payload };
+    case "AVATAR_EVENT":
+      return { ...state, avatarState: nextAvatarState(state.avatarState, action.payload) };
     case "SET_INPUT_MODE":
       return { ...state, inputMode: action.payload };
     case "SET_ERROR":

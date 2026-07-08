@@ -134,12 +134,13 @@ export function useChat() {
       conversationId?: string,
       llmProvider?: string,
       llmModel?: string,
+      voice?: { enqueueDelta: (token: string) => void; flush: () => void },
     ) => {
       const convId = conversationId || state.activeConversationId;
       if (!convId) return;
 
       dispatch({ type: "SET_LOADING", payload: true });
-      dispatch({ type: "SET_AVATAR_STATE", payload: "thinking" });
+      dispatch({ type: "AVATAR_EVENT", payload: "REQUEST_SENT" });
       dispatch({ type: "SET_ERROR", payload: null });
 
       // Optimistically add user message
@@ -218,6 +219,7 @@ export function useChat() {
                 type: "UPDATE_MESSAGE_CONTENT",
                 payload: { id: streamingId, append: e.content },
               });
+              voice?.enqueueDelta(e.content);
             } else if (e.type === "done") {
               const currentMessages = messagesRef.current.filter(
                 (m) => m.id !== tempUserId && m.id !== streamingId
@@ -230,7 +232,13 @@ export function useChat() {
                   e.assistant_message as unknown as Message,
                 ],
               });
-              dispatch({ type: "SET_AVATAR_STATE", payload: "speaking" });
+              if (voice) {
+                // Avatar stays "thinking" until the queued TTS audio actually
+                // starts playing (see useVoicePlayback onPlaybackStarted).
+                voice.flush();
+              } else {
+                dispatch({ type: "AVATAR_EVENT", payload: "RESPONSE_DONE_NO_TTS" });
+              }
             } else if (e.type === "error") {
               throw new Error(e.message || "Error del servidor");
             }
@@ -258,7 +266,7 @@ export function useChat() {
             },
           ],
         });
-        dispatch({ type: "SET_AVATAR_STATE", payload: "idle" });
+        dispatch({ type: "AVATAR_EVENT", payload: "ERROR" });
         dispatch({
           type: "SET_ERROR",
           payload: error instanceof Error ? error.message : "Error enviando mensaje",

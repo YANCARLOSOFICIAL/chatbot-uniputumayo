@@ -6,7 +6,7 @@ import { PanelLeft, LogOut, LogIn } from "lucide-react";
 import Link from "next/link";
 import { useChat } from "@/hooks/useChat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
-import { useSpeechSynthesis } from "@/hooks/useSpeechSynthesis";
+import { useVoicePlayback } from "@/hooks/useVoicePlayback";
 import { isAuthenticated, getUser, logout, type AuthUser } from "@/lib/auth";
 import { toast } from "@/components/ui/Toast";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
@@ -14,6 +14,7 @@ import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { QuickReplies } from "./QuickReplies";
 import { GuacamayaAvatar, type GuacamayaState } from "./GuacamayaAvatar";
+import { VoiceModeOverlay } from "./VoiceModeOverlay";
 
 const ConversationSidebar = dynamic(
   () => import("./ConversationSidebar").then((m) => ({ default: m.ConversationSidebar })),
@@ -26,6 +27,8 @@ export function ChatContainer() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authed, setAuthed] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
 
   const {
     conversations, activeConversationId, messages, sources,
@@ -34,13 +37,33 @@ export function ChatContainer() {
     sendMessage, deleteConversation, renameConversation, dispatch,
   } = useChat();
 
-  const { transcript, isListening, startListening, stopListening, isSupported } =
-    useSpeechRecognition();
-  const { speak, isSpeaking } = useSpeechSynthesis();
-
-  const handleSendRef = useRef<((content: string, inputType: "text" | "voice") => Promise<void>) | null>(null);
   // Prevents double-tap / rapid calls from creating two conversations simultaneously
   const creatingConvRef = useRef(false);
+
+  const handleSendRef = useRef<
+    ((content: string, inputType: "text" | "voice") => Promise<void>) | null
+  >(null);
+
+  const voicePlayback = useVoicePlayback({
+    onPlaybackStarted: () => dispatch({ type: "AVATAR_EVENT", payload: "TTS_CHUNK_PLAYBACK_STARTED" }),
+    onQueueDrained: () => dispatch({ type: "AVATAR_EVENT", payload: "TTS_QUEUE_DRAINED" }),
+    onPlaybackFailed: () => dispatch({ type: "AVATAR_EVENT", payload: "ERROR" }),
+    onError: (msg) => toast.error(msg),
+  });
+
+  const { interimTranscript, micStatus, startListening, stopListening, error: sttError, isSupported } =
+    useSpeechRecognition({
+      onFinal: (transcript) => {
+        dispatch({ type: "AVATAR_EVENT", payload: "SPEECH_FINAL" });
+        handleSendRef.current?.(transcript, "voice");
+      },
+      onCancelled: (reason) => {
+        dispatch({ type: "AVATAR_EVENT", payload: "CANCEL" });
+        if (reason && reason !== "empty-recording" && reason !== "no-speech") {
+          toast.error("No se pudo capturar audio. Intenta de nuevo.");
+        }
+      },
+    });
 
   useEffect(() => {
     if (error) {
@@ -50,12 +73,34 @@ export function ChatContainer() {
   }, [error, dispatch]);
 
   useEffect(() => {
+    setVoiceError(sttError);
+  }, [sttError]);
+
+  useEffect(() => {
     const a = isAuthenticated();
     setAuthed(a);
     if (a) setUser(getUser());
     loadConversations();
     setMounted(true);
   }, [loadConversations]);
+
+  // Force everything back to a clean idle state on unmount — never leave the
+  // mic, TTS queue, or avatarState hanging mid-flight.
+  useEffect(() => {
+    return () => {
+      stopListening();
+      voicePlayback.stop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-close the voice overlay a beat after the avatar settles back to idle
+  // (gives the "done speaking" moment room to breathe instead of snapping shut).
+  useEffect(() => {
+    if (!voiceOverlayOpen || avatarState !== "idle") return;
+    const t = setTimeout(() => setVoiceOverlayOpen(false), 450);
+    return () => clearTimeout(t);
+  }, [voiceOverlayOpen, avatarState]);
 
   const handleSend = useCallback(
     async (content: string, inputType: "text" | "voice" = "text") => {
@@ -70,22 +115,22 @@ export function ChatContainer() {
         }
         if (!convId) return;
       }
-      const response = await sendMessage(content, inputType, convId);
-      if (response && inputType === "voice") speak(response);
+      if (inputType === "voice") voicePlayback.beginResponse();
+      await sendMessage(
+        content,
+        inputType,
+        convId,
+        undefined,
+        undefined,
+        inputType === "voice"
+          ? { enqueueDelta: voicePlayback.enqueueDelta, flush: voicePlayback.flush }
+          : undefined
+      );
     },
-    [activeConversationId, createConversation, sendMessage, speak]
+    [activeConversationId, createConversation, sendMessage, voicePlayback]
   );
 
   handleSendRef.current = handleSend;
-
-  useEffect(() => {
-    if (transcript && !isListening) handleSendRef.current?.(transcript, "voice");
-  }, [transcript, isListening]);
-
-  useEffect(() => {
-    if (!isSpeaking && avatarState === "speaking")
-      dispatch({ type: "SET_AVATAR_STATE", payload: "idle" });
-  }, [isSpeaking, avatarState, dispatch]);
 
   const handleRegenerate = useCallback(() => {
     const lastUser = [...messages].reverse().find((m) => m.role === "user");
@@ -93,9 +138,18 @@ export function ChatContainer() {
   }, [messages, handleSend]);
 
   const handleVoiceStart = useCallback(() => {
-    dispatch({ type: "SET_AVATAR_STATE", payload: "listening" });
+    setVoiceError(null);
+    setVoiceOverlayOpen(true);
+    dispatch({ type: "AVATAR_EVENT", payload: "MIC_STARTED" });
     startListening();
   }, [dispatch, startListening]);
+
+  const handleVoiceCancel = useCallback(() => {
+    stopListening();
+    voicePlayback.stop();
+    dispatch({ type: "AVATAR_EVENT", payload: "CANCEL" });
+    setVoiceOverlayOpen(false);
+  }, [stopListening, voicePlayback, dispatch]);
 
   const handleSelectConversation = useCallback((id: string) => {
     selectConversation(id);
@@ -108,6 +162,18 @@ export function ChatContainer() {
 
   return (
     <div className="flex h-[100dvh] bg-[var(--bg)] overflow-hidden">
+
+      {mounted && voiceOverlayOpen && (
+        <VoiceModeOverlay
+          isOpen={voiceOverlayOpen}
+          avatarState={(avatarState as GuacamayaState) ?? "idle"}
+          interimTranscript={interimTranscript}
+          micStatus={micStatus}
+          amplitude={voicePlayback.amplitude}
+          error={voiceError}
+          onCancel={handleVoiceCancel}
+        />
+      )}
 
       {/* Mobile backdrop */}
       {mounted && mobileSidebarOpen && (
@@ -182,6 +248,7 @@ export function ChatContainer() {
             <GuacamayaAvatar
               state={(avatarState as GuacamayaState) ?? "idle"}
               size={26}
+              amplitude={voicePlayback.amplitude}
               className="flex-shrink-0"
             />
             <span className="text-[14px] font-semibold text-[var(--text-1)] truncate" style={{ fontFamily: "var(--font-display)" }}>
@@ -212,7 +279,7 @@ export function ChatContainer() {
                 </>
               ) : (
                 <Link
-                  href="/admin/login"
+                  href="/login"
                   className="flex items-center gap-1.5 text-[12px] text-[var(--text-2)] hover:text-[var(--brand-primary)] transition-colors px-2.5 py-1.5 rounded-md border border-[var(--border)] hover:border-[var(--brand-primary)] font-medium"
                   style={{ whiteSpace: "nowrap" }}
                 >
@@ -243,7 +310,7 @@ export function ChatContainer() {
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderRadius: 10, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", fontSize: 12 }}>
               <span style={{ color: "var(--text-2)", flex: 1 }}>
                 Esta conversacion no se guardara.{" "}
-                <Link href="/admin/login" style={{ color: "var(--brand-primary)", fontWeight: 600, textDecoration: "none" }}>
+                <Link href="/login" style={{ color: "var(--brand-primary)", fontWeight: 600, textDecoration: "none" }}>
                   Inicia sesion
                 </Link>{" "}
                 para guardar tu historial.
@@ -257,7 +324,7 @@ export function ChatContainer() {
           onSend={(msg) => handleSend(msg, "text")}
           onVoiceStart={handleVoiceStart}
           onVoiceStop={stopListening}
-          isListening={isListening}
+          isListening={micStatus !== "idle"}
           isLoading={isLoading}
           isVoiceSupported={isSupported}
         />
