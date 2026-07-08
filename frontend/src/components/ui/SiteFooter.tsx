@@ -224,7 +224,7 @@ export function FooterCredit() {
       background: "rgba(0,0,0,0.15)",
     }}>
       <span style={{ fontSize: 11, color: "rgba(255,255,255,0.52)", lineHeight: 1.5 }}>
-        © 2026 IUP ·{" "}
+        © 2026 Uniputumayo ·{" "}
         <span style={{ color: "rgba(255,255,255,0.55)" }}>Yan Carlos Pinchao</span>
         {" & "}
         <span style={{ color: "rgba(255,255,255,0.55)" }}>Ilver Chapal</span>

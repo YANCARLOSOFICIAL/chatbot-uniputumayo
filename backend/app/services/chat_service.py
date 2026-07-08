@@ -132,7 +132,7 @@ class ChatService:
         source_infos = [
             SourceInfo(
                 chunk_id=r.chunk_id,
-                document_title=r.document_title or "Documento IUP",
+                document_title=r.document_title or "Documento Uniputumayo",
                 content_preview=r.content[:200],
                 score=r.score,
                 program=r.program,
@@ -243,7 +243,7 @@ class ChatService:
                 messages=[{
                     "role": "user",
                     "content": (
-                        "Genera un título corto (4 a 6 palabras) para esta consulta sobre la IUP.\n"
+                        "Genera un título corto (4 a 6 palabras) para esta consulta sobre Uniputumayo.\n"
                         f"Pregunta: {user_content[:120]}\n"
                         f"Respuesta resumida: {assistant_content[:120]}\n\n"
                         "Responde SOLO con el título, sin comillas, sin punto final."

@@ -34,6 +34,11 @@ export function sanitizeForSpeech(text: string): string {
   t = t.replace(/\|/g, " ");
   t = t.replace(/[#*_~`]/g, "");
 
+  // Emoji and pictographs — TTS engines either vocalize their Unicode name
+  // ("carita sonriendo") or make an odd noise; neither is wanted out loud.
+  t = t.replace(/\p{Extended_Pictographic}/gu, "");
+  t = t.replace(/[\u{FE0F}\u{200D}\u{20E3}]/gu, ""); // variation selector, ZWJ, keycap combiner
+
   // Collapse whitespace produced by the removals above
   t = t.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim();
 

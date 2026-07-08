@@ -41,7 +41,7 @@ class RAGService:
                 messages=[{
                     "role": "user",
                     "content": (
-                        "Eres un asistente de la Institución Universitaria del Putumayo (IUP). "
+                        "Eres un asistente de Uniputumayo (Institución Universitaria del Putumayo). "
                         "Responde brevemente en español como si fuera documentación oficial:\n\n"
                         f"{query}"
                     ),
