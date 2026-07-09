@@ -32,6 +32,11 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
+interface TaxonomyItem {
+  id: string;
+  name: string;
+}
+
 export default function DocumentsPage() {
   const [documents, setDocuments]       = useState<DocumentItem[]>([]);
   const [loading, setLoading]           = useState(true);
@@ -45,6 +50,23 @@ export default function DocumentsPage() {
   const [faculty, setFaculty]           = useState("");
   const [program, setProgram]           = useState("");
   const [docType, setDocType]           = useState("");
+  const [faculties, setFaculties]       = useState<TaxonomyItem[]>([]);
+  const [programs, setPrograms]         = useState<TaxonomyItem[]>([]);
+  const [docTypes, setDocTypes]         = useState<TaxonomyItem[]>([]);
+
+  useEffect(() => {
+    // allSettled (not all) — un catálogo caído no debe vaciar los otros dos
+    // que sí cargaron bien.
+    Promise.allSettled([
+      apiClient.getFaculties(),
+      apiClient.getPrograms(),
+      apiClient.getDocumentTypes(),
+    ]).then(([f, p, t]) => {
+      if (f.status === "fulfilled") setFaculties(f.value); else toast.error("No se pudieron cargar las facultades");
+      if (p.status === "fulfilled") setPrograms(p.value); else toast.error("No se pudieron cargar los programas");
+      if (t.status === "fulfilled") setDocTypes(t.value); else toast.error("No se pudieron cargar los tipos de documento");
+    });
+  }, []);
 
   // Tracks last-seen status per document id so polling can toast on processing → completed/failed transitions
   const lastStatusRef = useRef<Map<string, string>>(new Map());
@@ -252,31 +274,35 @@ export default function DocumentsPage() {
                   className="input" style={{ width: "100%", boxSizing: "border-box" }} />
               </div>
 
-              {/* Optional fields */}
+              {/* Optional fields — poblados desde /admin/catalogos */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-                {[
-                  { label: "Facultad", value: faculty, set: setFaculty, ph: "Ingenieria" },
-                  { label: "Programa", value: program, set: setProgram, ph: "Ing. Sistemas" },
-                ].map(({ label, value, set, ph }) => (
-                  <div key={label}>
-                    <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>{label}</label>
-                    <input type="text" value={value} onChange={(e) => set(e.target.value)} placeholder={ph}
-                      className="input" style={{ width: "100%", boxSizing: "border-box" }} />
-                  </div>
-                ))}
+                <div>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Facultad</label>
+                  <select value={faculty} onChange={(e) => setFaculty(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
+                    <option value="">Sin especificar</option>
+                    {faculties.map((f) => <option key={f.id} value={f.name}>{f.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Programa</label>
+                  <select value={program} onChange={(e) => setProgram(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
+                    <option value="">Sin especificar</option>
+                    {programs.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+                  </select>
+                </div>
               </div>
 
               <div style={{ marginBottom: 18 }}>
                 <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Tipo</label>
                 <select value={docType} onChange={(e) => setDocType(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
                   <option value="">General</option>
-                  <option value="pensum">Pensum</option>
-                  <option value="perfil">Perfil Profesional</option>
-                  <option value="mision">Mision y Vision</option>
-                  <option value="reglamento">Reglamento</option>
-                  <option value="admision">Requisitos de Admision</option>
+                  {docTypes.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
                 </select>
               </div>
+
+              <p style={{ fontSize: 11, color: "var(--text-3)", margin: "-8px 0 14px" }}>
+                ¿Falta una opción? Gestiónalas en <a href="/admin/catalogos" style={{ color: "var(--brand-primary)" }}>Catálogos</a>.
+              </p>
 
               <button type="submit" disabled={!file || !title || uploading} className="btn btn-primary"
                 style={{ width: "100%", justifyContent: "center", display: "flex", alignItems: "center", gap: 7 }}>

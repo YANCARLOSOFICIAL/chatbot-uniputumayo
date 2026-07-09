@@ -28,6 +28,7 @@ export interface SourceInfo {
   score: number;
   program: string | null;
   faculty: string | null;
+  citation_number: number;
 }
 
 export interface ChatResponse {

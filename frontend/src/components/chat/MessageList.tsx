@@ -9,7 +9,9 @@ import { MessageBubble } from "./MessageBubble";
 import { TypingIndicator } from "./TypingIndicator";
 import { SourceCard } from "./SourceCard";
 import { GuacamayaAvatar } from "./GuacamayaAvatar";
+import { apiClient } from "@/lib/api/client";
 import type { Message, SourceInfo } from "@/types/chat";
+import type { LucideIcon } from "lucide-react";
 
 interface MessageListProps {
   messages: Message[];
@@ -19,31 +21,48 @@ interface MessageListProps {
   onRegenerate?: () => void;
 }
 
-const CARDS = [
-  {
-    icon: GraduationCap,
-    label: "Pregrados en Mocoa",
-    query: "Que pregrados hay en la sede Mocoa de UniPutumayo?",
-  },
-  {
-    icon: Globe,
-    label: "Sedes Sibundoy y Puerto Asis",
-    query: "Que programas academicos hay en las sedes de Sibundoy y Puerto Asis?",
-  },
-  {
-    icon: FileText,
-    label: "Requisitos 2026-1",
-    query: "Cuales son los requisitos de inscripcion para el periodo 2026-1 en UniPutumayo?",
-  },
-  {
-    icon: BookOpen,
-    label: "Costos academicos",
-    query: "Cuales son los costos academicos y derechos de matricula en UniPutumayo?",
-  },
+interface SuggestionCard {
+  icon: LucideIcon;
+  label: string;
+  query: string;
+}
+
+// Fallback usado mientras carga /api/v1/chat/suggestions o si falla —
+// las tarjetas reales se generan en el backend a partir de lo indexado.
+const DEFAULT_CARDS: SuggestionCard[] = [
+  { icon: GraduationCap, label: "Programas académicos", query: "¿Qué programas académicos ofrece Uniputumayo?" },
+  { icon: Globe, label: "Sedes", query: "¿Cuáles son las sedes de Uniputumayo?" },
+  { icon: FileText, label: "Proceso de admisión", query: "¿Cómo es el proceso de admisión en Uniputumayo?" },
+  { icon: BookOpen, label: "Contacto", query: "¿Cómo puedo contactar a Uniputumayo?" },
 ];
+
+const DOC_TYPE_ICONS: Record<string, LucideIcon> = {
+  pensum: BookOpen,
+  admision: FileText,
+  perfil: GraduationCap,
+  mision: Globe,
+  reglamento: FileText,
+};
 
 /* ── Welcome / empty state ── */
 function WelcomeState({ onSend }: { onSend?: (q: string) => void }) {
+  const [CARDS, setCards] = useState<SuggestionCard[]>(DEFAULT_CARDS);
+
+  useEffect(() => {
+    apiClient.getSuggestions()
+      .then((data) => {
+        if (!data.length) return;
+        setCards(data.map((s) => ({
+          icon: (s.document_type && DOC_TYPE_ICONS[s.document_type]) || GraduationCap,
+          label: s.label,
+          query: s.query,
+        })));
+      })
+      .catch(() => {
+        // Se queda con DEFAULT_CARDS — no hay conexión o la KB está vacía.
+      });
+  }, []);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", padding: "36px 24px 24px", userSelect: "none" }}>
 
@@ -148,6 +167,17 @@ export function MessageList({ messages, sources, isLoading, onQuickReply, onRege
   const scrollRef       = useRef<HTMLDivElement>(null);
   const [showBtn, setShowBtn] = useState(false);
   const isAtBottomRef   = useRef(true);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [highlightedSource, setHighlightedSource] = useState<number | null>(null);
+
+  const handleCitationClick = (n: number) => {
+    setSourcesOpen(true);
+    requestAnimationFrame(() => {
+      document.getElementById(`source-${n}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    setHighlightedSource(n);
+    setTimeout(() => setHighlightedSource((cur) => (cur === n ? null : cur)), 1500);
+  };
 
   const scrollToBottom = (smooth = true) => {
     const el = scrollRef.current;
@@ -202,6 +232,10 @@ export function MessageList({ messages, sources, isLoading, onQuickReply, onRege
                     message={msg}
                     isLast={isLast}
                     onRegenerate={isLast && !isLoading ? onRegenerate : undefined}
+                    // `sources` only ever holds the latest turn's sources (see
+                    // ChatContext), so wiring citation clicks on older messages
+                    // would open/highlight the wrong turn's source list.
+                    onCitationClick={isLast ? handleCitationClick : undefined}
                   />
                 </div>
               );
@@ -210,7 +244,12 @@ export function MessageList({ messages, sources, isLoading, onQuickReply, onRege
 
             {sources.length > 0 && (
               <div className="pl-8">
-                <SourceCard sources={sources} />
+                <SourceCard
+                  sources={sources}
+                  open={sourcesOpen}
+                  onOpenChange={setSourcesOpen}
+                  highlightedIndex={highlightedSource}
+                />
               </div>
             )}
 

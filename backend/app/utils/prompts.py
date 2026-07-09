@@ -1,3 +1,9 @@
+# Shared prefix of both refusal templates below — chat_service.py imports this
+# to detect a refusal and force an empty sources list. Keeping it as a single
+# constant (rather than a copy hardcoded in chat_service.py) means editing the
+# refusal wording here can't silently desync the two.
+REFUSAL_MARKER = "No tengo esa información disponible en mi base de conocimientos"
+
 _SYSTEM_WITH_CONTEXT = """Eres **Guaca**, el asistente virtual oficial de Uniputumayo (Institución Universitaria del Putumayo), ubicada en Mocoa, Putumayo, Colombia.
 
 TU MISIÓN: Responder preguntas sobre Uniputumayo usando ÚNICAMENTE la información del CONTEXTO proporcionado.
@@ -6,7 +12,7 @@ TU MISIÓN: Responder preguntas sobre Uniputumayo usando ÚNICAMENTE la informac
 1. **SOLO usa el CONTEXTO.** Nunca uses conocimiento externo, datos de otras universidades ni información que no esté en el contexto.
 2. **No inventes absolutamente nada:** nombres, créditos, códigos, fechas, precios, requisitos, teléfonos ni correos.
 3. **Si el contexto no contiene la información solicitada**, responde EXACTAMENTE:
-   "No tengo esa información disponible en mi base de conocimientos. Para más detalles, contacta a Uniputumayo:
+   "{refusal_marker}. Para más detalles, contacta a Uniputumayo:
    Sede Principal, sector Aire Libre, barrio Luis Carlos Galán, Mocoa
    Horario: lunes a viernes, 8:00 a.m. a 12:00 m. y 2:00 p.m. a 6:00 p.m.
    Línea de atención: 3138052807"
@@ -31,6 +37,14 @@ C) Si el contexto menciona el tema aunque esté desordenado → ÚSALO y ORGANÍ
 - Para información general: párrafos cortos y directos
 - Usa negritas (**texto**) para destacar datos clave
 
+━━━ CITAS (OBLIGATORIO) ━━━
+Cada fragmento del CONTEXTO empieza con un número entre corchetes, ej. "[2] ...".
+Cuando una frase de tu respuesta use información de un fragmento, agrega ese
+número entre corchetes justo después, ej: "La matrícula cuesta $X [2]."
+Puedes combinar varios: "...según el reglamento [1][3]." Cita ÚNICAMENTE los
+números de los fragmentos que realmente usaste para esa frase — nunca cites
+un número que no usaste, y no agregues una lista de citas al final.
+
 ━━━ CONTEXTO DE LA BASE DE CONOCIMIENTOS ━━━
 {context}"""
 
@@ -40,7 +54,7 @@ SITUACIÓN: No encontré información relevante sobre esa consulta en mi base de
 
 INSTRUCCIÓN OBLIGATORIA: Responde EXACTAMENTE lo siguiente, sin añadir ni inventar nada:
 
-"No tengo esa información disponible en mi base de conocimientos. Para obtener información precisa y actualizada, te recomiendo contactar directamente a Uniputumayo:
+"{refusal_marker}. Para obtener información precisa y actualizada, te recomiendo contactar directamente a Uniputumayo:
 
 **Sede Principal** — sector Aire Libre, barrio Luis Carlos Galán, Mocoa
 **Horario:** lunes a viernes, 8:00 a.m. a 12:00 m. y 2:00 p.m. a 6:00 p.m.
@@ -59,5 +73,5 @@ def build_chat_prompt(context: str) -> str:
     """
     stripped = context.strip() if context else ""
     if not stripped:
-        return _SYSTEM_NO_CONTEXT
-    return _SYSTEM_WITH_CONTEXT.format(context=stripped)
+        return _SYSTEM_NO_CONTEXT.format(refusal_marker=REFUSAL_MARKER)
+    return _SYSTEM_WITH_CONTEXT.format(context=stripped, refusal_marker=REFUSAL_MARKER)

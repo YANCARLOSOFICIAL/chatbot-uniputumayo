@@ -6,10 +6,15 @@ import type { SourceInfo } from "@/types/chat";
 
 interface SourceCardProps {
   sources: SourceInfo[];
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  highlightedIndex?: number | null;
 }
 
-export function SourceCard({ sources }: SourceCardProps) {
-  const [open, setOpen] = useState(false);
+export function SourceCard({ sources, open: openProp, onOpenChange, highlightedIndex }: SourceCardProps) {
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (v: boolean) => { onOpenChange ? onOpenChange(v) : setOpenState(v); };
   if (!sources.length) return null;
 
   return (
@@ -43,25 +48,33 @@ export function SourceCard({ sources }: SourceCardProps) {
           {sources.map((source, i) => {
             const score = source.score;
             const dotColor = score >= 0.55 ? "var(--success)" : score >= 0.38 ? "var(--warning)" : "var(--text-3)";
+            // Matches the "[N]" citation marker in the message text, which is
+            // this source's original retrieval position — NOT its index in
+            // this (possibly filtered/non-contiguous) list.
+            const n = source.citation_number;
+            const isHighlighted = highlightedIndex === n;
             return (
               <div
                 key={source.chunk_id}
+                id={`source-${n}`}
                 style={{
                   display: "flex", alignItems: "center", gap: 10,
                   padding: "10px 14px",
                   borderBottom: i < sources.length - 1 ? "1px solid var(--border)" : "none",
-                  background: "var(--surface)",
-                  transition: "background 0.12s",
+                  background: isHighlighted ? "var(--brand-dim)" : "var(--surface)",
+                  outline: isHighlighted ? "2px solid var(--brand-primary)" : "none",
+                  outlineOffset: -2,
+                  transition: "background 0.3s, outline-color 0.3s",
                 }}
-                onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.background = "var(--surface-2)")}
-                onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.background = "var(--surface)")}
+                onMouseEnter={(e) => { if (!isHighlighted) (e.currentTarget as HTMLDivElement).style.background = "var(--surface-2)"; }}
+                onMouseLeave={(e) => { if (!isHighlighted) (e.currentTarget as HTMLDivElement).style.background = "var(--surface)"; }}
               >
                 {/* Index */}
                 <span style={{
                   fontFamily: "var(--font-mono)", fontSize: 9,
                   color: "var(--text-3)", width: 16, flexShrink: 0, textAlign: "right",
                 }}>
-                  {i + 1}
+                  {n}
                 </span>
 
                 {/* Doc icon */}

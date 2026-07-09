@@ -2,15 +2,33 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu } from "lucide-react";
+import { Menu, PanelLeft } from "lucide-react";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { isAuthenticated, getUser } from "@/lib/auth";
+
+const DESKTOP_SIDEBAR_KEY = "admin_sidebar_open";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router   = useRouter();
   const [checked, setChecked] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [desktopOpen, setDesktopOpen] = useState(true);
+
+  // Restaurar preferencia de colapso guardada — se aplica post-montaje para
+  // que el primer render (SSR + cliente) coincida con el default `true`.
+  useEffect(() => {
+    const stored = localStorage.getItem(DESKTOP_SIDEBAR_KEY);
+    if (stored !== null) setDesktopOpen(stored === "1");
+  }, []);
+
+  const toggleDesktopSidebar = () => {
+    setDesktopOpen((prev) => {
+      const next = !prev;
+      localStorage.setItem(DESKTOP_SIDEBAR_KEY, next ? "1" : "0");
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (pathname === "/admin/login") { setChecked(true); return; }
@@ -20,8 +38,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setChecked(true);
   }, [pathname, router]);
 
-  // Cerrar sidebar al cambiar de ruta en móvil
-  useEffect(() => { setSidebarOpen(false); }, [pathname]);
+  // Cerrar overlay móvil al cambiar de ruta
+  useEffect(() => { setMobileSidebarOpen(false); }, [pathname]);
 
   if (pathname === "/admin/login") return <>{children}</>;
 
@@ -44,13 +62,37 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div style={{ display: "flex", height: "100dvh", overflow: "hidden", background: "var(--bg)" }}>
-      <AdminSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <AdminSidebar
+        isOpen={mobileSidebarOpen}
+        onClose={() => setMobileSidebarOpen(false)}
+        desktopOpen={desktopOpen}
+      />
+
+      {/* Toggle de colapso — solo desktop, anclado al borde del sidebar */}
+      <button
+        onClick={toggleDesktopSidebar}
+        className="hidden md:flex"
+        aria-label={desktopOpen ? "Colapsar barra lateral" : "Expandir barra lateral"}
+        title={desktopOpen ? "Colapsar" : "Expandir"}
+        style={{
+          position: "fixed", top: 16,
+          left: desktopOpen ? 239 : -13,
+          zIndex: 30, width: 26, height: 26, borderRadius: "50%",
+          alignItems: "center", justifyContent: "center",
+          background: "var(--surface)", border: "1px solid var(--border)",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.18)",
+          color: "var(--text-3)", cursor: "pointer", padding: 0,
+          transition: "left 0.2s cubic-bezier(0.16,1,0.3,1)",
+        }}
+      >
+        <PanelLeft size={13} strokeWidth={1.75} style={{ transform: desktopOpen ? "none" : "scaleX(-1)" }} />
+      </button>
 
       <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "auto" }}>
         {/* Barra superior solo en móvil */}
         <div className="flex md:hidden items-center gap-3 px-4 h-14 border-b border-[var(--border)] bg-[var(--surface)] flex-shrink-0">
           <button
-            onClick={() => setSidebarOpen(true)}
+            onClick={() => setMobileSidebarOpen(true)}
             className="w-9 h-9 flex items-center justify-center rounded-md text-[var(--text-2)] hover:bg-[var(--surface-3)] hover:text-[var(--text-1)] transition-colors"
             aria-label="Abrir menú"
           >

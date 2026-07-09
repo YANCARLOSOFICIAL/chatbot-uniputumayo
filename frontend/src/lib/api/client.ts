@@ -243,6 +243,11 @@ export const apiClient = {
     }
   },
 
+  getSuggestions: () =>
+    request<Array<{ label: string; query: string; document_type: string | null }>>(
+      "/api/v1/chat/suggestions"
+    ),
+
   getMessages: (conversationId: string, limit = 50, offset = 0) =>
     request<
       Array<{ id: string; role: string; content: string; created_at: string }>
@@ -280,6 +285,46 @@ export const apiClient = {
       `/api/v1/documents/${id}/reindex`,
       { method: "POST" }
     ),
+
+  // ── Taxonomy (Admin) ──
+  getFaculties: () =>
+    request<Array<{ id: string; name: string; created_at: string }>>("/api/v1/taxonomy/faculties"),
+  createFaculty: (name: string) =>
+    request<{ id: string; name: string; created_at: string }>("/api/v1/taxonomy/faculties", {
+      method: "POST", body: JSON.stringify({ name }),
+    }),
+  renameFaculty: (id: string, name: string) =>
+    request<{ id: string; name: string; created_at: string }>(`/api/v1/taxonomy/faculties/${id}`, {
+      method: "PUT", body: JSON.stringify({ name }),
+    }),
+  deleteFaculty: (id: string) =>
+    request<{ success: boolean }>(`/api/v1/taxonomy/faculties/${id}`, { method: "DELETE" }),
+
+  getPrograms: () =>
+    request<Array<{ id: string; name: string; faculty_id: string | null; created_at: string }>>("/api/v1/taxonomy/programs"),
+  createProgram: (name: string, faculty_id?: string | null) =>
+    request<{ id: string; name: string; faculty_id: string | null; created_at: string }>("/api/v1/taxonomy/programs", {
+      method: "POST", body: JSON.stringify({ name, faculty_id: faculty_id ?? null }),
+    }),
+  renameProgram: (id: string, name: string) =>
+    request<{ id: string; name: string; faculty_id: string | null; created_at: string }>(`/api/v1/taxonomy/programs/${id}`, {
+      method: "PUT", body: JSON.stringify({ name }),
+    }),
+  deleteProgram: (id: string) =>
+    request<{ success: boolean }>(`/api/v1/taxonomy/programs/${id}`, { method: "DELETE" }),
+
+  getDocumentTypes: () =>
+    request<Array<{ id: string; name: string; created_at: string }>>("/api/v1/taxonomy/document-types"),
+  createDocumentType: (name: string) =>
+    request<{ id: string; name: string; created_at: string }>("/api/v1/taxonomy/document-types", {
+      method: "POST", body: JSON.stringify({ name }),
+    }),
+  renameDocumentType: (id: string, name: string) =>
+    request<{ id: string; name: string; created_at: string }>(`/api/v1/taxonomy/document-types/${id}`, {
+      method: "PUT", body: JSON.stringify({ name }),
+    }),
+  deleteDocumentType: (id: string) =>
+    request<{ success: boolean }>(`/api/v1/taxonomy/document-types/${id}`, { method: "DELETE" }),
 
   // ── Health ──
   checkHealth: () =>

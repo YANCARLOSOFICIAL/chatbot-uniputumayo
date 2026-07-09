@@ -71,6 +71,11 @@ class SourceInfo(BaseModel):
     score: float
     program: str | None
     faculty: str | None
+    # 1-based position among retrieved context fragments — matches the "[N]"
+    # marker the LLM was shown/asked to cite, independent of this source's
+    # position in a filtered/reordered list. Frontend uses this (not array
+    # index) to match a clicked "[N]" citation back to its source card.
+    citation_number: int = 1
 
 
 class ConversationUpdate(BaseModel):
@@ -89,3 +94,9 @@ class ChatResponse(BaseModel):
     user_message: MessageResponse
     assistant_message: MessageResponse
     sources: list[SourceInfo]
+
+
+class SuggestedQuestion(BaseModel):
+    label: str
+    query: str
+    document_type: str | None = None

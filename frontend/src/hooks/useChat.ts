@@ -204,6 +204,7 @@ export function useChat() {
                   score: number;
                   program: string | null;
                   faculty: string | null;
+                  citation_number: number;
                 }>).map((s) => ({
                   chunk_id: s.chunk_id,
                   document_title: s.document_title,
@@ -211,6 +212,7 @@ export function useChat() {
                   score: s.score,
                   program: s.program ?? null,
                   faculty: s.faculty ?? null,
+                  citation_number: s.citation_number,
                 })),
               });
             } else if (e.type === "token" && e.content) {

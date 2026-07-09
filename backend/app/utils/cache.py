@@ -360,3 +360,8 @@ answer_cache = AsyncAnswerCache(
 
 # Embedding cache: sync in-memory only (deterministic, no cross-session benefit from Redis)
 embedding_cache = TTLCache(ttl_seconds=21600, max_size=2048)
+
+# Suggested-questions cache (welcome screen): stable for a few minutes so the
+# cards don't shuffle mid-session, re-rolled periodically so they stay fresh
+# as new documents get indexed.
+suggestion_cache = TTLCache(ttl_seconds=600, max_size=4)

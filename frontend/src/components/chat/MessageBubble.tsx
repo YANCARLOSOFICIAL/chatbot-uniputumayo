@@ -15,6 +15,7 @@ interface MessageBubbleProps {
   message: Message;
   isLast?: boolean;
   onRegenerate?: () => void;
+  onCitationClick?: (n: number) => void;
 }
 
 function UserMessage({ message }: { message: Message }) {
@@ -47,7 +48,7 @@ function UserMessage({ message }: { message: Message }) {
   );
 }
 
-function BotMessage({ message, isLast, onRegenerate }: { message: Message; isLast?: boolean; onRegenerate?: () => void }) {
+function BotMessage({ message, isLast, onRegenerate, onCitationClick }: { message: Message; isLast?: boolean; onRegenerate?: () => void; onCitationClick?: (n: number) => void }) {
   const [copied, setCopied] = useState(false);
   const timeStr = new Date(message.created_at).toLocaleTimeString("es-CO", {
     hour: "2-digit", minute: "2-digit",
@@ -80,7 +81,7 @@ function BotMessage({ message, isLast, onRegenerate }: { message: Message; isLas
           {isStreaming && !message.content ? (
             <span className="streaming-cursor" />
           ) : (
-            <MarkdownContent content={message.content} />
+            <MarkdownContent content={message.content} onCitationClick={onCitationClick} />
           )}
           {isStreaming && message.content && (
             <span className="streaming-cursor" />
@@ -138,7 +139,7 @@ function BotMessage({ message, isLast, onRegenerate }: { message: Message; isLas
   );
 }
 
-export const MessageBubble = memo(function MessageBubble({ message, isLast, onRegenerate }: MessageBubbleProps) {
+export const MessageBubble = memo(function MessageBubble({ message, isLast, onRegenerate, onCitationClick }: MessageBubbleProps) {
   if (message.role === "user") return <UserMessage message={message} />;
-  return <BotMessage message={message} isLast={isLast} onRegenerate={onRegenerate} />;
+  return <BotMessage message={message} isLast={isLast} onRegenerate={onRegenerate} onCitationClick={onCitationClick} />;
 });

@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, BookOpen, MessageCircle, Users,
-  BarChart3, Settings, LogOut, X,
+  BarChart3, Settings, LogOut, X, Tags,
 } from "lucide-react";
 import { getUser, logout } from "@/lib/auth";
 import { useEffect, useState } from "react";
@@ -14,6 +14,7 @@ import type { AuthUser } from "@/lib/auth";
 const NAV_ITEMS = [
   { id: "overview",      href: "/admin",               icon: LayoutDashboard, label: "Resumen" },
   { id: "knowledge",     href: "/admin/documents",     icon: BookOpen,        label: "Documentos" },
+  { id: "catalogs",      href: "/admin/catalogos",     icon: Tags,            label: "Catálogos" },
   { id: "conversations", href: "/admin/conversations", icon: MessageCircle,   label: "Conversaciones" },
   { id: "users",         href: "/admin/users",         icon: Users,           label: "Usuarios" },
   { id: "analytics",     href: "/admin/analytics",     icon: BarChart3,       label: "Metricas" },
@@ -23,9 +24,11 @@ const NAV_ITEMS = [
 interface AdminSidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Controla el ancho del sidebar en desktop (colapsable). Default: true. */
+  desktopOpen?: boolean;
 }
 
-export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
+export function AdminSidebar({ isOpen, onClose, desktopOpen = true }: AdminSidebarProps) {
   const pathname = usePathname();
   const [user, setUser] = useState<AuthUser | null>(null);
 
@@ -227,7 +230,13 @@ export function AdminSidebar({ isOpen, onClose }: AdminSidebarProps) {
 
   return (
     <>
-      <div className="hidden md:flex flex-shrink-0">{sidebar}</div>
+      <div
+        className="hidden md:flex flex-shrink-0 overflow-hidden transition-all duration-200"
+        style={{ width: desktopOpen ? 252 : 0 }}
+        aria-hidden={!desktopOpen}
+      >
+        {sidebar}
+      </div>
 
       {isOpen && (
         <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={onClose} aria-hidden />

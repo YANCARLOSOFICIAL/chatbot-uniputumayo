@@ -11,7 +11,7 @@ from slowapi import _rate_limit_exceeded_handler
 from sqlalchemy import select, delete as sql_delete
 
 from app.config import settings
-from app.routers import health, chat, rag, llm, documents, config, auth, audio, analytics
+from app.routers import health, chat, rag, llm, documents, config, auth, audio, analytics, taxonomy
 from app.middleware.error_handler import global_exception_handler
 from app.utils.rate_limit import limiter
 
@@ -316,6 +316,7 @@ app.include_router(documents.router, prefix="/api/v1/documents", tags=["document
 app.include_router(config.router, prefix="/api/v1/config", tags=["config"])
 app.include_router(audio.router, prefix="/api/v1/audio", tags=["audio"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
+app.include_router(taxonomy.router, prefix="/api/v1/taxonomy", tags=["taxonomy"])
 
 
 @app.get("/")

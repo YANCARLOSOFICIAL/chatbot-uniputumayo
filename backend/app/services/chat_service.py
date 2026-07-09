@@ -1,5 +1,7 @@
 import json
 import logging
+import random
+import re
 import time
 from dataclasses import dataclass
 from typing import AsyncIterator
@@ -10,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation
 from app.models.message import Message
+from app.models.document import Document
 from app.schemas.chat import (
     ConversationCreate,
     MessageCreate,
@@ -21,9 +24,9 @@ from app.services.rag_service import RAGService
 from app.services.llm_service import LLMService
 from app.schemas.rag import SearchRequest
 from app.schemas.llm import GenerateRequest, LLMMessage
-from app.utils.prompts import build_chat_prompt
+from app.utils.prompts import build_chat_prompt, REFUSAL_MARKER
 from app.utils.query_utils import detect_temperature
-from app.utils.cache import answer_cache
+from app.utils.cache import answer_cache, suggestion_cache
 from app.runtime_config import runtime_config
 from app.config import settings
 from app.providers.provider_factory import ProviderFactory
@@ -32,6 +35,23 @@ logger = logging.getLogger(__name__)
 
 _MAX_HISTORY_MESSAGES = 10
 _MAX_HISTORY_CHARS = 600  # truncate long messages in history to save tokens
+
+_SUGGESTION_TEMPLATES: dict[str, str] = {
+    "pensum": "¿Cuáles son las materias del plan de estudios de {subject}?",
+    "admision": "¿Cuáles son los requisitos de admisión para {subject}?",
+    "perfil": "¿Cuál es el perfil profesional de {subject}?",
+    "mision": "¿Cuál es la misión y visión de Uniputumayo?",
+    "reglamento": "¿Qué establece el reglamento sobre {subject}?",
+}
+
+_SUGGESTION_FALLBACK: list[dict] = [
+    {"label": "Programas académicos", "query": "¿Qué programas académicos ofrece Uniputumayo?", "document_type": None},
+    {"label": "Proceso de admisión", "query": "¿Cómo es el proceso de admisión en Uniputumayo?", "document_type": None},
+    {"label": "Sedes", "query": "¿Cuáles son las sedes de Uniputumayo?", "document_type": None},
+    {"label": "Contacto", "query": "¿Cómo puedo contactar a Uniputumayo?", "document_type": None},
+]
+
+_SUGGESTION_CACHE_KEY = "suggested_questions"
 
 
 @dataclass
@@ -107,6 +127,60 @@ class ChatService:
         )
         return list(result.scalars().all())
 
+    async def get_suggested_questions(self, limit: int = 4) -> list[dict]:
+        """Welcome-screen suggestions generated from what's actually indexed,
+        instead of hardcoded claims that may not match the real knowledge base.
+
+        No LLM call — cheap template substitution keyed by document_type, since
+        this runs on every guest's first page load and the project targets
+        modest CPU-only hardware for local inference. Cached briefly (see
+        suggestion_cache) so cards don't reshuffle within a session.
+        """
+        cached = suggestion_cache.get(_SUGGESTION_CACHE_KEY)
+        if cached is not None:
+            return cached
+
+        result = await self.db.execute(
+            select(Document.title, Document.program, Document.faculty, Document.document_type)
+            .where(Document.ingestion_status == "completed")
+        )
+        rows = result.all()
+
+        if not rows:
+            suggestions = _SUGGESTION_FALLBACK[:limit]
+            suggestion_cache.set(_SUGGESTION_CACHE_KEY, suggestions)
+            return suggestions
+
+        # Dedup by (subject, type) case-insensitively — a program's pensum is
+        # often split across several chunks/documents, don't suggest it twice.
+        seen: set[tuple[str, str | None]] = set()
+        candidates: list[tuple[str, str | None]] = []
+        for title, program, faculty, doc_type in rows:
+            subject = program or faculty or title
+            key = (subject.lower(), doc_type)
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates.append((subject, doc_type))
+
+        random.shuffle(candidates)
+
+        suggestions: list[dict] = []
+        for subject, doc_type in candidates:
+            if len(suggestions) >= limit:
+                break
+            template = _SUGGESTION_TEMPLATES.get(doc_type or "")
+            query = template.format(subject=subject) if template else f"¿Qué información hay disponible sobre {subject}?"
+            suggestions.append({"label": subject[:48], "query": query, "document_type": doc_type})
+
+        for fallback in _SUGGESTION_FALLBACK:
+            if len(suggestions) >= limit:
+                break
+            suggestions.append(fallback)
+
+        suggestion_cache.set(_SUGGESTION_CACHE_KEY, suggestions)
+        return suggestions
+
     # ── Shared pipeline helpers ──────────────────────────────────────────────
 
     async def _run_rag(self, query: str) -> _RAGContext:
@@ -115,7 +189,13 @@ class ChatService:
         search_results = await rag_service.search(SearchRequest(query=query))
         quality = rag_service.evaluate_context_quality(search_results.results)
 
-        context_text = "\n\n---\n\n".join(r.content for r in search_results.results)
+        # Numbered so the LLM can cite which fragment(s) it actually used
+        # (see _SYSTEM_WITH_CONTEXT) — _filter_cited_sources() below then
+        # trims sources_payload/source_infos down to only what was cited.
+        context_text = "\n\n---\n\n".join(
+            f"[{i + 1}] {r.document_title}\n{r.content}"
+            for i, r in enumerate(search_results.results)
+        )
 
         sources_payload = [
             {
@@ -125,8 +205,9 @@ class ChatService:
                 "score": r.score,
                 "program": r.program,
                 "faculty": r.faculty,
+                "citation_number": i + 1,
             }
-            for r in search_results.results
+            for i, r in enumerate(search_results.results)
         ]
 
         source_infos = [
@@ -137,8 +218,9 @@ class ChatService:
                 score=r.score,
                 program=r.program,
                 faculty=r.faculty,
+                citation_number=i + 1,
             )
-            for r in search_results.results
+            for i, r in enumerate(search_results.results)
         ]
 
         return _RAGContext(
@@ -149,6 +231,51 @@ class ChatService:
             embed_ms=search_results.query_embedding_time_ms,
             search_ms=search_results.search_time_ms,
         )
+
+    _CITATION_RE = re.compile(r"\[(\d{1,2})\]")
+
+    def _filter_cited_sources(
+        self, content: str, rag_ctx: "_RAGContext"
+    ) -> tuple[list[dict], list[SourceInfo]]:
+        """Keep only the sources the LLM actually cited (`[N]` markers) in `content`.
+
+        `quality != "good"` is handled by the caller (context was never given
+        to the LLM, so nothing could have been cited from it). Here, quality
+        is already "good" (context WAS retrieved and passed above threshold),
+        but the model may still correctly refuse if that context doesn't
+        actually answer the question — that refusal must show zero sources
+        too, not fall back to the full retrieved list.
+
+        The exact-string REFUSAL_MARKER check below is the common case (low
+        temperature + "responde EXACTAMENTE" instruction), but a local model
+        can still paraphrase a refusal in its own words. To keep that failure
+        mode cheap rather than misleading, the "no citation found" fallback
+        below returns only the single top-scored source — never the full
+        retrieved list — so an uncited answer (real or a paraphrased refusal)
+        never surfaces more than one, best-guess source.
+
+        Each returned item keeps its original `citation_number` (assigned in
+        `_run_rag`, matching the "[N]" it was shown as) rather than being
+        renumbered by its position in this filtered list — the frontend
+        matches a clicked "[N]" back to its source card via that number, not
+        array position, so citations stay correct even when non-contiguous
+        (e.g. only "[2]" and "[4]" cited out of 5 retrieved).
+        """
+        if REFUSAL_MARKER in content:
+            return [], []
+
+        n = len(rag_ctx.source_infos)
+        if n == 0:
+            return [], []
+
+        cited = {int(m) for m in self._CITATION_RE.findall(content)}
+        cited = {i for i in cited if 1 <= i <= n}
+        if not cited:
+            return rag_ctx.sources_payload[:1], rag_ctx.source_infos[:1]
+
+        payload = [s for s in rag_ctx.sources_payload if s["citation_number"] in cited]
+        infos = [s for s in rag_ctx.source_infos if s.citation_number in cited]
+        return payload, infos
 
     async def _embed_query(self, query: str) -> list[float] | None:
         """Embed the raw user query for answer-cache similarity lookups.
@@ -335,9 +462,14 @@ class ChatService:
             provider_name = llm_response.provider
             model_name = llm_response.model
             quality = rag_ctx.quality
-            sources_payload = rag_ctx.sources_payload
-            source_infos = rag_ctx.source_infos
             tokens_used = llm_response.tokens_used.total if llm_response.tokens_used else None
+
+            # Only show sources actually grounded in the answer — never the
+            # raw retrieval list (see _filter_cited_sources / _run_rag).
+            if quality == "good":
+                sources_payload, source_infos = self._filter_cited_sources(content, rag_ctx)
+            else:
+                sources_payload, source_infos = [], []
 
             if (
                 settings.answer_cache_enabled
@@ -426,8 +558,13 @@ class ChatService:
                 history = await self._get_history(conversation_id, user_message.id)
                 messages = self._build_messages(rag_ctx, history, data.content)
 
-                # Send sources immediately so UI renders them while LLM streams
-                yield f"data: {json.dumps({'type': 'sources', 'sources': rag_ctx.sources_payload})}\n\n"
+                # Send candidate sources immediately so the UI renders them while
+                # the LLM streams — corrected down to only-cited (or cleared
+                # entirely) once generation finishes, below. Skipped when the LLM
+                # never received context (quality != "good") to avoid flashing
+                # sources next to what will be a "no tengo información" refusal.
+                if rag_ctx.quality == "good":
+                    yield f"data: {json.dumps({'type': 'sources', 'sources': rag_ctx.sources_payload})}\n\n"
 
                 provider_name = data.llm_provider or runtime_config.default_llm_provider
                 provider = ProviderFactory.get_provider(provider_name)
@@ -445,9 +582,18 @@ class ChatService:
                     full_content += token
                     yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
 
-                sources_payload = rag_ctx.sources_payload
                 quality = rag_ctx.quality
-                rag_count = len(rag_ctx.source_infos)
+
+                # Correct the candidate list sent before generation down to
+                # only the sources actually cited in the answer (or empty if
+                # the LLM never received context at all) — see
+                # _filter_cited_sources / _run_rag.
+                if quality == "good":
+                    sources_payload, _ = self._filter_cited_sources(full_content, rag_ctx)
+                else:
+                    sources_payload = []
+                rag_count = len(sources_payload)
+                yield f"data: {json.dumps({'type': 'sources', 'sources': sources_payload})}\n\n"
 
                 # Only cache answers actually grounded in retrieved context — never
                 # cache "no tengo esa información" refusals or ungrounded guesses.

@@ -16,6 +16,7 @@ from app.schemas.chat import (
     MessageCreate,
     MessageResponse,
     ChatResponse,
+    SuggestedQuestion,
 )
 from app.services.chat_service import ChatService
 from app.auth import get_current_user
@@ -37,6 +38,13 @@ def _check_ownership(conversation: Conversation, current_user: User | None) -> N
         current_user is None or conversation.user_id != current_user.id
     ):
         raise HTTPException(status_code=404, detail="Conversation not found")
+
+
+@router.get("/suggestions", response_model=list[SuggestedQuestion])
+async def get_suggestions(db: AsyncSession = Depends(get_db)):
+    """Welcome-screen prompt suggestions — no auth, guests see them too."""
+    service = ChatService(db)
+    return await service.get_suggested_questions(limit=4)
 
 
 @router.post("/conversations", response_model=ConversationResponse)
