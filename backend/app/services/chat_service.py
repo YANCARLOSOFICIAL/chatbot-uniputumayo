@@ -244,15 +244,15 @@ class ChatService:
         is already "good" (context WAS retrieved and passed above threshold),
         but the model may still correctly refuse if that context doesn't
         actually answer the question — that refusal must show zero sources
-        too, not fall back to the full retrieved list.
+        too, not fall back to the retrieved list.
 
-        The exact-string REFUSAL_MARKER check below is the common case (low
-        temperature + "responde EXACTAMENTE" instruction), but a local model
-        can still paraphrase a refusal in its own words. To keep that failure
-        mode cheap rather than misleading, the "no citation found" fallback
-        below returns only the single top-scored source — never the full
-        retrieved list — so an uncited answer (real or a paraphrased refusal)
-        never surfaces more than one, best-guess source.
+        No "uncited → show best-guess source anyway" fallback: an uncited
+        answer means the model didn't use the retrieved context at all — e.g.
+        a plain greeting/chit-chat reply, or a paraphrased refusal. Guessing a
+        "best match" source for those is actively misleading (a random
+        retrieved chunk shown as the source for "hola" — RAG's low score
+        threshold means *something* clears it for almost any query). Zero
+        sources correctly communicates "nothing was used."
 
         Each returned item keeps its original `citation_number` (assigned in
         `_run_rag`, matching the "[N]" it was shown as) rather than being
@@ -271,7 +271,7 @@ class ChatService:
         cited = {int(m) for m in self._CITATION_RE.findall(content)}
         cited = {i for i in cited if 1 <= i <= n}
         if not cited:
-            return rag_ctx.sources_payload[:1], rag_ctx.source_infos[:1]
+            return [], []
 
         payload = [s for s in rag_ctx.sources_payload if s["citation_number"] in cited]
         infos = [s for s in rag_ctx.source_infos if s.citation_number in cited]
