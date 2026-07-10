@@ -24,8 +24,8 @@ from app.services.rag_service import RAGService
 from app.services.llm_service import LLMService
 from app.schemas.rag import SearchRequest
 from app.schemas.llm import GenerateRequest, LLMMessage
-from app.utils.prompts import build_chat_prompt, REFUSAL_MARKER
-from app.utils.query_utils import detect_temperature
+from app.utils.prompts import build_chat_prompt, REFUSAL_MARKER, GREETING_PROMPT
+from app.utils.query_utils import detect_temperature, is_greeting
 from app.utils.cache import answer_cache, suggestion_cache
 from app.runtime_config import runtime_config
 from app.config import settings
@@ -182,6 +182,14 @@ class ChatService:
         return suggestions
 
     # ── Shared pipeline helpers ──────────────────────────────────────────────
+
+    @staticmethod
+    def _empty_rag_ctx() -> _RAGContext:
+        """Placeholder context for messages that skip RAG entirely (greetings)."""
+        return _RAGContext(
+            context_text="", sources_payload=[], source_infos=[],
+            quality="none", embed_ms=0, search_ms=0,
+        )
 
     async def _run_rag(self, query: str) -> _RAGContext:
         """Run RAG search and return structured context ready for prompt building."""
@@ -345,14 +353,22 @@ class ChatService:
         rag_ctx: _RAGContext,
         history: list[LLMMessage],
         user_content: str,
+        is_greeting_msg: bool = False,
     ) -> list[LLMMessage]:
         """Assemble system prompt + history + current user turn.
 
         Uses a stricter no-context system prompt when RAG returned nothing ('none')
-        or very low-quality results ('weak') to prevent hallucinations.
+        or very low-quality results ('weak') to prevent hallucinations. A pure
+        greeting/chit-chat message (RAG skipped entirely — see `is_greeting()`)
+        gets its own friendly prompt instead: the no-context prompt is written
+        to force the "no tengo información" refusal script, which is exactly
+        wrong for "hola".
         """
-        context_for_prompt = rag_ctx.context_text if rag_ctx.quality == "good" else ""
-        system_prompt = build_chat_prompt(context_for_prompt)
+        if is_greeting_msg:
+            system_prompt = GREETING_PROMPT
+        else:
+            context_for_prompt = rag_ctx.context_text if rag_ctx.quality == "good" else ""
+            system_prompt = build_chat_prompt(context_for_prompt)
 
         messages = [LLMMessage(role="system", content=system_prompt)]
         messages.extend(history)
@@ -442,9 +458,10 @@ class ChatService:
             source_infos = [SourceInfo(**s) for s in sources_payload]
             tokens_used = None
         else:
-            rag_ctx = await self._run_rag(data.content)
+            greeting = is_greeting(data.content)
+            rag_ctx = self._empty_rag_ctx() if greeting else await self._run_rag(data.content)
             history = await self._get_history(conversation_id, user_message.id)
-            messages = self._build_messages(rag_ctx, history, data.content)
+            messages = self._build_messages(rag_ctx, history, data.content, is_greeting_msg=greeting)
 
             provider_name = data.llm_provider or runtime_config.default_llm_provider
             temperature = detect_temperature(data.content, default=runtime_config.default_temperature)
@@ -554,9 +571,10 @@ class ChatService:
                 yield f"data: {json.dumps({'type': 'sources', 'sources': sources_payload})}\n\n"
                 yield f"data: {json.dumps({'type': 'token', 'content': full_content})}\n\n"
             else:
-                rag_ctx = await self._run_rag(data.content)
+                greeting = is_greeting(data.content)
+                rag_ctx = self._empty_rag_ctx() if greeting else await self._run_rag(data.content)
                 history = await self._get_history(conversation_id, user_message.id)
-                messages = self._build_messages(rag_ctx, history, data.content)
+                messages = self._build_messages(rag_ctx, history, data.content, is_greeting_msg=greeting)
 
                 # Send candidate sources immediately so the UI renders them while
                 # the LLM streams — corrected down to only-cited (or cleared

@@ -15,13 +15,20 @@ from app.models.document_chunk import DocumentChunk
 from app.schemas.document import DocumentUploadResponse
 from app.utils.file_parsers import extract_text, normalize_extension
 from app.utils.text_processing import clean_text
-from app.utils.chunking import chunk_text
+from app.utils.chunking import chunk_text, chunk_tabular_text
 from app.utils.cache import rag_cache, answer_cache
 from app.services.llm_service import LLMService
 from app.schemas.llm import EmbedRequest
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# xlsx/xls/csv/pptx extractors produce row/slide-oriented text ("=== HOJA: X
+# ===" / "=== DIAPOSITIVA N ===" sections) — chunk_tabular_text keeps rows
+# intact and repeats that header on every resulting chunk. docx is excluded:
+# its extractor interleaves prose paragraphs with occasional tables, so the
+# generic chunker (which already handles that mix reasonably) is a better fit.
+_TABULAR_FILE_TYPES = {"xlsx", "xls", "csv", "pptx"}
 
 
 class DocumentService:
@@ -288,7 +295,8 @@ class DocumentService:
             file_path = os.path.join(settings.upload_dir, document.file_name)
             try:
                 cleaned_text = await self._build_enriched_text(file_path, document.file_type)
-                chunks = chunk_text(
+                chunker = chunk_tabular_text if document.file_type in _TABULAR_FILE_TYPES else chunk_text
+                chunks = chunker(
                     cleaned_text,
                     chunk_size=settings.chunk_size,
                     chunk_overlap=settings.chunk_overlap,

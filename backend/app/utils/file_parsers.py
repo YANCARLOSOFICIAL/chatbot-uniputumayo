@@ -261,7 +261,10 @@ def _extract_pptx(file_path: str) -> str:
                         slide_texts.append(" | ".join(non_empty))
 
         if slide_texts:
-            parts.append(f"--- Diapositiva {slide_num} ---")
+            # "===" (not "---") — clean_text() strips runs of 3+ hyphens as
+            # decorative separators, which would destroy a "---"-style marker
+            # before chunk_tabular_text ever sees it.
+            parts.append(f"=== DIAPOSITIVA {slide_num} ===")
             parts.append("\n".join(slide_texts))
 
     return "\n\n".join(parts)

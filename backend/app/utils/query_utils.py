@@ -38,6 +38,21 @@ def detect_temperature(query: str, default: float = 0.05) -> float:
     return default
 
 
+def is_greeting(query: str) -> bool:
+    """True for short, purely conversational messages ("hola", "gracias") that
+    don't need RAG context at all.
+
+    Requires a conversational match AND no factual keyword AND a short
+    message — a query like "hola, cuánto cuesta la matrícula" is conversational
+    in tone but still needs retrieval, so it must not be short-circuited.
+    """
+    if _FACTUAL_PATTERNS.search(query):
+        return False
+    if not _CONVERSATIONAL_PATTERNS.search(query):
+        return False
+    return len(query.split()) <= 6
+
+
 def keyword_score(query: str, text: str) -> float:
     """Simple TF-style keyword overlap score [0, 1] between query and chunk text.
 

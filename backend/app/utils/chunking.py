@@ -1,4 +1,5 @@
 import logging
+import re
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -116,3 +117,93 @@ def _recursive_split(
         chunks.append(current_chunk)
 
     return chunks
+
+
+# ── Row-aware chunking for spreadsheets / slide decks ────────────────────────
+
+# Matches the section markers _extract_xlsx/_extract_xls/_extract_pptx (see
+# file_parsers.py) prepend to each sheet/slide's rows.
+_SECTION_RE = re.compile(r"^(=== HOJA: .+? ===|=== DIAPOSITIVA \d+ ===)$", re.MULTILINE)
+
+
+def chunk_tabular_text(
+    text: str,
+    chunk_size: int | None = None,
+    chunk_overlap: int | None = None,
+) -> list[dict]:
+    """Chunk spreadsheet/slide-deck text row-by-row instead of by raw characters.
+
+    `chunk_text`'s generic recursive splitter treats a "=== HOJA: X ===" /
+    "=== DIAPOSITIVA N ===" header and the row/table content after it as two
+    separate top-level pieces once it picks the "\\n\\n" separator tier — for
+    any sheet/slide whose rows don't all fit in one chunk, every chunk after
+    the first ends up with no idea which sheet/slide it came from (and, in the
+    worst case, a single oversized run of rows can land in one chunk far past
+    `chunk_size` — the generic splitter only recurses into a finer separator
+    when a lone part is too big *by itself*, not when it overflows after
+    being combined with a preceding part). This chunker instead treats each
+    section's rows as an atomic list, never splits a row across chunks, and
+    repeats the section header on every chunk built from it.
+
+    Text with no recognizable section headers (plain CSV) is treated as one
+    headerless section — still chunked row-by-row rather than by characters.
+    """
+    chunk_size = chunk_size or settings.chunk_size
+    chunk_overlap = chunk_overlap or settings.chunk_overlap
+    max_chars = chunk_size * 4
+    overlap_chars = chunk_overlap * 4
+
+    matches = list(_SECTION_RE.finditer(text))
+    sections: list[tuple[str, str]] = []
+    if not matches:
+        sections.append(("", text))
+    else:
+        if matches[0].start() > 0:
+            sections.append(("", text[: matches[0].start()]))
+        for i, m in enumerate(matches):
+            body_start = m.end()
+            body_end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+            sections.append((m.group(1), text[body_start:body_end]))
+
+    result: list[dict] = []
+    for header, body in sections:
+        rows = [r for r in body.split("\n") if r.strip()]
+        if not rows:
+            continue
+
+        prefix = f"{header}\n" if header else ""
+        current_rows: list[str] = []
+        current_len = len(prefix)
+
+        for row in rows:
+            row_len = len(row) + 1  # +1 for the joining newline
+            if current_rows and current_len + row_len > max_chars:
+                content = prefix + "\n".join(current_rows)
+                result.append({
+                    "content": content,
+                    "token_count": _count_tokens(content),
+                    "metadata": {"chunk_index": len(result)},
+                })
+                # Carry the last row(s) forward as overlap so a record split
+                # across a chunk boundary still has its neighbor for context.
+                carry: list[str] = []
+                carry_len = 0
+                for r in reversed(current_rows):
+                    if carry_len + len(r) + 1 > overlap_chars:
+                        break
+                    carry.insert(0, r)
+                    carry_len += len(r) + 1
+                current_rows = carry
+                current_len = len(prefix) + carry_len
+            current_rows.append(row)
+            current_len += row_len
+
+        if current_rows:
+            content = prefix + "\n".join(current_rows)
+            result.append({
+                "content": content,
+                "token_count": _count_tokens(content),
+                "metadata": {"chunk_index": len(result)},
+            })
+
+    return result
