@@ -493,6 +493,13 @@ class ChatService:
             quality = rag_ctx.quality
             tokens_used = llm_response.tokens_used.total if llm_response.tokens_used else None
 
+            if llm_response.finish_reason == "length":
+                logger.warning(
+                    "Truncated response (finish_reason=length) | conv=%s | provider=%s | model=%s | "
+                    "content_len=%d — max_tokens too low for this answer",
+                    conversation_id, provider_name, model_name, len(content),
+                )
+
             # Only show sources actually grounded in the answer — never the
             # raw retrieval list (see _filter_cited_sources / _run_rag).
             if quality == "good":
@@ -608,11 +615,20 @@ class ChatService:
                 yield ": generating\n\n"
 
                 full_content = ""
+                stream_meta: dict = {}
                 async for token in provider.generate_stream(
-                    messages_dicts, model, temperature, runtime_config.default_max_tokens
+                    messages_dicts, model, temperature, runtime_config.default_max_tokens,
+                    meta=stream_meta,
                 ):
                     full_content += token
                     yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+
+                if stream_meta.get("finish_reason") == "length":
+                    logger.warning(
+                        "Truncated stream response (finish_reason=length) | conv=%s | provider=%s | "
+                        "model=%s | content_len=%d — max_tokens too low for this answer",
+                        conversation_id, provider_name, model, len(full_content),
+                    )
 
                 quality = rag_ctx.quality
 

@@ -46,6 +46,7 @@ class LLMService:
                 model=model,
                 tokens_used=result.get("tokens_used"),
                 response_time_ms=response_time,
+                finish_reason=result.get("finish_reason"),
             )
         except ValueError as e:
             raise ValueError(f"Cannot use provider '{provider_name}': {str(e)}")

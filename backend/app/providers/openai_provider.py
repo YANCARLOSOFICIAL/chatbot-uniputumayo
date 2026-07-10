@@ -53,6 +53,7 @@ class OpenAIProvider(BaseLLMProvider):
         return {
             "content": choice.message.content or "",
             "tokens_used": tokens_used,
+            "finish_reason": choice.finish_reason,
         }
 
     async def generate_stream(
@@ -61,6 +62,7 @@ class OpenAIProvider(BaseLLMProvider):
         model: str,
         temperature: float = 0.3,
         max_tokens: int = 1024,
+        meta: dict | None = None,
     ) -> AsyncIterator[str]:
         client = self._ensure_client()
         stream = await client.chat.completions.create(
@@ -71,7 +73,11 @@ class OpenAIProvider(BaseLLMProvider):
             stream=True,
         )
         async for chunk in stream:
-            if chunk.choices and chunk.choices[0].delta.content:
+            if not chunk.choices:
+                continue
+            if chunk.choices[0].finish_reason and meta is not None:
+                meta["finish_reason"] = chunk.choices[0].finish_reason
+            if chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
 
     async def embed(self, texts: list[str], model: str) -> dict:

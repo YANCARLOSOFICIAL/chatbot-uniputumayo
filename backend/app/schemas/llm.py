@@ -26,6 +26,9 @@ class GenerateResponse(BaseModel):
     model: str
     tokens_used: TokenUsage | None
     response_time_ms: int
+    # "length" means max_tokens was hit before the model finished naturally —
+    # the content is truncated mid-answer, not a complete response.
+    finish_reason: str | None = None
 
 
 class EmbedRequest(BaseModel):

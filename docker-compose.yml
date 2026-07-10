@@ -82,7 +82,7 @@ services:
       OPENAI_EMBEDDING_MODEL: text-embedding-3-small
       DEFAULT_LLM_PROVIDER: ollama
       DEFAULT_TEMPERATURE: "0.05"
-      DEFAULT_MAX_TOKENS: "1024"
+      DEFAULT_MAX_TOKENS: "2048"
       CHUNK_SIZE: "512"
       CHUNK_OVERLAP: "77"
       RAG_TOP_K: "5"

@@ -52,9 +52,13 @@ class Settings(BaseSettings):
     # LLM Configuration
     default_llm_provider: str = "ollama"
     default_temperature: float = 0.05   # Casi determinista para respuestas RAG factuales
-    # 2048 era excesivo para respuestas factuales típicas y, en Ollama CPU, cada
-    # token extra permitido es tiempo extra de espera en el peor caso.
-    default_max_tokens: int = 1024
+    # Bajarlo a 1024 causó respuestas cortadas a media palabra en preguntas que
+    # legítimamente necesitan más (planes de estudio completos, explicaciones
+    # largas) — confirmado viendo done_reason="length" en la respuesta cruda de
+    # Ollama. Con think:false + el prompt como "user" para Ollama (ver
+    # ollama_provider.py / chat_service.py) ya no hace falta sacrificar tokens
+    # de salida para ganar velocidad.
+    default_max_tokens: int = 2048
 
     # RAG Configuration
     chunk_size: int = 512

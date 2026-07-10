@@ -64,7 +64,9 @@ class OllamaProvider(BaseLLMProvider):
                 }
 
             content = self._strip_think(data["message"]["content"])
-            return {"content": content, "tokens_used": tokens_used}
+            # Ollama's own "length"/"stop"/etc. vocabulary already matches what
+            # callers expect — no remapping needed.
+            return {"content": content, "tokens_used": tokens_used, "finish_reason": data.get("done_reason")}
 
     async def generate_stream(
         self,
@@ -72,6 +74,7 @@ class OllamaProvider(BaseLLMProvider):
         model: str,
         temperature: float = 0.3,
         max_tokens: int = 1024,
+        meta: dict | None = None,
     ) -> AsyncIterator[str]:
         """Stream tokens, filtering out <think>…</think> reasoning blocks."""
         inside_think = False
@@ -99,7 +102,11 @@ class OllamaProvider(BaseLLMProvider):
                         continue
                     try:
                         data = json.loads(line)
-                        if data.get("done") or "message" not in data:
+                        if data.get("done"):
+                            if meta is not None:
+                                meta["finish_reason"] = data.get("done_reason")
+                            continue
+                        if "message" not in data:
                             continue
                         token = data["message"].get("content", "")
                         if not token:

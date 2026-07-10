@@ -102,9 +102,13 @@ services:
       OPENAI_EMBEDDING_MODEL: text-embedding-3-small
       DEFAULT_LLM_PROVIDER: ollama
       DEFAULT_TEMPERATURE: "0.05"
-      # Bajado de 2048: en un CPU sin AVX2 (~5 tok/s) cada token de más es
-      # tiempo real perdido; 768 alcanza para respuestas RAG completas.
-      DEFAULT_MAX_TOKENS: "768"
+      # 768 causaba respuestas cortadas a media palabra en preguntas que
+      # legítimamente necesitan más tokens (planes de estudio completos,
+      # explicaciones largas) — confirmado con done_reason="length" en la
+      # respuesta cruda de Ollama. 1536 es un punto medio: este CPU sin AVX2
+      # sigue siendo lento, pero OLLAMA_THINK_ENABLED=false ya elimina el
+      # gasto de tokens en razonamiento oculto, dejando margen para esto.
+      DEFAULT_MAX_TOKENS: "1536"
       CHUNK_SIZE: "512"
       CHUNK_OVERLAP: "77"
       RAG_TOP_K: "5"
