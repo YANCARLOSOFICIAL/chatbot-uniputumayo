@@ -69,12 +69,23 @@ class Settings(BaseSettings):
     # embeddinggemma: "distinta" cae a ~0.35-0.37 y "parafraseo profundo" sube
     # a ~0.69-0.80 — separación real y amplia.
     answer_cache_embedding_model: str = "embeddinggemma"
-    # Umbral de similitud coseno para considerar un acierto de caché (ver
-    # medición arriba). 0.65 deja margen amplio por debajo del parafraseo
-    # profundo más bajo medido (0.69) y muy por encima de preguntas distintas
-    # (máx 0.37). Ajustar según los logs de "Answer cache HIT (similarity=...)"
-    # en producción.
-    answer_cache_similarity_threshold: float = 0.65
+    # Umbral de similitud coseno para considerar un acierto de caché.
+    # 0.65 (valor original, ver medición arriba) causó colisiones reales
+    # detectadas por scripts/eval_rag.py el 2026-07-10: "¿cuántos créditos
+    # tiene...?" devolvió la respuesta cacheada de "¿cuál es el costo de la
+    # matrícula...?" (similarity=0.721), y "segundo semestre" devolvió la de
+    # "primer semestre" (similarity=0.781) — ambas caen DENTRO del rango de
+    # "parafraseo profundo" (0.69-0.80) que la medición original consideró
+    # seguro, porque esa medición comparó parafraseos reales contra preguntas
+    # de tema totalmente distinto, no contra preguntas de MISMO tema pero
+    # HECHO distinto (costo vs créditos, semestre 1 vs 2) — el caso que de
+    # hecho más se repite en un chatbot universitario real. La similitud
+    # coseno sola no separa limpiamente esas dos categorías; subir el umbral
+    # es la mitigación disponible sin agregar un segundo guard heurístico.
+    # 0.90 rechaza ambas colisiones observadas con margen y prioriza nunca
+    # servir una respuesta incorrecta sobre maximizar el acierto de caché
+    # (una respuesta lenta pero correcta es mejor que una rápida pero falsa).
+    answer_cache_similarity_threshold: float = 0.90
     # 30 días — es solo una red de seguridad: la invalidación real ocurre al
     # subir/borrar documentos (answer_cache.invalidate_all() en
     # document_service.py), así que un TTL largo no arriesga servir

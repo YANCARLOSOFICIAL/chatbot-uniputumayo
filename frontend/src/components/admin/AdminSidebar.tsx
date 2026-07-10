@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, BookOpen, MessageCircle, Users,
-  BarChart3, Settings, LogOut, X, Tags,
+  BarChart3, Settings, LogOut, X, Tags, FlaskConical,
 } from "lucide-react";
 import { getUser, logout } from "@/lib/auth";
 import { useEffect, useState } from "react";
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { id: "conversations", href: "/admin/conversations", icon: MessageCircle,   label: "Conversaciones" },
   { id: "users",         href: "/admin/users",         icon: Users,           label: "Usuarios" },
   { id: "analytics",     href: "/admin/analytics",     icon: BarChart3,       label: "Metricas" },
+  { id: "rag-eval",      href: "/admin/rag-eval",      icon: FlaskConical,    label: "Evaluacion RAG" },
   { id: "settings",      href: "/admin/config",        icon: Settings,        label: "Configuracion" },
 ];
 

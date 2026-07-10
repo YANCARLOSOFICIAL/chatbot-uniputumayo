@@ -8,6 +8,7 @@ from app.models.llm_configuration import LLMConfiguration
 from app.models.faculty import Faculty
 from app.models.program import Program
 from app.models.document_type import DocumentType
+from app.models.rag_eval_run import RagEvalRun
 
 __all__ = [
     "User",
@@ -20,4 +21,5 @@ __all__ = [
     "Faculty",
     "Program",
     "DocumentType",
+    "RagEvalRun",
 ]

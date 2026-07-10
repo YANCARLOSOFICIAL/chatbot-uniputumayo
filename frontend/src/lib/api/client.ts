@@ -382,4 +382,40 @@ export const apiClient = {
       conversations_per_day: Array<{ date: string; label: string; count: number }>;
       top_queries: Array<{ label: string; count: number }>;
     }>("/api/v1/analytics/overview"),
+
+  // ── RAG Eval ──
+  startRagEval: () => request<RagEvalRunSummary>("/api/v1/rag-eval/run", { method: "POST" }),
+  getRagEvalRuns: (limit = 20) =>
+    request<RagEvalRunSummary[]>(`/api/v1/rag-eval?limit=${limit}`),
+  getRagEvalRun: (runId: string) =>
+    request<RagEvalRunDetail>(`/api/v1/rag-eval/${runId}`),
 };
+
+export interface RagEvalRunSummary {
+  id: string;
+  status: "running" | "completed" | "failed";
+  created_at: string;
+  completed_at: string | null;
+  passed: number | null;
+  total: number | null;
+  avg_retrieval_ms: number | null;
+  avg_generation_ms: number | null;
+}
+
+export interface RagEvalCaseResult {
+  id: string;
+  query: string;
+  passed: boolean;
+  retrieval_quality: string;
+  retrieval_top_score: number;
+  retrieval_ms: number;
+  sources_cited: number;
+  generation_ms: number;
+  answer: string;
+  notes: string[];
+}
+
+export interface RagEvalRunDetail extends RagEvalRunSummary {
+  results: RagEvalCaseResult[] | null;
+  error_message: string | null;
+}
