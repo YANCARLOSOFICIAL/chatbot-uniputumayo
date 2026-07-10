@@ -9,8 +9,15 @@ import type { Components } from "react-markdown";
 // reales "[texto](url)" (que siempre llevan un "(" justo después del "]").
 const CITATION_PATTERN = /\[(\d{1,2})\](?!\()/g;
 
+// Debe ser un fragmento ("#...", sin "esquema:") — react-markdown sanea
+// cualquier URL cuyo protocolo no esté en su allowlist (http/https/mailto/…)
+// reemplazándola por href="", y un <a href=""> navega a la página actual al
+// hacer click (recarga completa, pierde la conversación de invitado). Ver
+// defaultUrlTransform en node_modules/react-markdown/lib/index.js.
+const CITATION_HREF_PREFIX = "#citation-";
+
 function withCitationLinks(content: string): string {
-  return content.replace(CITATION_PATTERN, (_match, n) => `[[${n}]](citation:${n})`);
+  return content.replace(CITATION_PATTERN, (_match, n) => `[[${n}]](${CITATION_HREF_PREFIX}${n})`);
 }
 
 interface MarkdownContentProps {
@@ -21,8 +28,8 @@ interface MarkdownContentProps {
 export function MarkdownContent({ content, onCitationClick }: MarkdownContentProps) {
   const components: Components = useMemo(() => ({
     a: ({ href, children }) => {
-      if (href?.startsWith("citation:")) {
-        const n = parseInt(href.slice("citation:".length), 10);
+      if (href?.startsWith(CITATION_HREF_PREFIX)) {
+        const n = parseInt(href.slice(CITATION_HREF_PREFIX.length), 10);
         return (
           <sup>
             <a

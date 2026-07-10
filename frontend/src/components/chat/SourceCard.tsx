@@ -58,7 +58,7 @@ export function SourceCard({ sources, open: openProp, onOpenChange, highlightedI
                 key={source.chunk_id}
                 id={`source-${n}`}
                 style={{
-                  display: "flex", alignItems: "center", gap: 10,
+                  display: "flex", alignItems: "flex-start", gap: 10,
                   padding: "10px 14px",
                   borderBottom: i < sources.length - 1 ? "1px solid var(--border)" : "none",
                   background: isHighlighted ? "var(--brand-dim)" : "var(--surface)",
@@ -86,32 +86,42 @@ export function SourceCard({ sources, open: openProp, onOpenChange, highlightedI
                   <BookOpen size={11} style={{ color: "var(--brand-primary)" }} />
                 </div>
 
-                {/* Title + program */}
+                {/* Title + program + fragment */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    fontSize: 12, fontWeight: 600, color: "var(--text-1)",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    lineHeight: 1.3,
-                  }}>
-                    {source.document_title}
-                  </div>
-                  {source.program && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <div style={{
-                      fontSize: 10, color: "var(--text-3)", marginTop: 2,
+                      fontSize: 12, fontWeight: 600, color: "var(--text-1)",
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                      fontFamily: "var(--font-mono)",
+                      lineHeight: 1.3, flex: 1, minWidth: 0,
                     }}>
-                      {source.program}
+                      {source.document_title}
+                    </div>
+                    {source.program && (
+                      <div style={{
+                        fontSize: 10, color: "var(--text-3)", flexShrink: 0,
+                        fontFamily: "var(--font-mono)",
+                      }}>
+                        {source.program}
+                      </div>
+                    )}
+                    {/* Relevance dot */}
+                    <div style={{
+                      width: 6, height: 6, borderRadius: "50%",
+                      background: dotColor, flexShrink: 0,
+                      boxShadow: `0 0 4px ${dotColor}`,
+                    }} title={`Relevancia: ${Math.round(score * 100)}%`} />
+                  </div>
+                  {source.content_preview && (
+                    <div style={{
+                      fontSize: 11, color: "var(--text-2)", marginTop: 4,
+                      lineHeight: 1.45, display: "-webkit-box",
+                      WebkitLineClamp: isHighlighted ? 6 : 2, WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                    }}>
+                      &ldquo;{source.content_preview.trim()}&rdquo;
                     </div>
                   )}
                 </div>
-
-                {/* Relevance dot */}
-                <div style={{
-                  width: 6, height: 6, borderRadius: "50%",
-                  background: dotColor, flexShrink: 0,
-                  boxShadow: `0 0 4px ${dotColor}`,
-                }} title={`Relevancia: ${Math.round(score * 100)}%`} />
               </div>
             );
           })}
