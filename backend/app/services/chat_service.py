@@ -354,6 +354,7 @@ class ChatService:
         history: list[LLMMessage],
         user_content: str,
         is_greeting_msg: bool = False,
+        provider_name: str = "",
     ) -> list[LLMMessage]:
         """Assemble system prompt + history + current user turn.
 
@@ -363,6 +364,14 @@ class ChatService:
         gets its own friendly prompt instead: the no-context prompt is written
         to force the "no tengo información" refusal script, which is exactly
         wrong for "hola".
+
+        `provider_name == "ollama"` sends the instructions as a `user`-role turn
+        instead of `system` — an unconfirmed but plausible Ollama/Qwen chat-template
+        quirk (ollama/ollama#10980) reports the `system` role being mishandled in
+        RAG contexts specifically for Qwen models, which lines up with this
+        project's own measured finding that qwen3:8b doesn't reliably follow the
+        "[N]" citation instruction. Cheap to test, cheap to revert if the eval
+        harness (scripts/eval_rag.py) shows no improvement.
         """
         if is_greeting_msg:
             system_prompt = GREETING_PROMPT
@@ -370,7 +379,8 @@ class ChatService:
             context_for_prompt = rag_ctx.context_text if rag_ctx.quality == "good" else ""
             system_prompt = build_chat_prompt(context_for_prompt)
 
-        messages = [LLMMessage(role="system", content=system_prompt)]
+        instruction_role = "user" if provider_name == "ollama" else "system"
+        messages = [LLMMessage(role=instruction_role, content=system_prompt)]
         messages.extend(history)
         messages.append(LLMMessage(role="user", content=user_content))
         return messages
@@ -461,9 +471,11 @@ class ChatService:
             greeting = is_greeting(data.content)
             rag_ctx = self._empty_rag_ctx() if greeting else await self._run_rag(data.content)
             history = await self._get_history(conversation_id, user_message.id)
-            messages = self._build_messages(rag_ctx, history, data.content, is_greeting_msg=greeting)
-
             provider_name = data.llm_provider or runtime_config.default_llm_provider
+            messages = self._build_messages(
+                rag_ctx, history, data.content, is_greeting_msg=greeting, provider_name=provider_name,
+            )
+
             temperature = detect_temperature(data.content, default=runtime_config.default_temperature)
 
             llm_service = LLMService()
@@ -574,7 +586,10 @@ class ChatService:
                 greeting = is_greeting(data.content)
                 rag_ctx = self._empty_rag_ctx() if greeting else await self._run_rag(data.content)
                 history = await self._get_history(conversation_id, user_message.id)
-                messages = self._build_messages(rag_ctx, history, data.content, is_greeting_msg=greeting)
+                provider_name = data.llm_provider or runtime_config.default_llm_provider
+                messages = self._build_messages(
+                    rag_ctx, history, data.content, is_greeting_msg=greeting, provider_name=provider_name,
+                )
 
                 # Send candidate sources immediately so the UI renders them while
                 # the LLM streams — corrected down to only-cited (or cleared
@@ -584,7 +599,6 @@ class ChatService:
                 if rag_ctx.quality == "good":
                     yield f"data: {json.dumps({'type': 'sources', 'sources': rag_ctx.sources_payload})}\n\n"
 
-                provider_name = data.llm_provider or runtime_config.default_llm_provider
                 provider = ProviderFactory.get_provider(provider_name)
                 model = data.llm_model or runtime_config.resolve_model(provider_name)
                 temperature = detect_temperature(data.content, default=runtime_config.default_temperature)

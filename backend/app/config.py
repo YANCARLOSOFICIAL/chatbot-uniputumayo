@@ -25,6 +25,23 @@ class Settings(BaseSettings):
     ollama_embedding_model: str = "nomic-embed-text"
     # gemma4:e4b — 7.2 GB, 128 K ctx, texto + imagen + audio. Óptimo para extracción de PDFs
     ollama_vision_model: str = "gemma4:e4b"
+    # Evita que Ollama descargue el modelo de RAM tras 5 min de inactividad (default).
+    # En CPU pura, recargar el modelo desde disco puede tardar minutos — con 64 GB en
+    # el servidor no hay necesidad de liberar esa memoria entre consultas.
+    ollama_keep_alive: str = "30m"
+    # Sin este valor, Ollama usa su default (2048 tokens) para TODO el prompt —
+    # system prompt + contexto RAG (hasta 5 fragmentos de 512 tokens) + historial
+    # puede superarlo fácilmente, y Ollama trunca el sobrante EN SILENCIO. Con
+    # OpenAI (400K ctx) esto nunca pasa, lo que hace que la misma respuesta RAG
+    # "se sienta distinta" entre proveedores sin que el retrieval esté roto.
+    ollama_num_ctx: int = 8192
+    # qwen3:8b es un modelo híbrido de razonamiento: por defecto genera un bloque
+    # <think>...</think> largo antes de la respuesta visible, y ese bloque cuenta
+    # contra num_predict y el tiempo de generación real, aunque _strip_think lo
+    # descarte después. Ollama soporta "think": false en /api/chat para saltarse
+    # ese razonamiento en el origen — medido: una sola consulta con el modelo ya
+    # cargado tardaba >300s con thinking habilitado.
+    ollama_think_enabled: bool = False
 
     # OpenAI
     openai_api_key: Optional[str] = None
@@ -35,7 +52,9 @@ class Settings(BaseSettings):
     # LLM Configuration
     default_llm_provider: str = "ollama"
     default_temperature: float = 0.05   # Casi determinista para respuestas RAG factuales
-    default_max_tokens: int = 2048
+    # 2048 era excesivo para respuestas factuales típicas y, en Ollama CPU, cada
+    # token extra permitido es tiempo extra de espera en el peor caso.
+    default_max_tokens: int = 1024
 
     # RAG Configuration
     chunk_size: int = 512

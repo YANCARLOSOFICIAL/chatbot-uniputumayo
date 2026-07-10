@@ -55,6 +55,9 @@ services:
       # ~18s. Mantenerlo en memoria más tiempo evita pagar ese costo en cada
       # mensaje tras 5 min de inactividad (default de Ollama).
       OLLAMA_KEEP_ALIVE: "30m"
+      # Sin esto, Ollama usa su default de 2048 tokens para TODO el prompt
+      # (system + contexto RAG + historial) y trunca el resto en silencio.
+      OLLAMA_NUM_CTX: "8192"
     ports:
       - "11434:11434"
     volumes:
@@ -88,6 +91,12 @@ services:
       OLLAMA_DEFAULT_MODEL: qwen3:8b
       OLLAMA_EMBEDDING_MODEL: nomic-embed-text
       OLLAMA_VISION_MODEL: gemma4:e4b
+      # qwen3:8b es un modelo híbrido de razonamiento: sin esto genera un bloque
+      # <think>...</think> largo antes de la respuesta visible, que se descartaba
+      # DESPUÉS de generarlo (pagando el costo completo en tiempo real). En este
+      # CPU sin AVX2 esto era, medido en un caso, la diferencia entre responder
+      # y morir en el timeout de 300s.
+      OLLAMA_THINK_ENABLED: "false"
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_DEFAULT_MODEL: gpt-5.4-mini
       OPENAI_EMBEDDING_MODEL: text-embedding-3-small

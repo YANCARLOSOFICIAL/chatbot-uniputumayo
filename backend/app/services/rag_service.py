@@ -229,13 +229,20 @@ class RAGService:
     async def search(self, request: SearchRequest) -> SearchResponse:
         t0 = time.time()
 
-        # Cache check (key = query + retrieval params)
+        # HyDE — skipped when the active chat provider is Ollama: HyDE issues a
+        # full extra generate() call before every non-cached search, which on
+        # CPU-only Ollama roughly doubles the time to answer. On OpenAI the extra
+        # call is fast/cheap enough that the retrieval-quality gain is worth it.
+        hyde_active = settings.rag_hyde_enabled and runtime_config.default_llm_provider != "ollama"
+
+        # Cache check (key = query + retrieval params). `hyde_active` (not the
+        # static setting) so entries built with/without HyDE never collide.
         cache_key = rag_cache.make_key(
             query=request.query,
             top_k=request.top_k,
             threshold=request.score_threshold,
             filters=request.filters.model_dump() if request.filters else None,
-            hyde=settings.rag_hyde_enabled,
+            hyde=hyde_active,
         )
         cached = await rag_cache.get(cache_key)
         if cached is not None:
@@ -244,10 +251,9 @@ class RAGService:
 
         llm_service = LLMService()
 
-        # 1. HyDE
         embed_start = time.time()
         embed_query = request.query
-        if settings.rag_hyde_enabled:
+        if hyde_active:
             embed_query = await self._generate_hyde_doc(request.query)
             logger.debug("HyDE doc generated (%d chars)", len(embed_query))
 

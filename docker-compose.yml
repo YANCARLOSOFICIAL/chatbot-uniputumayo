@@ -46,6 +46,13 @@ services:
     dns:
       - 8.8.8.8
       - 8.8.4.4
+    # GPU passthrough probado y descartado para este hardware: la RTX 3050 local
+    # solo tiene 4GB VRAM, insuficiente para qwen3:8b (6.5GB) — Ollama termina
+    # desalojando/recargando los modelos de embedding constantemente peleando por
+    # ese espacio, y medido con el eval harness NO mejoró la latencia (de hecho
+    # el retrieval empeoró). Además, reservar una GPU aquí haría que el contenedor
+    # de Ollama fallara al arrancar en el servidor de producción (sin GPU). Ver
+    # docker-compose.gpu.yml si se quiere probar en una máquina con más VRAM.
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 15s
@@ -67,12 +74,15 @@ services:
       OLLAMA_DEFAULT_MODEL: qwen3:8b
       OLLAMA_EMBEDDING_MODEL: nomic-embed-text
       OLLAMA_VISION_MODEL: gemma4:e4b
+      OLLAMA_KEEP_ALIVE: "30m"
+      OLLAMA_NUM_CTX: "8192"
+      OLLAMA_THINK_ENABLED: "false"
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_DEFAULT_MODEL: gpt-5.4-mini
       OPENAI_EMBEDDING_MODEL: text-embedding-3-small
       DEFAULT_LLM_PROVIDER: ollama
       DEFAULT_TEMPERATURE: "0.05"
-      DEFAULT_MAX_TOKENS: "2048"
+      DEFAULT_MAX_TOKENS: "1024"
       CHUNK_SIZE: "512"
       CHUNK_OVERLAP: "77"
       RAG_TOP_K: "5"

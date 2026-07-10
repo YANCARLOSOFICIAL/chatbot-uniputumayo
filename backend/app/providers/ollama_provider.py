@@ -43,9 +43,12 @@ class OllamaProvider(BaseLLMProvider):
                     "model": model,
                     "messages": messages,
                     "stream": False,
+                    "think": settings.ollama_think_enabled,
+                    "keep_alive": settings.ollama_keep_alive,
                     "options": {
                         "temperature": temperature,
                         "num_predict": max_tokens,
+                        "num_ctx": settings.ollama_num_ctx,
                     },
                 },
             )
@@ -81,9 +84,12 @@ class OllamaProvider(BaseLLMProvider):
                     "model": model,
                     "messages": messages,
                     "stream": True,
+                    "think": settings.ollama_think_enabled,
+                    "keep_alive": settings.ollama_keep_alive,
                     "options": {
                         "temperature": temperature,
                         "num_predict": max_tokens,
+                        "num_ctx": settings.ollama_num_ctx,
                     },
                 },
             ) as response:
@@ -140,7 +146,7 @@ class OllamaProvider(BaseLLMProvider):
 
         response = await client.post(
             f"{self.base_url}/api/embeddings",
-            json={"model": model, "prompt": text},
+            json={"model": model, "prompt": text, "keep_alive": settings.ollama_keep_alive},
         )
         response.raise_for_status()
         vector = response.json()["embedding"]
