@@ -44,7 +44,10 @@ export function AdminSidebar({ isOpen, onClose, desktopOpen = true }: AdminSideb
   const sidebar = (
     <aside style={{
       width: 252,
-      background: "var(--admin-sb-bg)",
+      background: "var(--glass-navy-bg)",
+      backdropFilter: "blur(var(--glass-blur-sm))",
+      WebkitBackdropFilter: "blur(var(--glass-blur-sm))",
+      borderRight: "1px solid var(--glass-navy-border)",
       display: "flex",
       flexDirection: "column",
       height: "100dvh",
@@ -57,11 +60,17 @@ export function AdminSidebar({ isOpen, onClose, desktopOpen = true }: AdminSideb
         background: "linear-gradient(90deg, var(--brand-primary) 0%, var(--brand-accent) 100%)",
       }} />
 
-      {/* Ambient glow blob */}
+      {/* Ambient glow blobs — give the glass sidebar real detail to refract */}
       <div style={{
         position: "absolute", top: -60, left: -60,
         width: 240, height: 240, borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(27,110,148,0.12) 0%, transparent 70%)",
+        background: "radial-gradient(circle, rgba(27,110,148,0.22) 0%, transparent 70%)",
+        pointerEvents: "none",
+      }} />
+      <div style={{
+        position: "absolute", bottom: -40, right: -60,
+        width: 200, height: 200, borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(123,181,46,0.14) 0%, transparent 70%)",
         pointerEvents: "none",
       }} />
 
@@ -232,8 +241,8 @@ export function AdminSidebar({ isOpen, onClose, desktopOpen = true }: AdminSideb
   return (
     <>
       <div
-        className="hidden md:flex flex-shrink-0 overflow-hidden transition-all duration-200"
-        style={{ width: desktopOpen ? 252 : 0 }}
+        className="hidden md:flex flex-shrink-0 overflow-hidden transition-all duration-200 relative"
+        style={{ width: desktopOpen ? 252 : 0, zIndex: 1 }}
         aria-hidden={!desktopOpen}
       >
         {sidebar}

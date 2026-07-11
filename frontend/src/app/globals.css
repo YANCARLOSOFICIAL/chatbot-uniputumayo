@@ -80,6 +80,21 @@
   --sb-active:   #7BB52E;
   --admin-sb-bg: #08202E;
 
+  /* Liquid Glass — navy variant, always-dark bespoke surfaces (landing, login,
+     sidebar) that don't react to the light/dark toggle. Tinted with the brand
+     navy, not generic white/black, so it reads as institutional rather than
+     stock glassmorphism. */
+  --glass-navy-bg:        rgba(19,78,104,0.38);
+  /* Bumped from 0.42 → 0.62: at 0.42 over a high-contrast photo (e.g. a white
+     building wall), text/placeholder contrast inside the card dropped below
+     the WCAG floor documented in session-9's audit. Still shows color/texture
+     through the blur, just normalizes brightness swings enough to keep every
+     label and placeholder readable regardless of what's behind it. */
+  --glass-navy-bg-strong: rgba(15,45,60,0.62);
+  --glass-navy-border:     rgba(255,255,255,0.20);
+  --glass-navy-border-top: rgba(255,255,255,0.55);
+  --glass-navy-shadow: 0 24px 80px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.16) inset;
+
   /* Messages */
   --user-bg:   #1B6E94;
   --user-text: #ffffff;
@@ -109,6 +124,18 @@
   --shadow-ring: 0 0 0 3px rgba(27,110,148,0.25);
   --glow-brand: 0 0 0 3px rgba(27,110,148,0.20);
   --glow-accent: 0 0 20px rgba(123,181,46,0.20);
+
+  /* Liquid Glass — reactive surface (light mode: frosted white over --bg) */
+  --glass-bg:        rgba(255,255,255,0.55);
+  --glass-bg-strong: rgba(255,255,255,0.72);
+  --glass-border:     rgba(19,78,104,0.12);
+  --glass-border-top: rgba(255,255,255,0.85);
+  --glass-shadow: 0 8px 32px rgba(15,26,34,0.14), 0 1px 0 rgba(255,255,255,0.7) inset;
+  /* Blur amounts are theme-independent — pushed up from the first pass (12/24)
+     because on flat/low-detail backgrounds a light blur is nearly invisible;
+     this needs to be strong enough to read as "glass" even on subtle sections. */
+  --glass-blur-sm: 18px;
+  --glass-blur-lg: 36px;
 
   /* Radius */
   --r-sm:   4px;
@@ -195,6 +222,13 @@
   --brand-accent-light:   rgba(123,181,46,0.10);
   --shadow-ring: 0 0 0 3px rgba(44,155,200,0.28);
   --glow-brand:  0 0 0 3px rgba(44,155,200,0.22);
+
+  /* Liquid Glass — reactive surface (dark mode: navy-tinted frost over --bg) */
+  --glass-bg:        rgba(19,78,104,0.36);
+  --glass-bg-strong: rgba(24,90,120,0.42);
+  --glass-border:     rgba(255,255,255,0.18);
+  --glass-border-top: rgba(255,255,255,0.5);
+  --glass-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.14) inset;
 }
 
 /* ── Tailwind v4 theme bridge ── */
@@ -962,15 +996,18 @@ p           { text-wrap: pretty; }
 
 /* Dark form inputs */
 .dark-input {
-  width: 100%; background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.10);
+  /* Second contrast safety layer on top of the .glass-navy-strong card fill —
+     bumped from 0.06 so the field itself stays legible even where the photo
+     behind the card is bright (e.g. a white building wall). */
+  width: 100%; background: rgba(8,20,28,0.42);
+  border: 1px solid rgba(255,255,255,0.14);
   border-radius: 10px; padding: 12px 14px;
   font-family: var(--font-body); font-size: 14px;
   color: #fff; outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
   box-sizing: border-box;
 }
-.dark-input::placeholder { color: rgba(255,255,255,0.40); }
+.dark-input::placeholder { color: rgba(255,255,255,0.55); }
 .dark-input:focus {
   border-color: rgba(27,110,148,0.5);
   box-shadow: 0 0 0 3px rgba(27,110,148,0.12);
@@ -985,26 +1022,38 @@ p           { text-wrap: pretty; }
 }
 .dark-tab.active { color: #fff; border-bottom-color: var(--brand-accent); }
 
-/* Flat chat input bar */
+/* Chat input area — ChatGPT-style: no bar/border spanning the width, just
+   padding around a floating rounded pill (see .chatgpt-input-pill below). */
 .flat-input-bar {
-  background: var(--surface); border-top: 1px solid var(--border);
-  padding: 14px 20px 14px;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-.flat-input-bar:focus-within {
-  border-top-color: rgba(27,110,148,0.35);
-  box-shadow: 0 -1px 0 rgba(27,110,148,0.18);
-}
-.flat-input-bar.listening {
-  border-top-color: rgba(123,181,46,0.4);
-  box-shadow: 0 -1px 0 rgba(123,181,46,0.2);
+  background: var(--bg);
+  padding: 10px 20px 16px;
 }
 
-/* Bot message flat style */
+/* Floating rounded input pill — flat solid fill, no blur, generous radius. */
+.chatgpt-input-pill {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.chatgpt-input-pill:focus-within {
+  border-color: rgba(27,110,148,0.4);
+  box-shadow: 0 0 0 3px rgba(27,110,148,0.10);
+}
+.flat-input-bar.listening .chatgpt-input-pill {
+  border-color: rgba(123,181,46,0.45);
+  box-shadow: 0 0 0 3px rgba(123,181,46,0.10);
+}
+
+/* Bot message — ChatGPT-style plain text, no card/border/blur at all. The
+   chat now intentionally breaks from the Liquid Glass language used on
+   landing/login/admin — the user asked specifically for a ChatGPT-like flat
+   chat surface, kept as its own visual mode. */
 .msg-bot-flat {
-  border-left: 2px solid var(--brand);
-  padding: 4px 0 4px 16px;
-  background: none; border-radius: 0;
+  padding: 2px 0;
+  background: none;
+  border: none;
+  border-radius: 0;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1044,21 +1093,33 @@ p           { text-wrap: pretty; }
   white-space: nowrap;
 }
 
-/* ── Double-Bezel (Doppelrand) — physical depth architecture ── */
+/* ── Double-Bezel (Doppelrand) — physical depth architecture ──
+   Upgraded to real Liquid Glass: backdrop-filter blur + a brighter top edge
+   simulating light catching the rim of a glass panel, on top of the existing
+   physical-depth shadow stack (kept — that's the "solid structure" half of
+   the hybrid, blur alone would read as generic glassmorphism). */
 .double-bezel {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.10);
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 50%),
+    var(--glass-navy-bg-strong);
+  border: 1px solid var(--glass-navy-border);
+  border-top-color: var(--glass-navy-border-top);
   border-radius: 24px;
   padding: 6px;
+  backdrop-filter: blur(var(--glass-blur-lg));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg));
   box-shadow:
     0 0 0 1px rgba(0,0,0,0.4),
     0 24px 80px rgba(0,0,0,0.6),
-    0 1px 0 rgba(255,255,255,0.06) inset;
+    0 1px 0 rgba(255,255,255,0.16) inset;
 }
 .double-bezel-inner {
   border-radius: 19px;
   overflow: hidden;
   box-shadow: inset 0 1px 1px rgba(255,255,255,0.07);
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .double-bezel { background: var(--glass-navy-bg-strong); }
 }
 
 /* ── Button-in-Button Island CTA ── */
@@ -1120,10 +1181,88 @@ p           { text-wrap: pretty; }
 
 /* ── Agency dark card (deeper than .dark-card) ── */
 .agency-card {
-  background: rgba(255,255,255,0.035);
-  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.09) 0%, transparent 50%),
+    var(--glass-navy-bg);
+  border: 1px solid var(--glass-navy-border);
+  border-top-color: var(--glass-navy-border-top);
   border-radius: 20px; padding: 28px;
-  box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.14) inset;
+  backdrop-filter: blur(var(--glass-blur-lg));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg));
+}
+
+/* ══════════════════════════════════════════════
+   LIQUID GLASS — reactive utility classes
+   Used on chat/admin surfaces that already read the
+   --surface/--text-* reactive tokens (light+dark via .dark).
+   Approximation of Apple's Liquid Glass for the web:
+   backdrop-filter + a brighter top border + an inset highlight,
+   not just backdrop-blur alone — see design-taste-frontend skill.
+══════════════════════════════════════════════ */
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-top-color: var(--glass-border-top);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur-sm));
+  -webkit-backdrop-filter: blur(var(--glass-blur-sm));
+}
+.glass-strong {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.16) 0%, transparent 45%),
+    var(--glass-bg-strong);
+  border: 1px solid var(--glass-border);
+  border-top-color: var(--glass-border-top);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur-lg));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg));
+}
+/* Low-blur chrome (nav bars, headers) — cheap enough to keep on while scrolling */
+.glass-subtle {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ── Navy variants — always-dark bespoke surfaces (landing/login), not tied
+   to the .dark toggle ── */
+.glass-navy {
+  background: var(--glass-navy-bg);
+  border: 1px solid var(--glass-navy-border);
+  border-top-color: var(--glass-navy-border-top);
+  box-shadow: var(--glass-navy-shadow);
+  backdrop-filter: blur(var(--glass-blur-sm));
+  -webkit-backdrop-filter: blur(var(--glass-blur-sm));
+}
+.glass-navy-strong {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.14) 0%, transparent 45%),
+    var(--glass-navy-bg-strong);
+  border: 1px solid var(--glass-navy-border);
+  border-top-color: var(--glass-navy-border-top);
+  box-shadow: var(--glass-navy-shadow);
+  backdrop-filter: blur(var(--glass-blur-lg));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg));
+}
+
+/* Fallback when backdrop-filter isn't supported — solid surface instead of
+   see-through, so text never sits on an unreadably busy background. */
+@supports not (backdrop-filter: blur(1px)) {
+  .glass, .glass-strong, .glass-subtle { background: var(--surface); }
+  .glass-navy, .glass-navy-strong { background: var(--glass-navy-bg-strong); }
+}
+/* Respect reduced-transparency preference the same way */
+@media (prefers-reduced-transparency: reduce) {
+  .glass, .glass-strong, .glass-subtle {
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+    background: var(--surface);
+  }
+  .glass-navy, .glass-navy-strong {
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+    background: var(--glass-navy-bg-strong);
+  }
 }
 
 /* ── Grain/noise overlay (physical texture) ── */

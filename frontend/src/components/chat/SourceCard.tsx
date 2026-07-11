@@ -25,7 +25,7 @@ export function SourceCard({ sources, open: openProp, onOpenChange, highlightedI
         style={{
           display: "inline-flex", alignItems: "center", gap: 5,
           padding: "4px 10px 4px 8px", borderRadius: 9999,
-          border: "1px solid var(--border)", background: "var(--surface)",
+          border: "1px solid var(--border)", background: "transparent",
           fontSize: 11, fontWeight: 600, color: "var(--text-3)",
           cursor: "pointer", transition: "border-color 0.15s, color 0.15s",
         }}

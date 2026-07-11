@@ -161,7 +161,7 @@ export function ChatContainer() {
     : "U";
 
   return (
-    <div className="flex h-[100dvh] bg-[var(--bg)] overflow-hidden">
+    <div className="flex h-[100dvh] bg-[var(--bg)] overflow-hidden relative">
 
       {mounted && voiceOverlayOpen && (
         <VoiceModeOverlay
@@ -189,8 +189,8 @@ export function ChatContainer() {
         <>
           {/* Desktop sidebar */}
           <div
-            className="hidden md:block flex-shrink-0 overflow-hidden transition-all duration-200"
-            style={{ width: sidebarOpen ? 260 : 0 }}
+            className="hidden md:block flex-shrink-0 overflow-hidden transition-all duration-200 relative"
+            style={{ width: sidebarOpen ? 260 : 0, zIndex: 1 }}
             aria-hidden={!sidebarOpen}
           >
             <ConversationSidebar
@@ -222,10 +222,11 @@ export function ChatContainer() {
       )}
 
       {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative" style={{ zIndex: 1 }}>
 
-        {/* Top bar */}
-        <header className="flex-shrink-0 h-14 px-3 border-b border-[var(--border)] bg-[var(--bg)] flex items-center gap-2">
+        {/* Top bar — flat, blends into the canvas like ChatGPT's borderless
+            header (no card/glass chrome, just a hairline separator). */}
+        <header className="flex-shrink-0 h-14 px-3 flex items-center gap-2" style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
           {/* Toggle buttons */}
           <button
             onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}

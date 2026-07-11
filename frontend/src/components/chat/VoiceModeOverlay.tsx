@@ -85,7 +85,13 @@ export function VoiceModeOverlay({
       className="voice-overlay animate-fade-in"
       style={{
         position: "fixed", inset: 0, zIndex: 60,
-        background: "radial-gradient(circle at 50% 35%, rgba(11,52,71,0.97), rgba(7,24,36,0.99))",
+        // Dramatic full-screen glass: the chat behind this overlay is visible
+        // but heavily blurred, instead of a near-opaque scrim — a real "glass
+        // modal over the app" moment, the best candidate on the whole site
+        // for a strong Liquid Glass treatment (see redesign plan).
+        background: "radial-gradient(circle at 50% 35%, rgba(11,52,71,0.62), rgba(7,24,36,0.72))",
+        backdropFilter: "blur(var(--glass-blur-lg))",
+        WebkitBackdropFilter: "blur(var(--glass-blur-lg))",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
         padding: 24,
       }}
@@ -93,9 +99,9 @@ export function VoiceModeOverlay({
       <button
         onClick={onCancel}
         aria-label="Cerrar modo de voz"
+        className="glass-navy"
         style={{
           position: "absolute", top: 20, right: 20, width: 40, height: 40, borderRadius: "50%",
-          background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)",
           color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
         }}
       >
@@ -127,9 +133,9 @@ export function VoiceModeOverlay({
 
         <button
           onClick={onCancel}
+          className="glass-navy"
           style={{
             display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 999,
-            background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.18)",
             color: "#fff", fontSize: 13.5, fontWeight: 500, cursor: "pointer",
           }}
         >

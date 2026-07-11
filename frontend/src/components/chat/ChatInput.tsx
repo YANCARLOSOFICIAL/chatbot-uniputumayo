@@ -71,7 +71,7 @@ export function ChatInput({
     >
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
 
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 10 }}>
+        <div className="chatgpt-input-pill" style={{ display: "flex", alignItems: "flex-end", gap: 10, padding: "8px 10px 8px 14px" }}>
 
           {/* Voice button */}
           {isVoiceSupported && (

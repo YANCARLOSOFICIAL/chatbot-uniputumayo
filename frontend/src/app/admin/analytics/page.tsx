@@ -59,8 +59,9 @@ export default function AnalyticsPage() {
           </div>
         ) : !data ? null : (
           <>
-            {/* KPI strip — editorial numbers NOT equal icon cards */}
-            <div style={{ display: "flex", borderRadius: 14, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface)", marginBottom: 28 }}>
+            {/* KPI strip — editorial numbers NOT equal icon cards. Glass surface,
+                same treatment as the overview page's number strip. */}
+            <div className="glass-subtle" style={{ display: "flex", borderRadius: 14, overflow: "hidden", marginBottom: 28 }}>
               {[
                 {
                   label: "Conversaciones",

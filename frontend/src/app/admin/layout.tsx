@@ -61,7 +61,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div style={{ display: "flex", height: "100dvh", overflow: "hidden", background: "var(--bg)" }}>
+    <div style={{ display: "flex", height: "100dvh", overflow: "hidden", background: "var(--bg)", position: "relative" }}>
+      {/* Ambient glass backdrop — subtle (lower opacity than chat/landing,
+          this is a data dashboard, not a marketing surface) so the glass
+          header/KPI cards have real detail to refract without competing with
+          the actual data. */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden" style={{ zIndex: 0 }}>
+        <div style={{ position: "absolute", top: "-8%", right: "15%", width: 460, height: 460, borderRadius: "50%", background: "radial-gradient(circle, rgba(27,110,148,0.10), transparent 70%)" }} />
+        <div style={{ position: "absolute", bottom: "-12%", left: "30%", width: 400, height: 400, borderRadius: "50%", background: "radial-gradient(circle, rgba(123,181,46,0.08), transparent 70%)" }} />
+      </div>
+
       <AdminSidebar
         isOpen={mobileSidebarOpen}
         onClose={() => setMobileSidebarOpen(false)}
@@ -88,7 +97,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <PanelLeft size={13} strokeWidth={1.75} style={{ transform: desktopOpen ? "none" : "scaleX(-1)" }} />
       </button>
 
-      <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "auto" }}>
+      <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "auto", position: "relative", zIndex: 1 }}>
         {/* Barra superior solo en móvil */}
         <div className="flex md:hidden items-center gap-3 px-4 h-14 border-b border-[var(--border)] bg-[var(--surface)] flex-shrink-0">
           <button

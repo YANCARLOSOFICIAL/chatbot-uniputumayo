@@ -114,7 +114,35 @@ export default function LoginPage() {
   ];
 
   return (
-    <div style={{ minHeight: "100dvh", background: "#071824", display: "flex" }}>
+    <div style={{ minHeight: "100dvh", background: "#071824", display: "flex", position: "relative", overflow: "hidden" }}>
+
+      {/* Single campus photo spanning the full width — both panels share one
+          continuous image instead of a bright left half + a separately
+          darkened, disconnected-looking right half. The overlay is darkest
+          over the text (left) and lets the photo show through more clearly
+          behind the login card (right), so the glass card's blur has real
+          photographic detail to refract. */}
+      <div aria-hidden style={{
+        position: "absolute", inset: 0,
+        backgroundImage: "url('/hero-fondo.png')",
+        backgroundSize: "cover", backgroundPosition: "center",
+      }} />
+      <div aria-hidden style={{
+        position: "absolute", inset: 0,
+        background: "linear-gradient(100deg, rgba(7,24,36,0.85) 0%, rgba(11,52,71,0.68) 35%, rgba(11,52,71,0.30) 62%, rgba(11,52,71,0.42) 100%)",
+      }} />
+      <div aria-hidden style={{
+        position: "absolute", top: "-8%", right: "8%",
+        width: 420, height: 420, borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(27,110,148,0.28), transparent 70%)",
+        filter: "blur(60px)", pointerEvents: "none",
+      }} />
+      <div aria-hidden style={{
+        position: "absolute", bottom: "-10%", left: "20%",
+        width: 340, height: 340, borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(123,181,46,0.16), transparent 70%)",
+        filter: "blur(60px)", pointerEvents: "none",
+      }} />
 
       {/* Left panel — brand showcase */}
       <div
@@ -125,25 +153,6 @@ export default function LoginPage() {
           padding: "60px 56px",
         }}
       >
-        {/* Campus background */}
-        <div style={{
-          position: "absolute", inset: 0,
-          backgroundImage: "url('/hero-fondo.png')",
-          backgroundSize: "cover", backgroundPosition: "center",
-        }} />
-        {/* Overlay — lighter so campus shows through */}
-        <div style={{
-          position: "absolute", inset: 0,
-          background: "linear-gradient(135deg, rgba(7,24,36,0.72) 0%, rgba(11,52,71,0.62) 55%, rgba(27,110,148,0.30) 100%)",
-        }} />
-        {/* Accent blob */}
-        <div style={{
-          position: "absolute", bottom: "10%", right: "-5%",
-          width: 320, height: 320, borderRadius: "50%",
-          background: "radial-gradient(circle, rgba(123,181,46,0.08), transparent 70%)",
-          filter: "blur(50px)", pointerEvents: "none",
-        }} />
-
         {/* Content */}
         <div style={{ position: "relative", zIndex: 1, maxWidth: 440 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 48 }}>
@@ -186,14 +195,14 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right panel — login form */}
+      {/* Right panel — login form (transparent, sits on the shared photo above) */}
       <div style={{
         flex: 1, display: "flex", flexDirection: "column",
-        background: "#0F1E2A", minHeight: "100dvh",
+        minHeight: "100dvh", position: "relative",
       }}>
         {/* Form area — centered, fills available space */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "48px 40px" }}>
-        <div style={{ width: "100%", maxWidth: 360 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "48px 40px", position: "relative", zIndex: 1 }}>
+        <div className="glass-navy-strong" style={{ width: "100%", maxWidth: 400, borderRadius: 24, padding: "40px 36px" }}>
 
           {/* Logo mobile only */}
           <div className="md:hidden" style={{ textAlign: "center", marginBottom: 32 }}>
@@ -322,12 +331,13 @@ export default function LoginPage() {
             </form>
           )}
 
-          {/* Continue without account */}
-          <div style={{ marginTop: 20, position: "relative" }}>
-            <div style={{ position: "absolute", inset: "50% 0 auto", borderTop: "1px solid rgba(255,255,255,0.08)" }} />
-            <span style={{ position: "relative", background: "#0F1E2A", padding: "0 10px", fontSize: 11, color: "rgba(255,255,255,0.45)", display: "flex", justifyContent: "center" }}>
-              o
-            </span>
+          {/* Continue without account — two half-width rules with a gap for
+              the label, instead of a full-width line + a background-matched
+              mask (fragile against the card's gradient sheen). */}
+          <div style={{ marginTop: 20, display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ flex: 1, borderTop: "1px solid rgba(255,255,255,0.12)" }} />
+            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)" }}>o</span>
+            <div style={{ flex: 1, borderTop: "1px solid rgba(255,255,255,0.12)" }} />
           </div>
           <button
             onClick={() => router.push("/chat")}

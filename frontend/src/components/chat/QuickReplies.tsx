@@ -27,7 +27,7 @@ export function QuickReplies({ onSelect }: QuickRepliesProps) {
               className="flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 active:scale-[0.96] transition-all hover:border-[var(--brand-primary)] hover:text-[var(--brand-primary)] hover:bg-[var(--brand-dim)]"
               style={{
                 padding: "5px 12px", borderRadius: 9999,
-                background: "var(--surface)", border: "1px solid var(--border)",
+                background: "transparent", border: "1px solid var(--border)",
                 fontSize: 12, fontWeight: 500, color: "var(--text-2)", cursor: "pointer",
                 transition: "border-color 0.15s, color 0.15s, background 0.15s",
               }}

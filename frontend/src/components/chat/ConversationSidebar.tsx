@@ -109,10 +109,9 @@ function ConvItem({
         onClick={onSelect}
         style={{
           width: "100%", display: "flex", alignItems: "center", gap: 7,
-          padding: "7px 8px", borderRadius: 7, marginBottom: 1, cursor: "pointer",
+          padding: "8px 10px", borderRadius: 8, marginBottom: 1, cursor: "pointer",
           background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
           border: "none",
-          borderLeft: isActive ? "2px solid var(--sb-active)" : "2px solid transparent",
           color: isActive ? "#fff" : "rgba(255,255,255,0.72)",
           transition: "background 0.1s, color 0.1s",
           textAlign: "left",
@@ -183,9 +182,20 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   return (
     <aside
       style={{
+        // ChatGPT-style: sidebar blends flat into the main canvas — same flat
+        // dark color, no blur, only a hairline seam — instead of a distinct
+        // glass panel. Keeps the institutional navy-dark tone (var(--sb-bg)),
+        // just flattened.
         width: 260, flexShrink: 0, display: "flex", flexDirection: "column",
-        height: "100%", background: "var(--sb-bg)",
-        borderRight: "1px solid rgba(255,255,255,0.07)",
+        height: "100%",
+        // Sidebar stays always-dark (var(--sb-bg), non-reactive) regardless of
+        // the chat's light/dark toggle — this is pre-existing app behavior,
+        // and every text color in this file is a hardcoded white/opacity
+        // value that assumes a dark backdrop. Switching this to the reactive
+        // var(--bg) would make all that text vanish in light mode. Flat,
+        // no blur, matches the ChatGPT reference for the dark theme.
+        background: "var(--sb-bg)",
+        borderRight: "1px solid rgba(255,255,255,0.06)",
       }}
       className={[
         "md:relative md:translate-x-0 md:flex",
@@ -204,39 +214,40 @@ export const ConversationSidebar = memo(function ConversationSidebar({
           </div>
         </div>
 
+        {/* ChatGPT-style: plain rows, no button/input chrome — flat, only a
+            hover highlight, not a bordered pill. */}
         <button
           onClick={() => { onNew(); onClose(); }}
           style={{
-            width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
-            padding: "9px 14px", borderRadius: 8,
-            background: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            color: "rgba(255,255,255,0.75)", cursor: "pointer",
+            width: "100%", display: "flex", alignItems: "center", gap: 9,
+            padding: "8px 8px", borderRadius: 8,
+            background: "transparent", border: "none",
+            color: "rgba(255,255,255,0.85)", cursor: "pointer",
             fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 500,
-            marginBottom: 10, transition: "background 0.12s, border-color 0.12s",
+            marginBottom: 2, transition: "background 0.12s",
           }}
-          className="hover:bg-white/10 hover:border-white/20"
+          className="hover:bg-white/[0.06]"
         >
-          <Plus size={13} strokeWidth={2} /> Nueva conversacion
+          <Plus size={15} strokeWidth={1.75} /> Nuevo chat
         </button>
 
-        <div style={{ position: "relative" }}>
-          <Search size={12} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.3)" }} />
+        <div style={{ position: "relative", marginTop: 6 }}>
+          <Search size={13} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.45)" }} />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar..."
+            placeholder="Buscar chats"
             style={{
-              width: "100%", paddingLeft: 28, paddingRight: 28, paddingTop: 8, paddingBottom: 8,
-              fontSize: 12, borderRadius: 8,
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              color: "rgba(255,255,255,0.8)",
+              width: "100%", paddingLeft: 30, paddingRight: 28, paddingTop: 8, paddingBottom: 8,
+              fontSize: 13, borderRadius: 8,
+              background: "transparent",
+              border: "none",
+              color: "rgba(255,255,255,0.85)",
               outline: "none", boxSizing: "border-box",
-              transition: "border-color 0.12s",
+              transition: "background 0.12s",
             }}
-            className="placeholder-white/30 focus:border-white/20"
+            className="placeholder-white/45 hover:bg-white/[0.06] focus:bg-white/[0.06]"
           />
           {search && (
             <button

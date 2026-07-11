@@ -8,10 +8,9 @@ interface AdminHeaderProps {
 
 export function AdminHeader({ title, subtitle, action }: AdminHeaderProps) {
   return (
-    <header style={{
+    <header className="glass-subtle" style={{
       padding: "22px 32px 18px",
-      borderBottom: "1px solid var(--border)",
-      background: "var(--surface)",
+      borderLeft: "none", borderRight: "none", borderTop: "none",
       display: "flex", justifyContent: "space-between",
       alignItems: "flex-start", flexShrink: 0, gap: 16,
     }}>

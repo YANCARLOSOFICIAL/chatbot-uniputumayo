@@ -155,8 +155,10 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Editorial number strip — NOT 4 equal icon cards */}
-        <div style={{ display: "flex", borderRadius: 14, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface)", marginBottom: 24 }}>
+        {/* Editorial number strip — NOT 4 equal icon cards. KPI surface: glass
+            (per the redesign plan, blur is reserved for chrome/KPI cards, data
+            tables below stay solid for legibility). */}
+        <div className="glass-subtle" style={{ display: "flex", borderRadius: 14, overflow: "hidden", marginBottom: 24 }}>
           {[
             { label: "Conversaciones", value: loading ? "..." : conversations.length > 0 ? `${conversations.length}+` : "0", color: "var(--brand-primary)" },
             { label: "Usuarios",       value: loading ? "..." : userCount ?? "—",                                            color: "#8B5CF6" },

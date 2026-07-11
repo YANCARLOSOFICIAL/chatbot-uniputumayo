@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
-import { ArrowUp, ArrowRight, MapPin, BookOpen, Mic, MessageCircle, Search, Shield } from "lucide-react";
+import { ArrowUp, ArrowRight, MapPin, BookOpen, Mic, Clock, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { SiteFooter } from "@/components/ui/SiteFooter";
 
@@ -35,12 +35,6 @@ const PROGRAMS = [
 
 const CHIPS = ["Que pregrados tienen?", "Costos 2026-1", "Como inscribirse?", "Sedes disponibles"];
 
-const STEPS = [
-  { icon: MessageCircle, num: "01", title: "Escribe o habla", body: "Pregunta en espanol natural. Guaca entiende contexto, no solo palabras clave." },
-  { icon: Search,        num: "02", title: "Busca en el catalogo", body: "Consulta el PEI, reglamentos y programas oficiales de UniPutumayo en tiempo real." },
-  { icon: Shield,        num: "03", title: "Responde con fuentes", body: "Cada respuesta cita el documento de origen. Informacion verificada, no alucinada." },
-];
-
 export default function LandingPage() {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -65,9 +59,8 @@ export default function LandingPage() {
 
   const hero   = useInView(0.05);
   const stats  = useInView(0.3);
-  const steps  = useInView(0.15);
+  const why    = useInView(0.1);
   const campus = useInView(0.1);
-  const bento  = useInView(0.1);
   const progs  = useInView(0.1);
   const cta    = useInView(0.3);
 
@@ -89,7 +82,7 @@ export default function LandingPage() {
           </Link>
 
           <div className="hidden md:flex" style={{ gap: 18, alignItems: "center" }}>
-            {[["Como funciona", "#how"], ["Programas", "#programs"]].map(([label, href]) => (
+            {[["Por que Guaca", "#why"], ["Programas", "#programs"]].map(([label, href]) => (
               <a key={href} href={href} style={{ fontSize: 13, color: "rgba(255,255,255,0.72)", textDecoration: "none" }} className="hover:text-white transition-colors">
                 {label}
               </a>
@@ -110,92 +103,49 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* ══════ HERO — campus background ══════ */}
+      {/* ══════ HERO — full-bleed campus photo, no phone mockup ══════ */}
       <main>
         <section className="landing-hero">
-          {/* Background photo */}
           <div className="landing-hero-bg" aria-hidden />
           <div className="landing-hero-bg-glow" aria-hidden />
 
           <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px", width: "100%", position: "relative", zIndex: 1 }}>
-            <div className="hero-split">
+            <div ref={hero.ref} className={`reveal${hero.inView ? " in-view" : ""}`} style={{ maxWidth: 700 }}>
 
-              {/* Left — headline + input */}
-              <div ref={hero.ref} className={`reveal${hero.inView ? " in-view" : ""}`}>
-                <div style={{ marginBottom: 28 }}>
-                  <span className="eyebrow-pill">
-                    <span className="dot" />
-                    Guaca · UniPutumayo 2026
-                  </span>
-                </div>
-
-                <h1 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(48px, 7vw, 86px)", fontWeight: 900, lineHeight: 0.93, letterSpacing: "-0.04em", margin: "0 0 24px", textWrap: "balance" }}>
-                  La guia<br />
-                  <span style={{ color: "var(--brand-primary)" }}>academica</span><br />
-                  del Putumayo.
-                </h1>
-
-                <p style={{ fontSize: "clamp(14px, 1.7vw, 17px)", color: "rgba(255,255,255,0.70)", lineHeight: 1.7, margin: "0 0 36px", maxWidth: 420 }}>
-                  Respuestas verificadas del catalogo oficial. Sin filas, sin formularios. Disponible 24 horas.
-                </p>
-
-                <form onSubmit={(e) => { e.preventDefault(); goToChat(); }} style={{ marginBottom: 16 }}>
-                  <div className="hero-chat-bar" style={{ maxWidth: 440 }}>
-                    <input
-                      type="text" value={query} onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Pregunta sobre programas, costos, sedes..."
-                      autoComplete="off"
-                    />
-                    <button type="submit" className="hero-chat-send" aria-label="Enviar">
-                      <ArrowUp size={17} color="#fff" strokeWidth={2.5} />
-                    </button>
-                  </div>
-                </form>
-
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-                  {CHIPS.map((c) => (
-                    <button key={c} className="hero-chip" onClick={() => goToChat(c)}>{c}</button>
-                  ))}
-                </div>
+              <div style={{ marginBottom: 24 }}>
+                <span className="eyebrow-pill">
+                  <span className="dot" />
+                  Guaca · Asistente oficial 2026
+                </span>
               </div>
 
-              {/* Right — Double-Bezel chat preview */}
-              <div className="hidden md:flex justify-center" style={{
-                opacity: hero.inView ? 1 : 0,
-                transform: hero.inView ? "none" : "translateY(28px)",
-                filter: hero.inView ? "none" : "blur(3px)",
-                transition: "opacity 0.75s 0.2s cubic-bezier(0.32,0.72,0,1), transform 0.75s 0.2s cubic-bezier(0.32,0.72,0,1), filter 0.75s 0.2s cubic-bezier(0.32,0.72,0,1)",
-              }}>
-                <div className="double-bezel" style={{ width: "100%", maxWidth: 340 }}>
-                  <div className="double-bezel-inner">
-                    <div className="chat-mockup-hd">
-                      <Image src="/isotipo.webp" alt="Guaca" width={22} height={22} style={{ objectFit: "contain", borderRadius: 5 }} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", lineHeight: 1 }}>Guaca</div>
-                        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>UniPutumayo</div>
-                      </div>
-                      <span style={{ fontSize: 9, color: "#4ade80", fontWeight: 600, display: "flex", alignItems: "center", gap: 3 }}>
-                        <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#4ade80", display: "inline-block" }} />
-                        En linea
-                      </span>
-                    </div>
-                    <div className="chat-mockup-bd">
-                      <div className="mock-user">Tienen Ingenieria Ambiental?</div>
-                      <div className="mock-bot" style={{ animationDelay: "0.7s" }}>
-                        Si, SNIES <span className="mock-tag">53095</span>. Disponible en <strong>Mocoa y Sibundoy</strong>. Quieres saber sobre costos o requisitos?
-                      </div>
-                      <div className="mock-source" style={{ animationDelay: "1.2s" }}>
-                        <BookOpen size={8} /> Catalogo Programas 2026 · 2 fuentes
-                      </div>
-                    </div>
-                    <div className="chat-mockup-ft">
-                      <div className="mock-input">Preguntale a Guaca...</div>
-                      <div className="mock-send"><ArrowUp size={12} color="#fff" /></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <h1 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(38px, 5.6vw, 72px)", fontWeight: 900, lineHeight: 1.0, letterSpacing: "-0.04em", margin: "0 0 20px", textWrap: "balance" }}>
+                Uniputumayo,<br />
+                <span style={{ color: "var(--brand-primary)" }}>resuelto</span> al instante.
+              </h1>
 
+              <p style={{ fontSize: "clamp(14px, 1.7vw, 17px)", color: "rgba(255,255,255,0.74)", lineHeight: 1.7, margin: "0 0 30px", maxWidth: 460 }}>
+                Programas, costos, sedes y admisiones — respondidos con fuentes verificadas del catalogo oficial.
+              </p>
+
+              <form onSubmit={(e) => { e.preventDefault(); goToChat(); }} style={{ marginBottom: 16 }}>
+                <div className="hero-chat-bar" style={{ maxWidth: 460 }}>
+                  <input
+                    type="text" value={query} onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Pregunta sobre programas, costos, sedes..."
+                    autoComplete="off"
+                  />
+                  <button type="submit" className="hero-chat-send" aria-label="Enviar">
+                    <ArrowUp size={17} color="#fff" strokeWidth={2.5} />
+                  </button>
+                </div>
+              </form>
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                {CHIPS.map((c) => (
+                  <button key={c} className="hero-chip" onClick={() => goToChat(c)}>{c}</button>
+                ))}
+              </div>
             </div>
           </div>
         </section>
@@ -205,10 +155,10 @@ export default function LandingPage() {
           style={{ borderTop: "1px solid rgba(255,255,255,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
           <div style={{ maxWidth: 900, margin: "0 auto", padding: "0 32px", display: "grid", gridTemplateColumns: "repeat(4,1fr)" }}>
             {[
-              { val: "6",    lbl: "Programas",        accent: false },
-              { val: "3",    lbl: "Sedes activas",    accent: true  },
-              { val: "24/7", lbl: "Disponible",       accent: false },
-              { val: "100%", lbl: "Catalogo oficial", accent: true  },
+              { val: "6",    lbl: "Programas activos",  accent: false },
+              { val: "3",    lbl: "Sedes en Putumayo",  accent: true  },
+              { val: "24/7", lbl: "Siempre disponible", accent: false },
+              { val: "100%", lbl: "Fuentes verificadas", accent: true  },
             ].map((s, i) => (
               <div key={s.lbl} style={{ padding: "32px 20px", textAlign: "center", borderLeft: i > 0 ? "1px solid rgba(255,255,255,0.06)" : "none" }}>
                 <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(26px,4vw,38px)", fontWeight: 900, letterSpacing: "-0.04em", lineHeight: 1, color: s.accent ? "var(--brand-primary)" : "#fff" }}>
@@ -220,34 +170,70 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* ══════ HOW IT WORKS — 3 steps ══════ */}
-        <section id="how" style={{ padding: "100px 0", background: "#071824" }}>
-          <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 32px" }}>
-            <div ref={steps.ref} className={`reveal${steps.inView ? " in-view" : ""}`} style={{ marginBottom: 52 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.52)", marginBottom: 14 }}>
-                Como funciona
-              </div>
-              <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(26px,4vw,44px)", fontWeight: 800, letterSpacing: "-0.03em", margin: 0, lineHeight: 1.05, color: "#fff", textWrap: "balance", maxWidth: 520 }}>
-                Informacion institucional en segundos.
+        {/* ══════ POR QUE GUACA — bento consolidado ══════ */}
+        <section id="why" style={{ padding: "100px 0", background: "#071824" }}>
+          <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px" }}>
+
+            <div ref={why.ref} className={`reveal${why.inView ? " in-view" : ""}`} style={{ marginBottom: 52 }}>
+              <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(28px, 4.5vw, 50px)", fontWeight: 800, letterSpacing: "-0.03em", color: "#fff", margin: 0, lineHeight: 1.05, maxWidth: 560, textWrap: "balance" }}>
+                Respuestas que puedes verificar.
               </h2>
             </div>
 
-            <div className={`steps-grid reveal${steps.inView ? " in-view" : ""} reveal-d1`}>
-              {STEPS.map(({ icon: Icon, num, title, body }) => (
-                <div key={num} className="step-card">
-                  <div className="step-num">{num}</div>
-                  <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(27,110,148,0.12)", border: "1px solid rgba(27,110,148,0.2)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-                    <Icon size={18} style={{ color: "var(--brand-primary)" }} strokeWidth={1.8} />
-                  </div>
-                  <h3 style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, color: "#fff", margin: "0 0 10px", letterSpacing: "-0.01em" }}>
-                    {title}
-                  </h3>
-                  <p style={{ fontSize: 13.5, color: "rgba(255,255,255,0.68)", lineHeight: 1.7, margin: 0 }}>
-                    {body}
-                  </p>
-                  <div className="step-connector" aria-hidden />
+            <div className={`feat-bento-v2 reveal${why.inView ? " in-view" : ""} reveal-d1`}>
+
+              {/* Big cell — RAG citations demo */}
+              <div className="agency-card bento-span rotate-card-1" style={{ display: "flex", flexDirection: "column", minHeight: 380 }}>
+                <div style={{ width: 48, height: 48, borderRadius: 14, marginBottom: 22, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <BookOpen size={22} style={{ color: "var(--brand-primary)" }} />
                 </div>
-              ))}
+                <h3 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, margin: "0 0 12px", letterSpacing: "-0.015em", color: "#fff" }}>
+                  Cada respuesta cita su fuente.
+                </h3>
+                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.68)", lineHeight: 1.7, margin: "0 0 auto" }}>
+                  Guaca consulta el PEI, los reglamentos y el catalogo oficial de programas de Uniputumayo — nunca responde algo que no pueda respaldar con un documento real.
+                </p>
+                <div className="mini-chat">
+                  <div className="mini-user">Cuales son los requisitos de admision?</div>
+                  <div className="mini-bot">Cedula, diploma de bachillerato y puntaje ICFES. Inscripciones cierran el 28 de feb.</div>
+                </div>
+              </div>
+
+              {/* Photo cell — real campus imagery, tinted */}
+              <div
+                className="rotate-card-2"
+                style={{
+                  position: "relative", overflow: "hidden", borderRadius: 20,
+                  border: "1px solid rgba(255,255,255,0.08)", minHeight: 172,
+                  display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: 24,
+                }}
+              >
+                <Image src="/hero-fondo.png" alt="" fill style={{ objectFit: "cover", objectPosition: "center 70%" }} sizes="480px" />
+                <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(7,24,36,0.35) 0%, rgba(7,24,36,0.88) 100%)" }} />
+                <div style={{ position: "relative", zIndex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                    <Clock size={14} style={{ color: "var(--brand-accent)" }} />
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: "var(--brand-accent)" }}>24/7</span>
+                  </div>
+                  <p style={{ fontSize: 13, color: "rgba(255,255,255,0.85)", margin: 0, lineHeight: 1.5, fontWeight: 500 }}>
+                    Disponible a cualquier hora, sin filas ni formularios.
+                  </p>
+                </div>
+              </div>
+
+              {/* Voice cell */}
+              <div className="agency-card rotate-card-3">
+                <div style={{ width: 40, height: 40, borderRadius: 12, marginBottom: 18, background: "var(--accent-dim)", border: "1px solid var(--accent-light)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Mic size={18} style={{ color: "var(--brand-accent)" }} strokeWidth={1.8} />
+                </div>
+                <h4 style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, margin: "0 0 10px", letterSpacing: "-0.01em", color: "#fff" }}>
+                  Habla, no escribas
+                </h4>
+                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.68)", margin: 0, lineHeight: 1.65 }}>
+                  Guaca escucha en espanol colombiano y responde al instante, con o sin teclado.
+                </p>
+              </div>
+
             </div>
           </div>
         </section>
@@ -256,7 +242,6 @@ export default function LandingPage() {
         <section ref={campus.ref}>
           <div className={`campus-split reveal${campus.inView ? " in-view" : ""}`}>
 
-            {/* Left — campus photo */}
             <div className="campus-img-pane">
               <Image
                 src="/estudiantes.jpg"
@@ -265,20 +250,18 @@ export default function LandingPage() {
                 style={{ objectFit: "cover", objectPosition: "center" }}
                 sizes="50vw"
               />
-              {/* Subtle overlay */}
               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to right, rgba(7,24,36,0.3) 0%, transparent 50%)" }} />
             </div>
 
-            {/* Right — text */}
             <div className={`campus-text-pane reveal${campus.inView ? " in-view" : ""} reveal-d1`}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(123,181,46,0.7)", marginBottom: 18 }}>
                 Universidad del Putumayo
               </div>
               <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(24px,3.5vw,40px)", fontWeight: 800, letterSpacing: "-0.03em", color: "#fff", margin: "0 0 20px", lineHeight: 1.05, textWrap: "balance" }}>
-                Formacion de calidad en el corazon de la Amazonia.
+                Formando profesionales para la Amazonia desde 1992.
               </h2>
               <p style={{ fontSize: 14.5, color: "rgba(255,255,255,0.70)", lineHeight: 1.75, margin: "0 0 28px" }}>
-                Desde 1992, la Institucion Universitaria del Putumayo forma lideres y profesionales en ciencias, tecnologia e ingenieria con impacto regional.
+                La Institucion Universitaria del Putumayo es publica, esta acreditada y forma lideres en ciencias, tecnologia e ingenieria con impacto directo en la region.
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {[
@@ -292,67 +275,6 @@ export default function LandingPage() {
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ══════ FEATURES BENTO ══════ */}
-        <section id="features" style={{ padding: "100px 0", background: "#071824" }}>
-          <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px" }}>
-
-            <div ref={bento.ref} className={`reveal${bento.inView ? " in-view" : ""}`} style={{ marginBottom: 52 }}>
-              <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(28px, 4.5vw, 50px)", fontWeight: 800, letterSpacing: "-0.03em", color: "#fff", margin: 0, lineHeight: 1.05, maxWidth: 560, textWrap: "balance" }}>
-                Informacion que puedes citar.
-              </h2>
-            </div>
-
-            <div className={`feat-bento-v2 reveal${bento.inView ? " in-view" : ""} reveal-d1`}>
-
-              {/* Card 1 — RAG catalog */}
-              <div className="agency-card bento-span rotate-card-1" style={{ display: "flex", flexDirection: "column", minHeight: 380 }}>
-                <div style={{ width: 48, height: 48, borderRadius: 14, marginBottom: 22, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <BookOpen size={22} style={{ color: "var(--brand-primary)" }} />
-                </div>
-                <h3 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 800, margin: "0 0 12px", letterSpacing: "-0.015em", color: "#fff" }}>
-                  Respuestas del catalogo, no del internet.
-                </h3>
-                <p style={{ fontSize: 14, color: "rgba(255,255,255,0.68)", lineHeight: 1.7, margin: "0 0 auto" }}>
-                  Guaca consulta el PEI, reglamentos y catalogo de programas de UniPutumayo. Cada respuesta cita el documento fuente.
-                </p>
-                <div style={{ marginTop: 24, background: "rgba(0,0,0,0.25)", borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div className="mini-user">Cuales son los requisitos de admision?</div>
-                  <div className="mini-bot">Cedula, diploma de bachillerato y puntaje ICFES. Inscripciones cierran el 28 de feb.</div>
-                </div>
-              </div>
-
-              {/* Card 2 — Voice */}
-              <div className="agency-card rotate-card-2">
-                <div style={{ width: 40, height: 40, borderRadius: 12, marginBottom: 18, background: "var(--accent-dim)", border: "1px solid var(--accent-light)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Mic size={18} style={{ color: "var(--brand-accent)" }} strokeWidth={1.8} />
-                </div>
-                <h4 style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, margin: "0 0 10px", letterSpacing: "-0.01em", color: "#fff" }}>
-                  Voz y texto
-                </h4>
-                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.68)", margin: 0, lineHeight: 1.65 }}>
-                  Habla directamente. Guaca escucha en espanol colombiano y responde al instante.
-                </p>
-              </div>
-
-              {/* Card 3 — 24/7 */}
-              <div className="agency-card rotate-card-3">
-                <div style={{ marginBottom: 16 }}>
-                  <span style={{ fontFamily: "var(--font-display)", fontSize: 42, fontWeight: 900, letterSpacing: "-0.04em", color: "#fff", lineHeight: 1 }}>
-                    24<span style={{ color: "var(--brand-primary)", fontSize: 28 }}>/7</span>
-                  </span>
-                </div>
-                <h4 style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 700, margin: "0 0 10px", letterSpacing: "-0.01em", color: "#fff" }}>
-                  Historial privado
-                </h4>
-                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.68)", margin: 0, lineHeight: 1.65 }}>
-                  Tu cuenta, tus conversaciones. Disponible sin importar la hora ni el dia.
-                </p>
-              </div>
-
             </div>
           </div>
         </section>
@@ -411,7 +333,6 @@ export default function LandingPage() {
 
         {/* ══════ CTA ══════ */}
         <section style={{ padding: "120px 0", background: "#071824", position: "relative", overflow: "hidden" }}>
-          {/* Subtle photo background */}
           <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: "45%", overflow: "hidden", opacity: 0.32 }} aria-hidden>
             <Image src="/lab-aguas.jpg" alt="" fill style={{ objectFit: "cover", objectPosition: "center" }} />
           </div>
@@ -419,12 +340,17 @@ export default function LandingPage() {
 
           <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 32px", position: "relative", zIndex: 1 }}>
             <div ref={cta.ref} className={`reveal${cta.inView ? " in-view" : ""}`} style={{ maxWidth: 680 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 20 }}>
+                <ShieldCheck size={14} style={{ color: "var(--brand-accent)" }} />
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(255,255,255,0.55)" }}>
+                  Sin costo · Sin registro
+                </span>
+              </div>
               <h2 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(34px, 6vw, 68px)", fontWeight: 900, letterSpacing: "-0.04em", color: "#fff", margin: "0 0 20px", lineHeight: 0.95, textWrap: "balance" }}>
-                Empieza ahora.<br />
-                <span style={{ color: "rgba(255,255,255,0.48)" }}>Sin costo, sin registro.</span>
+                Empieza la<br />conversacion.
               </h2>
               <p style={{ fontSize: 16, color: "rgba(255,255,255,0.70)", margin: "0 0 40px", lineHeight: 1.65 }}>
-                Guaca responde al instante con informacion oficial de UniPutumayo.
+                Guaca esta disponible ahora mismo con informacion oficial de Uniputumayo.
               </p>
 
               <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
