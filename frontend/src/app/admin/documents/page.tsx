@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Upload, FileText, CheckCircle2, Clock, XCircle, AlertCircle, Trash2, X, ArrowUp, RefreshCw } from "lucide-react";
+import { Upload, FileText, AlertCircle, Trash2, X, ArrowUp, RefreshCw, ChevronDown } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "@/components/ui/Toast";
 import { AdminHeader } from "@/components/admin/AdminHeader";
@@ -23,12 +23,65 @@ const STATUS_CFG: Record<string, { label: string; bg: string; color: string; bor
   pending:    { label: "Pendiente",   bg: "var(--surface-2)",      color: "var(--text-3)",        border: "var(--border)"        },
 };
 
+// Strip the UUID prefix the backend adds to stored filenames (collision
+// avoidance) — showing it to an admin is noise, not information, and on
+// the mobile card it's long enough to wrap across multiple lines.
+function cleanFileName(name: string) {
+  return name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, "");
+}
+
 function StatusPill({ status }: { status: string }) {
   const cfg = STATUS_CFG[status] ?? STATUS_CFG.pending;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 9999, fontSize: 11, fontWeight: 600, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
       {cfg.label}
     </span>
+  );
+}
+
+function DocRowActions({ doc, reindexingId, confirmDeleteId, onReindex, onDelete }: {
+  doc: DocumentItem;
+  reindexingId: string | null;
+  confirmDeleteId: string | null;
+  onReindex: (id: string, title: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <button
+        onClick={() => onReindex(doc.id, doc.title)}
+        disabled={reindexingId === doc.id || doc.ingestion_status === "processing"}
+        title="Reprocesar y regenerar embeddings"
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11,
+          padding: "3px 8px", borderRadius: 6, border: "none",
+          cursor: reindexingId === doc.id || doc.ingestion_status === "processing" ? "not-allowed" : "pointer",
+          background: "transparent", color: "var(--text-3)",
+          opacity: reindexingId === doc.id || doc.ingestion_status === "processing" ? 0.5 : 1,
+          transition: "all 0.1s",
+        }}
+        onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--brand-dim)"; b.style.color = "var(--brand-primary)"; }}
+        onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--text-3)"; }}
+      >
+        <RefreshCw size={11} className={reindexingId === doc.id ? "animate-spin" : ""} />
+        Reindexar
+      </button>
+      <button
+        onClick={() => onDelete(doc.id)}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11,
+          padding: "3px 8px", borderRadius: 6, border: "none", cursor: "pointer",
+          background: confirmDeleteId === doc.id ? "var(--error-dim)" : "transparent",
+          color: confirmDeleteId === doc.id ? "var(--error)" : "var(--text-3)",
+          transition: "all 0.1s",
+        }}
+        onMouseEnter={(e) => { if (confirmDeleteId !== doc.id) { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--error-dim)"; b.style.color = "var(--error)"; } }}
+        onMouseLeave={(e) => { if (confirmDeleteId !== doc.id) { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--text-3)"; } }}
+      >
+        <Trash2 size={11} />
+        {confirmDeleteId === doc.id ? "Confirmar?" : "Eliminar"}
+      </button>
+    </div>
   );
 }
 
@@ -53,6 +106,14 @@ export default function DocumentsPage() {
   const [faculties, setFaculties]       = useState<TaxonomyItem[]>([]);
   const [programs, setPrograms]         = useState<TaxonomyItem[]>([]);
   const [docTypes, setDocTypes]         = useState<TaxonomyItem[]>([]);
+  // Upload panel starts open on desktop; collapsed on mobile so the docs
+  // list (the thing admins check most often) doesn't require a long scroll
+  // past the whole form first. Deferred to an effect to avoid an SSR/client
+  // markup mismatch (matchMedia isn't available during render).
+  const [uploadOpen, setUploadOpen] = useState(true);
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 767px)").matches) setUploadOpen(false);
+  }, []);
 
   useEffect(() => {
     // allSettled (not all) — un catálogo caído no debe vaciar los otros dos
@@ -207,17 +268,24 @@ export default function DocumentsPage() {
         )}
 
         {/* Two-col: upload card (sticky) + docs table */}
-        <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 24, alignItems: "start" }}>
+        <div className="docs-layout">
 
-          {/* Upload panel */}
+          {/* Upload panel — collapsible on mobile (see uploadOpen above) */}
           <div className="card" style={{ padding: 24, position: "sticky", top: 24 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 20 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 9, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <button
+              type="button"
+              onClick={() => setUploadOpen((v) => !v)}
+              className="upload-panel-toggle"
+              style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", marginBottom: uploadOpen ? 20 : 0, textAlign: "left" }}
+            >
+              <div style={{ width: 32, height: 32, borderRadius: 9, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <Upload size={14} style={{ color: "var(--brand-primary)" }} />
               </div>
-              <span style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--text-1)" }}>Subir documento</span>
-            </div>
+              <span style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--text-1)", flex: 1 }}>Subir documento</span>
+              <ChevronDown size={16} className="upload-panel-chevron" style={{ color: "var(--text-3)", transition: "transform 0.2s", transform: uploadOpen ? "rotate(180deg)" : "none", flexShrink: 0 }} />
+            </button>
 
+            {uploadOpen && (
             <form onSubmit={handleUpload}>
               {/* Drop zone */}
               <div
@@ -313,6 +381,7 @@ export default function DocumentsPage() {
                 )}
               </button>
             </form>
+            )}
           </div>
 
           {/* Documents list */}
@@ -339,88 +408,82 @@ export default function DocumentsPage() {
                   <div style={{ fontSize: 12, color: "var(--text-3)" }}>Sube el primer documento desde el panel izquierdo.</div>
                 </div>
               ) : (
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ background: "var(--surface-2)" }}>
-                        {["Titulo", "Archivo", "Estado", "Chunks", "Fecha", ""].map((h, i) => (
-                          <th key={i} style={{ padding: "10px 16px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-3)", textAlign: i === 5 ? "right" : "left", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {documents.map((doc, i) => (
-                        <tr key={doc.id}
-                          style={{ borderBottom: i < documents.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.1s" }}
-                          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
-                          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                        >
-                          <td style={{ padding: "13px 16px" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <div style={{ width: 28, height: 28, borderRadius: 7, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                <FileText size={12} style={{ color: "var(--brand-primary)" }} />
-                              </div>
-                              <span style={{ fontWeight: 500, fontSize: 13, color: "var(--text-1)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {doc.title}
-                              </span>
-                            </div>
-                          </td>
-                          <td style={{ padding: "13px 16px", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                            {doc.file_name}
-                          </td>
-                          <td style={{ padding: "13px 16px" }}>
-                            <StatusPill status={doc.ingestion_status} />
-                          </td>
-                          <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-2)" }}>
-                            {doc.total_chunks}
-                          </td>
-                          <td style={{ padding: "13px 16px", fontSize: 12, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
-                            {new Date(doc.created_at).toLocaleDateString("es-CO")}
-                          </td>
-                          <td style={{ padding: "13px 16px", textAlign: "right" }}>
-                            <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                              <button
-                                onClick={() => handleReindex(doc.id, doc.title)}
-                                disabled={reindexingId === doc.id || doc.ingestion_status === "processing"}
-                                title="Reprocesar y regenerar embeddings"
-                                style={{
-                                  display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11,
-                                  padding: "3px 8px", borderRadius: 6, border: "none",
-                                  cursor: reindexingId === doc.id || doc.ingestion_status === "processing" ? "not-allowed" : "pointer",
-                                  background: "transparent", color: "var(--text-3)",
-                                  opacity: reindexingId === doc.id || doc.ingestion_status === "processing" ? 0.5 : 1,
-                                  transition: "all 0.1s",
-                                }}
-                                onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--brand-dim)"; b.style.color = "var(--brand-primary)"; }}
-                                onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--text-3)"; }}
-                              >
-                                <RefreshCw size={11} className={reindexingId === doc.id ? "animate-spin" : ""} />
-                                Reindexar
-                              </button>
-                              <button
-                                onClick={() => handleDeleteClick(doc.id)}
-                                style={{
-                                  display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11,
-                                  padding: "3px 8px", borderRadius: 6, border: "none", cursor: "pointer",
-                                  background: confirmDeleteId === doc.id ? "var(--error-dim)" : "transparent",
-                                  color: confirmDeleteId === doc.id ? "var(--error)" : "var(--text-3)",
-                                  transition: "all 0.1s",
-                                }}
-                                onMouseEnter={(e) => { if (confirmDeleteId !== doc.id) { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--error-dim)"; b.style.color = "var(--error)"; } }}
-                                onMouseLeave={(e) => { if (confirmDeleteId !== doc.id) { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--text-3)"; } }}
-                              >
-                                <Trash2 size={11} />
-                                {confirmDeleteId === doc.id ? "Confirmar?" : "Eliminar"}
-                              </button>
-                            </div>
-                          </td>
+                <>
+                  {/* Desktop: table */}
+                  <div className="hidden md:block" style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "var(--surface-2)" }}>
+                          {["Titulo", "Archivo", "Estado", "Chunks", "Fecha", ""].map((h, i) => (
+                            <th key={i} style={{ padding: "10px 16px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-3)", textAlign: i === 5 ? "right" : "left", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>
+                              {h}
+                            </th>
+                          ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {documents.map((doc, i) => (
+                          <tr key={doc.id}
+                            style={{ borderBottom: i < documents.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.1s" }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                          >
+                            <td style={{ padding: "13px 16px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ width: 28, height: 28, borderRadius: 7, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                  <FileText size={12} style={{ color: "var(--brand-primary)" }} />
+                                </div>
+                                <span style={{ fontWeight: 500, fontSize: 13, color: "var(--text-1)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {doc.title}
+                                </span>
+                              </div>
+                            </td>
+                            <td style={{ padding: "13px 16px", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+                              {doc.file_name}
+                            </td>
+                            <td style={{ padding: "13px 16px" }}>
+                              <StatusPill status={doc.ingestion_status} />
+                            </td>
+                            <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-2)" }}>
+                              {doc.total_chunks}
+                            </td>
+                            <td style={{ padding: "13px 16px", fontSize: 12, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
+                              {new Date(doc.created_at).toLocaleDateString("es-CO")}
+                            </td>
+                            <td style={{ padding: "13px 16px", textAlign: "right" }}>
+                              <DocRowActions doc={doc} reindexingId={reindexingId} confirmDeleteId={confirmDeleteId} onReindex={handleReindex} onDelete={handleDeleteClick} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile: card list — no horizontal scroll, one glance per doc */}
+                  <div className="md:hidden">
+                    {documents.map((doc) => (
+                      <div key={doc.id} className="admin-row-card">
+                        <div className="admin-row-card-top">
+                          <div className="admin-row-card-title">
+                            <div style={{ width: 28, height: 28, borderRadius: 7, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              <FileText size={12} style={{ color: "var(--brand-primary)" }} />
+                            </div>
+                            <span>{doc.title}</span>
+                          </div>
+                          <StatusPill status={doc.ingestion_status} />
+                        </div>
+                        <div className="admin-row-card-meta">
+                          <span>{cleanFileName(doc.file_name)}</span>
+                          <span>{doc.total_chunks} chunks</span>
+                          <span>{new Date(doc.created_at).toLocaleDateString("es-CO")}</span>
+                        </div>
+                        <div className="admin-row-card-actions">
+                          <DocRowActions doc={doc} reindexingId={reindexingId} confirmDeleteId={confirmDeleteId} onReindex={handleReindex} onDelete={handleDeleteClick} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           </div>

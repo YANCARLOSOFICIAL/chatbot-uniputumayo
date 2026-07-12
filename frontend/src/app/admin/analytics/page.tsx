@@ -61,7 +61,7 @@ export default function AnalyticsPage() {
           <>
             {/* KPI strip — editorial numbers NOT equal icon cards. Glass surface,
                 same treatment as the overview page's number strip. */}
-            <div className="glass-subtle" style={{ display: "flex", borderRadius: 14, overflow: "hidden", marginBottom: 28 }}>
+            <div className="glass-subtle admin-kpi-strip" style={{ borderRadius: 14, overflow: "hidden", marginBottom: 28 }}>
               {[
                 {
                   label: "Conversaciones",
@@ -91,8 +91,8 @@ export default function AnalyticsPage() {
                   positive: null,
                   color: "var(--warning)",
                 },
-              ].map((s, i, arr) => (
-                <div key={s.label} style={{ flex: 1, padding: "22px 24px", borderRight: i < arr.length - 1 ? "1px solid var(--border)" : "none", textAlign: "center" }}>
+              ].map((s) => (
+                <div key={s.label} className="admin-kpi-cell" style={{ padding: "22px 24px" }}>
                   <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(26px,2.5vw,36px)", fontWeight: 900, color: s.color, lineHeight: 1, letterSpacing: "-0.04em" }}>
                     {s.value}
                   </div>
@@ -113,7 +113,7 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Two-col: bar chart + top queries */}
-            <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 22 }}>
+            <div className="analytics-2col">
 
               {/* Bar chart */}
               <div className="card" style={{ padding: 24 }}>

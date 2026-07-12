@@ -273,7 +273,7 @@ export default function ConfigPage() {
                 <Server size={14} style={{ color: "var(--brand-primary)" }} />
                 <span style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Instrucciones de configuracion</span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, fontSize: 13, color: "var(--text-2)" }}>
+              <div className="config-2col" style={{ fontSize: 13, color: "var(--text-2)" }}>
                 <div>
                   <div style={{ fontWeight: 700, color: "var(--text-1)", marginBottom: 8 }}>Ollama (Local)</div>
                   <ol style={{ paddingLeft: 18, margin: 0, display: "flex", flexDirection: "column", gap: 5 }}>

@@ -104,7 +104,6 @@ export function SiteFooter() {
         {/* 4-col top grid */}
         <div className="footer-grid" style={{
           display: "grid",
-          gridTemplateColumns: "1.7fr 1fr 1fr 1fr",
           gap: "36px 28px",
           marginBottom: 52,
         }}>

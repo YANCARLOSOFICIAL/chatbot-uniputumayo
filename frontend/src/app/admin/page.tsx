@@ -101,12 +101,10 @@ export default function AdminPage() {
       <div style={{ padding: "28px 32px 48px", flex: 1 }}>
 
         {/* Welcome banner */}
-        <div style={{
+        <div className="admin-welcome-grid" style={{
           borderRadius: 16, overflow: "hidden",
           background: "var(--sb-bg)",
           marginBottom: 24, padding: "28px 32px",
-          display: "grid", gridTemplateColumns: "1fr auto",
-          alignItems: "center", gap: 20,
           position: "relative", minHeight: 120,
         }}>
           {/* Background image */}
@@ -158,14 +156,14 @@ export default function AdminPage() {
         {/* Editorial number strip — NOT 4 equal icon cards. KPI surface: glass
             (per the redesign plan, blur is reserved for chrome/KPI cards, data
             tables below stay solid for legibility). */}
-        <div className="glass-subtle" style={{ display: "flex", borderRadius: 14, overflow: "hidden", marginBottom: 24 }}>
+        <div className="glass-subtle admin-kpi-strip" style={{ borderRadius: 14, overflow: "hidden", marginBottom: 24 }}>
           {[
             { label: "Conversaciones", value: loading ? "..." : conversations.length > 0 ? `${conversations.length}+` : "0", color: "var(--brand-primary)" },
             { label: "Usuarios",       value: loading ? "..." : userCount ?? "—",                                            color: "#8B5CF6" },
             { label: "Documentos RAG", value: loading ? "..." : documents.length > 0 ? `${documents.length}+` : "0",        color: "var(--warning)" },
             { label: "Sistema",        value: loading ? "..." : health?.status === "healthy" ? "OK" : "—",                   color: health?.status === "healthy" ? "var(--success)" : "var(--error)" },
-          ].map((s, i, arr) => (
-            <div key={s.label} style={{ flex: 1, padding: "22px 20px", borderRight: i < arr.length - 1 ? "1px solid var(--border)" : "none", textAlign: "center" }}>
+          ].map((s) => (
+            <div key={s.label} className="admin-kpi-cell">
               <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(28px,3vw,40px)", fontWeight: 900, color: s.color, lineHeight: 1, letterSpacing: "-0.04em" }}>
                 {s.value}
               </div>

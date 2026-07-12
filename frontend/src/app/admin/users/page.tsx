@@ -100,91 +100,155 @@ export default function UsersPage() {
               <div style={{ fontSize: 12, color: "var(--text-3)" }}>Nadie se ha registrado aun.</div>
             </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "var(--surface-2)" }}>
-                    {["Nombre", "Email", "Rol", "Registro", "Cambiar rol"].map((h, i) => (
-                      <th key={h} style={{ padding: "10px 18px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-3)", textAlign: i === 4 ? "right" : "left", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user, i) => (
-                    <tr key={user.id}
-                      style={{ borderBottom: i < users.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.1s" }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                    >
-                      <td style={{ padding: "14px 18px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <div style={{
-                            width: 32, height: 32, borderRadius: 9, flexShrink: 0,
-                            background: user.role === "admin"
-                              ? "linear-gradient(135deg, var(--brand-primary), var(--brand-accent))"
-                              : "var(--brand-dim)",
-                            border: user.role === "admin"
-                              ? "none"
-                              : "1px solid var(--brand-light)",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            fontSize: 10, fontWeight: 800, textTransform: "uppercase",
-                            color: user.role === "admin" ? "#fff" : "var(--brand-primary)",
-                            letterSpacing: "0.01em",
-                          }}>
-                            {(user.display_name?.split(" ").map((w: string) => w[0]).join("").slice(0, 2)) ?? "U"}
-                          </div>
-                          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-1)" }}>
-                            {user.display_name || "Sin nombre"}
-                          </span>
-                        </div>
-                      </td>
-                      <td style={{ padding: "14px 18px", fontSize: 12, color: "var(--text-2)", fontFamily: "var(--font-mono)" }}>
-                        {user.email}
-                      </td>
-                      <td style={{ padding: "14px 18px" }}>
-                        <span style={{
-                          display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 9999,
-                          fontSize: 11, fontWeight: 600,
-                          background: user.role === "admin" ? "rgba(139,92,246,0.1)" : "var(--surface-2)",
-                          color: user.role === "admin" ? "#8B5CF6" : "var(--text-2)",
-                          border: `1px solid ${user.role === "admin" ? "rgba(139,92,246,0.2)" : "var(--border)"}`,
-                        }}>
-                          {user.role === "admin" ? <Shield size={9} /> : <User size={9} />}
-                          {user.role}
-                        </span>
-                      </td>
-                      <td style={{ padding: "14px 18px", fontSize: 12, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
-                        {new Date(user.created_at).toLocaleDateString("es-CO")}
-                      </td>
-                      <td style={{ padding: "14px 18px", textAlign: "right" }}>
-                        {updating === user.id ? (
-                          <div style={{ display: "inline-flex", gap: 3, justifyContent: "flex-end" }}>
-                            {[0, 0.1, 0.2].map((d) => (
-                              <span key={d} style={{ width: 3, height: 3, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block", animation: `pulse-soft 1s ${d}s ease-in-out infinite` }} />
-                            ))}
-                          </div>
-                        ) : (
-                          <select
-                            value={user.role}
-                            onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                            style={{
-                              fontSize: 11, fontFamily: "var(--font-body)", border: "1px solid var(--border)",
-                              background: "var(--surface-2)", color: "var(--text-2)", borderRadius: 7,
-                              padding: "4px 8px", cursor: "pointer", outline: "none",
-                            }}
-                          >
-                            <option value="user">user</option>
-                            <option value="admin">admin</option>
-                          </select>
-                        )}
-                      </td>
+            <>
+              {/* Desktop: table */}
+              <div className="hidden md:block" style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "var(--surface-2)" }}>
+                      {["Nombre", "Email", "Rol", "Registro", "Cambiar rol"].map((h, i) => (
+                        <th key={h} style={{ padding: "10px 18px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-3)", textAlign: i === 4 ? "right" : "left", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>
+                          {h}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {users.map((user, i) => (
+                      <tr key={user.id}
+                        style={{ borderBottom: i < users.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.1s" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                      >
+                        <td style={{ padding: "14px 18px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <div style={{
+                              width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+                              background: user.role === "admin"
+                                ? "linear-gradient(135deg, var(--brand-primary), var(--brand-accent))"
+                                : "var(--brand-dim)",
+                              border: user.role === "admin"
+                                ? "none"
+                                : "1px solid var(--brand-light)",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              fontSize: 10, fontWeight: 800, textTransform: "uppercase",
+                              color: user.role === "admin" ? "#fff" : "var(--brand-primary)",
+                              letterSpacing: "0.01em",
+                            }}>
+                              {(user.display_name?.split(" ").map((w: string) => w[0]).join("").slice(0, 2)) ?? "U"}
+                            </div>
+                            <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-1)" }}>
+                              {user.display_name || "Sin nombre"}
+                            </span>
+                          </div>
+                        </td>
+                        <td style={{ padding: "14px 18px", fontSize: 12, color: "var(--text-2)", fontFamily: "var(--font-mono)" }}>
+                          {user.email}
+                        </td>
+                        <td style={{ padding: "14px 18px" }}>
+                          <span style={{
+                            display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 9999,
+                            fontSize: 11, fontWeight: 600,
+                            background: user.role === "admin" ? "rgba(139,92,246,0.1)" : "var(--surface-2)",
+                            color: user.role === "admin" ? "#8B5CF6" : "var(--text-2)",
+                            border: `1px solid ${user.role === "admin" ? "rgba(139,92,246,0.2)" : "var(--border)"}`,
+                          }}>
+                            {user.role === "admin" ? <Shield size={9} /> : <User size={9} />}
+                            {user.role}
+                          </span>
+                        </td>
+                        <td style={{ padding: "14px 18px", fontSize: 12, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
+                          {new Date(user.created_at).toLocaleDateString("es-CO")}
+                        </td>
+                        <td style={{ padding: "14px 18px", textAlign: "right" }}>
+                          {updating === user.id ? (
+                            <div style={{ display: "inline-flex", gap: 3, justifyContent: "flex-end" }}>
+                              {[0, 0.1, 0.2].map((d) => (
+                                <span key={d} style={{ width: 3, height: 3, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block", animation: `pulse-soft 1s ${d}s ease-in-out infinite` }} />
+                              ))}
+                            </div>
+                          ) : (
+                            <select
+                              value={user.role}
+                              onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                              style={{
+                                fontSize: 11, fontFamily: "var(--font-body)", border: "1px solid var(--border)",
+                                background: "var(--surface-2)", color: "var(--text-2)", borderRadius: 7,
+                                padding: "4px 8px", cursor: "pointer", outline: "none",
+                              }}
+                            >
+                              <option value="user">user</option>
+                              <option value="admin">admin</option>
+                            </select>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile: card list */}
+              <div className="md:hidden">
+                {users.map((user) => (
+                  <div key={user.id} className="admin-row-card">
+                    <div className="admin-row-card-top">
+                      <div className="admin-row-card-title">
+                        <div style={{
+                          width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                          background: user.role === "admin"
+                            ? "linear-gradient(135deg, var(--brand-primary), var(--brand-accent))"
+                            : "var(--brand-dim)",
+                          border: user.role === "admin" ? "none" : "1px solid var(--brand-light)",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 9, fontWeight: 800, textTransform: "uppercase",
+                          color: user.role === "admin" ? "#fff" : "var(--brand-primary)",
+                        }}>
+                          {(user.display_name?.split(" ").map((w: string) => w[0]).join("").slice(0, 2)) ?? "U"}
+                        </div>
+                        <span>{user.display_name || "Sin nombre"}</span>
+                      </div>
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 9999,
+                        fontSize: 11, fontWeight: 600, flexShrink: 0,
+                        background: user.role === "admin" ? "rgba(139,92,246,0.1)" : "var(--surface-2)",
+                        color: user.role === "admin" ? "#8B5CF6" : "var(--text-2)",
+                        border: `1px solid ${user.role === "admin" ? "rgba(139,92,246,0.2)" : "var(--border)"}`,
+                      }}>
+                        {user.role === "admin" ? <Shield size={9} /> : <User size={9} />}
+                        {user.role}
+                      </span>
+                    </div>
+                    <div className="admin-row-card-meta">
+                      <span>{user.email}</span>
+                      <span>{new Date(user.created_at).toLocaleDateString("es-CO")}</span>
+                    </div>
+                    <div className="admin-row-card-actions">
+                      {updating === user.id ? (
+                        <div style={{ display: "inline-flex", gap: 3 }}>
+                          {[0, 0.1, 0.2].map((d) => (
+                            <span key={d} style={{ width: 3, height: 3, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block", animation: `pulse-soft 1s ${d}s ease-in-out infinite` }} />
+                          ))}
+                        </div>
+                      ) : (
+                        <select
+                          value={user.role}
+                          onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                          style={{
+                            fontSize: 12, fontFamily: "var(--font-body)", border: "1px solid var(--border)",
+                            background: "var(--surface-2)", color: "var(--text-2)", borderRadius: 7,
+                            padding: "6px 10px", cursor: "pointer", outline: "none", width: "100%",
+                          }}
+                        >
+                          <option value="user">user</option>
+                          <option value="admin">admin</option>
+                        </select>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>

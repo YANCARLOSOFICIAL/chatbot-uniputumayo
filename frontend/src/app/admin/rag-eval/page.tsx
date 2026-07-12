@@ -107,7 +107,7 @@ export default function RagEvalPage() {
         }
       />
 
-      <div style={{ padding: "28px 32px 48px", flex: 1, display: "grid", gridTemplateColumns: "1fr 260px", gap: 24 }}>
+      <div className="rag-eval-layout" style={{ padding: "28px 32px 48px", flex: 1 }}>
 
         {/* Main column */}
         <div>
@@ -121,7 +121,7 @@ export default function RagEvalPage() {
           ) : (
             <>
               {/* KPI strip */}
-              <div style={{ display: "flex", borderRadius: 14, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface)", marginBottom: 22 }}>
+              <div className="admin-kpi-strip" style={{ borderRadius: 14, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface)", marginBottom: 22 }}>
                 {[
                   {
                     label: "Casos aprobados",
@@ -143,8 +143,8 @@ export default function RagEvalPage() {
                     value: fmtMs(selectedRun.avg_generation_ms),
                     color: "var(--text-2)",
                   },
-                ].map((s, i, arr) => (
-                  <div key={s.label} style={{ flex: 1, padding: "20px 22px", borderRight: i < arr.length - 1 ? "1px solid var(--border)" : "none", textAlign: "center" }}>
+                ].map((s) => (
+                  <div key={s.label} className="admin-kpi-cell" style={{ padding: "20px 22px" }}>
                     <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(22px,2.2vw,30px)", fontWeight: 900, color: s.color, lineHeight: 1, letterSpacing: "-0.03em" }}>
                       {s.value}
                     </div>
@@ -174,10 +174,12 @@ export default function RagEvalPage() {
                   const isOpen = expandedCase === r.id;
                   return (
                     <div key={r.id} style={{ borderBottom: i < (selectedRun.results?.length ?? 0) - 1 ? "1px solid var(--border)" : "none" }}>
+                      {/* Desktop: single row */}
                       <button
                         onClick={() => setExpandedCase(isOpen ? null : r.id)}
+                        className="hidden md:flex"
                         style={{
-                          width: "100%", display: "flex", alignItems: "center", gap: 12,
+                          width: "100%", alignItems: "center", gap: 12,
                           padding: "14px 18px", background: "none", border: "none", cursor: "pointer",
                           textAlign: "left",
                         }}
@@ -204,6 +206,39 @@ export default function RagEvalPage() {
                           {fmtMs(r.generation_ms)}
                         </span>
                         {isOpen ? <ChevronUp size={14} style={{ color: "var(--text-3)" }} /> : <ChevronDown size={14} style={{ color: "var(--text-3)" }} />}
+                      </button>
+
+                      {/* Mobile: two-line card — query up top, badges wrap below */}
+                      <button
+                        onClick={() => setExpandedCase(isOpen ? null : r.id)}
+                        className="md:hidden"
+                        style={{
+                          width: "100%", display: "flex", flexDirection: "column", gap: 8,
+                          padding: "12px 16px", background: "none", border: "none", cursor: "pointer",
+                          textAlign: "left",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          {r.passed
+                            ? <CheckCircle2 size={15} style={{ color: "var(--success)", flexShrink: 0 }} />
+                            : <XCircle size={15} style={{ color: "var(--danger)", flexShrink: 0 }} />
+                          }
+                          <div style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {r.query}
+                          </div>
+                          {isOpen ? <ChevronUp size={14} style={{ color: "var(--text-3)", flexShrink: 0 }} /> : <ChevronDown size={14} style={{ color: "var(--text-3)", flexShrink: 0 }} />}
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, paddingLeft: 25 }}>
+                          <span className={`badge ${r.retrieval_quality === "good" ? "badge-suc" : "badge-neut"}`}>
+                            {r.retrieval_quality} · {r.retrieval_top_score.toFixed(2)}
+                          </span>
+                          <span className="badge badge-neut" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <Database size={9} /> {r.sources_cited}
+                          </span>
+                          <span style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
+                            {fmtMs(r.generation_ms)}
+                          </span>
+                        </div>
                       </button>
 
                       {isOpen && (

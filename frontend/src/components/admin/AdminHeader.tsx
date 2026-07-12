@@ -11,7 +11,7 @@ export function AdminHeader({ title, subtitle, action }: AdminHeaderProps) {
     <header className="glass-subtle" style={{
       padding: "22px 32px 18px",
       borderLeft: "none", borderRight: "none", borderTop: "none",
-      display: "flex", justifyContent: "space-between",
+      display: "flex", justifyContent: "space-between", flexWrap: "wrap",
       alignItems: "flex-start", flexShrink: 0, gap: 16,
     }}>
       <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
