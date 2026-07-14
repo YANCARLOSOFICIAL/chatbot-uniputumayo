@@ -147,6 +147,15 @@ def chunk_tabular_text(
 
     Text with no recognizable section headers (plain CSV) is treated as one
     headerless section — still chunked row-by-row rather than by characters.
+
+    Within a section, a row with no " | " column separator (i.e. only one cell
+    of the original row had content — the shape a merged cell like "SEMESTRE
+    II" produces once row cells are pipe-joined; see _extract_xlsx et al.) is
+    treated as a sub-header: it's tracked and repeated on every chunk split
+    out of that sub-section, the same way the section's own "=== HOJA: X ==="
+    header is repeated — otherwise only whichever single chunk happens to
+    contain that row keeps its semester/section label, and every other chunk
+    from a sub-section long enough to span multiple chunks loses it entirely.
     """
     chunk_size = chunk_size or settings.chunk_size
     chunk_overlap = chunk_overlap or settings.chunk_overlap
@@ -171,14 +180,52 @@ def chunk_tabular_text(
         if not rows:
             continue
 
-        prefix = f"{header}\n" if header else ""
+        section_prefix = f"{header}\n" if header else ""
         current_rows: list[str] = []
-        current_len = len(prefix)
+        current_len = 0
+        active_subheader: str | None = None
+        # A lone value with no " | " column separator is only a *sub-header*
+        # when it's the odd one out among otherwise multi-column rows (e.g. a
+        # "SEMESTRE II" row breaking up a code | materia | créditos table). A
+        # section that's uniformly single-column throughout (a plain bulleted
+        # list) has nothing to distinguish a "header" row from a normal one —
+        # treating every row as its own sub-header there would fragment the
+        # section into one tiny duplicated chunk per row for no benefit.
+        has_multi_column_rows = any("|" in r for r in rows)
+
+        def chunk_prefix() -> str:
+            if active_subheader:
+                return section_prefix + active_subheader + "\n"
+            return section_prefix
 
         for row in rows:
+            is_subheader = has_multi_column_rows and "|" not in row
+
+            if is_subheader:
+                # Force a clean boundary: whatever was pending under the OLD
+                # sub-header is flushed now (using the OLD chunk_prefix()),
+                # so a transition row is never grouped under the wrong label
+                # — a query about "segundo semestre" should never retrieve a
+                # chunk still labeled/mixed with "primer semestre" content.
+                if current_rows:
+                    content = chunk_prefix() + "\n".join(current_rows)
+                    result.append({
+                        "content": content,
+                        "token_count": _count_tokens(content),
+                        "metadata": {"chunk_index": len(result)},
+                    })
+                active_subheader = row
+                # Seed the new batch with the header row itself (not just the
+                # tracked label) so it's always real, visible content and can
+                # never be silently lost even if this sub-section turns out to
+                # have zero data rows under it.
+                current_rows = [row]
+                current_len = len(row) + 1
+                continue
+
             row_len = len(row) + 1  # +1 for the joining newline
-            if current_rows and current_len + row_len > max_chars:
-                content = prefix + "\n".join(current_rows)
+            if current_rows and len(chunk_prefix()) + current_len + row_len > max_chars:
+                content = chunk_prefix() + "\n".join(current_rows)
                 result.append({
                     "content": content,
                     "token_count": _count_tokens(content),
@@ -194,12 +241,13 @@ def chunk_tabular_text(
                     carry.insert(0, r)
                     carry_len += len(r) + 1
                 current_rows = carry
-                current_len = len(prefix) + carry_len
+                current_len = carry_len
+
             current_rows.append(row)
             current_len += row_len
 
         if current_rows:
-            content = prefix + "\n".join(current_rows)
+            content = chunk_prefix() + "\n".join(current_rows)
             result.append({
                 "content": content,
                 "token_count": _count_tokens(content),

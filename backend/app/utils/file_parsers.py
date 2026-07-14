@@ -158,7 +158,12 @@ def _extract_xlsx(file_path: str) -> str:
         for row in ws.iter_rows(values_only=True):
             cells = [_xlsx_cell_str(c) for c in row]
             non_empty = [c for c in cells if c]
-            if len(non_empty) >= 2:
+            # >= 1, not >= 2: a merged cell (e.g. a "SEMESTRE I" header spanning
+            # several columns) has openpyxl return that value in exactly one cell
+            # and None in the rest of the merged range — a >= 2 threshold would
+            # silently drop every such header row, losing the section structure
+            # a curriculum spreadsheet relies on.
+            if len(non_empty) >= 1:
                 rows_text.append(" | ".join(cells).strip(" |"))
 
         if rows_text:
@@ -199,7 +204,9 @@ def _extract_xls(file_path: str) -> str:
                 cells.append(val)
 
             non_empty = [c for c in cells if c]
-            if len(non_empty) >= 2:
+            # See the matching comment in _extract_xlsx — merged-cell section
+            # headers (xlrd reports the same value-in-anchor-cell-only shape).
+            if len(non_empty) >= 1:
                 rows_text.append(" | ".join(cells).strip(" |"))
 
         if rows_text:
@@ -224,7 +231,10 @@ def _extract_csv(file_path: str) -> str:
                 for row in reader:
                     cells = [c.strip() for c in row]
                     non_empty = [c for c in cells if c]
-                    if len(non_empty) >= 2:
+                    # >= 1 — a CSV exported from a spreadsheet with merged header
+                    # cells (e.g. "SEMESTRE I,,,") has the same single-populated-
+                    # column shape as the xlsx/xls case; see _extract_xlsx.
+                    if len(non_empty) >= 1:
                         rows_text.append(" | ".join(cells).strip(" |"))
             return "\n".join(rows_text)
         except (UnicodeDecodeError, csv.Error):
@@ -257,7 +267,9 @@ def _extract_pptx(file_path: str) -> str:
                 for trow in shape.table.rows:
                     cells = [c.text.strip() for c in trow.cells]
                     non_empty = [c for c in cells if c]
-                    if len(non_empty) >= 2:
+                    # >= 1 — a merged/spanning header cell in a slide table has
+                    # the same single-populated-cell shape as the xlsx case.
+                    if len(non_empty) >= 1:
                         slide_texts.append(" | ".join(non_empty))
 
         if slide_texts:
