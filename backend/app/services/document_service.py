@@ -1,7 +1,9 @@
 import base64
 import hashlib
 import logging
+import math
 import os
+import re
 from uuid import UUID
 
 import httpx
@@ -14,7 +16,7 @@ from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.schemas.document import DocumentUploadResponse
 from app.utils.file_parsers import extract_text, normalize_extension
-from app.utils.text_processing import clean_text
+from app.utils.text_processing import clean_text, normalize_for_match
 from app.utils.chunking import chunk_text, chunk_tabular_text
 from app.utils.cache import rag_cache, answer_cache
 from app.services.llm_service import LLMService
@@ -22,6 +24,10 @@ from app.schemas.llm import EmbedRequest
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Matches "SEMESTRE N: Materia 1, Materia 2, ..." lines produced by the vision
+# model / curriculum-enrichment LLM (see _extract_pdf_with_vision, _enrich_curriculum_text).
+_SEMESTER_LINE_RE = re.compile(r"^(SEMESTRE\s+\d+)\s*:\s*(.+)$", re.IGNORECASE)
 
 # xlsx/xls/csv/pptx extractors produce row/slide-oriented text ("=== HOJA: X
 # ===" / "=== DIAPOSITIVA N ===" sections) — chunk_tabular_text keeps rows
@@ -142,6 +148,67 @@ class DocumentService:
             logger.warning(f"Could not enrich curriculum text: {e}")
             return ""
 
+    def _validate_curriculum_summary(self, summary: str, raw_text: str) -> str:
+        """Drop course names the vision/enrichment model invented instead of read.
+
+        Both `_extract_pdf_with_vision` and `_enrich_curriculum_text` ask a model to
+        *reformat* course names out of a page image or noisy text dump — an easy place
+        for a misread or fabricated course name to slip in unverified. Because this
+        summary gets prepended to the chunked/embedded text, an invented name would
+        otherwise become a permanent, citable "official" source rather than a one-off
+        chat answer a user could challenge. Each course name is checked against whole
+        words actually present in the document's own extracted text (same
+        normalization — lowercase, accent-stripped — the answer-cache entity guard
+        uses in `utils/cache.py`); courses that aren't backed by at least half their
+        significant (>=4 char) words are dropped rather than kept "just in case".
+
+        Skipped entirely (summary returned unchanged) when the extracted text layer
+        is too sparse to check against: a fully scanned/image-only PDF has little or
+        no real text layer, which is exactly the case the vision-model fallback exists
+        for; rejecting its output against near-empty text would defeat that fallback.
+        """
+        raw_words = set(re.findall(r"[a-z0-9]+", normalize_for_match(raw_text)))
+        if len(raw_words) < 20:
+            logger.info(
+                "Skipping curriculum summary validation - source text layer too sparse "
+                "(%d words) to cross-check, likely a scanned/image-only document",
+                len(raw_words),
+            )
+            return summary
+
+        kept_lines: list[str] = []
+        dropped: list[str] = []
+
+        for line in summary.splitlines():
+            m = _SEMESTER_LINE_RE.match(line.strip())
+            if not m:
+                continue  # drop anything that isn't a recognized "SEMESTRE N: ..." line
+            label, courses_raw = m.group(1), m.group(2)
+
+            kept_courses = []
+            for course in courses_raw.split(","):
+                course = course.strip()
+                if not course:
+                    continue
+                words = [w for w in re.findall(r"[a-z0-9]+", normalize_for_match(course)) if len(w) >= 4]
+                matches = sum(1 for w in words if w in raw_words)
+                if words and matches >= math.ceil(len(words) / 2):
+                    kept_courses.append(course)
+                else:
+                    dropped.append(course)
+
+            if kept_courses:
+                kept_lines.append(f"{label}: {', '.join(kept_courses)}")
+
+        if dropped:
+            logger.warning(
+                "Curriculum summary validation dropped %d unverified course name(s) "
+                "not found in the source document: %s",
+                len(dropped), ", ".join(dropped[:10]),
+            )
+
+        return "\n".join(kept_lines)
+
     async def _build_enriched_text(self, file_path: str, file_type: str) -> str:
         """Extract, clean, and optionally enrich document text with a structured summary.
 
@@ -158,6 +225,9 @@ class DocumentService:
                 structured_summary = await self._extract_pdf_with_vision(file_path)
             if not structured_summary:
                 structured_summary = await self._enrich_curriculum_text(cleaned_text)
+
+            if structured_summary:
+                structured_summary = self._validate_curriculum_summary(structured_summary, cleaned_text)
 
             if structured_summary:
                 logger.info("Prepending structured curriculum summary to document text")

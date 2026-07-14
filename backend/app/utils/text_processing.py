@@ -2,6 +2,12 @@ import re
 import unicodedata
 
 
+def normalize_for_match(text: str) -> str:
+    """Lowercase, accent-stripped form of text for fuzzy word/substring matching."""
+    decomposed = unicodedata.normalize("NFKD", text.lower())
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
 def clean_text(text: str) -> str:
     """Clean and normalize text for chunking."""
     # Normalize Unicode (preserve Spanish characters)
