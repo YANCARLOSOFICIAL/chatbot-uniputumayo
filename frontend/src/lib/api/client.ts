@@ -381,6 +381,19 @@ export const apiClient = {
       last_week_conversations: number;
       conversations_per_day: Array<{ date: string; label: string; count: number }>;
       top_queries: Array<{ label: string; count: number }>;
+      verification: {
+        verified_total: number;
+        retried_total: number;
+        retry_rate: number;
+        never_approved_total: number;
+        recent_corrected: Array<{
+          question: string | null;
+          answer: string;
+          attempts: number;
+          approved: boolean;
+          created_at: string;
+        }>;
+      };
     }>("/api/v1/analytics/overview"),
 
   // ── RAG Eval ──

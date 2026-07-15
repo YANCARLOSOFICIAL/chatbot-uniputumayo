@@ -120,6 +120,13 @@ services:
       RAG_HYDE_ENABLED: "false"
       RAG_DIVERSITY_ENABLED: "true"
       RAG_CANDIDATES_MULTIPLIER: "3"
+      # Habilitado, pero sin reintento (1 intento = genera + revisa, nunca
+      # regenera): un reintento completo duplica el costo de un generate() ya
+      # medido como caro en este CPU sin AVX2 (ver OLLAMA_THINK_ENABLED /
+      # RAG_HYDE_ENABLED arriba, misma razón). Subir a "2" solo después de
+      # confirmar en logs de prod que hay margen real bajo el timeout de 300s.
+      VERIFICATION_LOOP_ENABLED: "true"
+      VERIFICATION_MAX_ATTEMPTS: "1"
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_DIMENSIONS: "768"
       CORS_ORIGINS: "*"

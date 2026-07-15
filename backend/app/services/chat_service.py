@@ -22,6 +22,7 @@ from app.schemas.chat import (
 )
 from app.services.rag_service import RAGService
 from app.services.llm_service import LLMService
+from app.services.verification_graph import generate_verified
 from app.schemas.rag import SearchRequest
 from app.schemas.llm import GenerateRequest, LLMMessage
 from app.utils.prompts import build_chat_prompt, REFUSAL_MARKER, GREETING_PROMPT
@@ -458,6 +459,8 @@ class ChatService:
         await self.db.flush()
 
         query_embedding, cached = await self._check_answer_cache(data.content)
+        verification_attempts: int | None = None
+        verification_approved: bool | None = None
 
         if cached is not None:
             content = cached["answer"]
@@ -478,22 +481,49 @@ class ChatService:
 
             temperature = detect_temperature(data.content, default=runtime_config.default_temperature)
 
-            llm_service = LLMService()
-            llm_response = await llm_service.generate(
-                GenerateRequest(
-                    messages=messages,
-                    provider=provider_name,
-                    model=data.llm_model,
-                    temperature=temperature,
-                )
-            )
-            content = llm_response.content
-            provider_name = llm_response.provider
-            model_name = llm_response.model
             quality = rag_ctx.quality
-            tokens_used = llm_response.tokens_used.total if llm_response.tokens_used else None
+            finish_reason: str | None
+            if quality == "good" and settings.verification_loop_enabled:
+                # Self-correction loop (LangGraph): generate -> grade against
+                # rag_ctx.context_text -> retry if ungrounded. See
+                # app/services/verification_graph.py for why this only runs
+                # here (RAG returned context) and not for greetings/refusals.
+                model_name = data.llm_model or runtime_config.resolve_model(provider_name)
+                verified = await generate_verified(
+                    messages=[{"role": m.role, "content": m.content} for m in messages],
+                    context_text=rag_ctx.context_text,
+                    provider_name=provider_name,
+                    model=model_name,
+                    temperature=temperature,
+                    max_tokens=runtime_config.default_max_tokens,
+                )
+                content = verified["content"]
+                finish_reason = verified["finish_reason"]
+                tokens_used = verified["tokens_used"]["total"] if verified["tokens_used"] else None
+                verification_attempts = verified["attempts"]
+                verification_approved = verified["approved"]
+                if not verified["approved"]:
+                    logger.warning(
+                        "Verification loop exhausted retries without approval | conv=%s | "
+                        "attempts=%d", conversation_id, verified["attempts"],
+                    )
+            else:
+                llm_service = LLMService()
+                llm_response = await llm_service.generate(
+                    GenerateRequest(
+                        messages=messages,
+                        provider=provider_name,
+                        model=data.llm_model,
+                        temperature=temperature,
+                    )
+                )
+                content = llm_response.content
+                provider_name = llm_response.provider
+                model_name = llm_response.model
+                tokens_used = llm_response.tokens_used.total if llm_response.tokens_used else None
+                finish_reason = llm_response.finish_reason
 
-            if llm_response.finish_reason == "length":
+            if finish_reason == "length":
                 logger.warning(
                     "Truncated response (finish_reason=length) | conv=%s | provider=%s | model=%s | "
                     "content_len=%d — max_tokens too low for this answer",
@@ -529,6 +559,8 @@ class ChatService:
             llm_provider=provider_name,
             llm_model=model_name,
             response_time_ms=response_time,
+            verification_attempts=verification_attempts,
+            verification_approved=verification_approved,
         )
         self.db.add(assistant_message)
 
@@ -576,6 +608,8 @@ class ChatService:
             yield ": thinking\n\n"
 
             query_embedding, cached = await self._check_answer_cache(data.content)
+            verification_attempts: int | None = None
+            verification_approved: bool | None = None
 
             if cached is not None:
                 # Semantic cache hit — skip RAG + LLM entirely. See AsyncAnswerCache
@@ -606,7 +640,6 @@ class ChatService:
                 if rag_ctx.quality == "good":
                     yield f"data: {json.dumps({'type': 'sources', 'sources': rag_ctx.sources_payload})}\n\n"
 
-                provider = ProviderFactory.get_provider(provider_name)
                 model = data.llm_model or runtime_config.resolve_model(provider_name)
                 temperature = detect_temperature(data.content, default=runtime_config.default_temperature)
                 messages_dicts = [{"role": m.role, "content": m.content} for m in messages]
@@ -614,16 +647,42 @@ class ChatService:
                 # Second heartbeat: Ollama on CPU can take 10-20 s before the first token
                 yield ": generating\n\n"
 
-                full_content = ""
-                stream_meta: dict = {}
-                async for token in provider.generate_stream(
-                    messages_dicts, model, temperature, runtime_config.default_max_tokens,
-                    meta=stream_meta,
-                ):
-                    full_content += token
-                    yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+                if rag_ctx.quality == "good" and settings.verification_loop_enabled:
+                    # Self-correction loop (see verification_graph.py): grading needs
+                    # the complete draft, so this path can't stream token-by-token —
+                    # it sends the whole approved answer as one event, same as the
+                    # answer-cache hit above does.
+                    verified = await generate_verified(
+                        messages=messages_dicts,
+                        context_text=rag_ctx.context_text,
+                        provider_name=provider_name,
+                        model=model,
+                        temperature=temperature,
+                        max_tokens=runtime_config.default_max_tokens,
+                    )
+                    full_content = verified["content"]
+                    finish_reason = verified["finish_reason"]
+                    verification_attempts = verified["attempts"]
+                    verification_approved = verified["approved"]
+                    if not verified["approved"]:
+                        logger.warning(
+                            "Verification loop exhausted retries without approval | conv=%s | "
+                            "attempts=%d", conversation_id, verified["attempts"],
+                        )
+                    yield f"data: {json.dumps({'type': 'token', 'content': full_content})}\n\n"
+                else:
+                    provider = ProviderFactory.get_provider(provider_name)
+                    full_content = ""
+                    stream_meta: dict = {}
+                    async for token in provider.generate_stream(
+                        messages_dicts, model, temperature, runtime_config.default_max_tokens,
+                        meta=stream_meta,
+                    ):
+                        full_content += token
+                        yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+                    finish_reason = stream_meta.get("finish_reason")
 
-                if stream_meta.get("finish_reason") == "length":
+                if finish_reason == "length":
                     logger.warning(
                         "Truncated stream response (finish_reason=length) | conv=%s | provider=%s | "
                         "model=%s | content_len=%d — max_tokens too low for this answer",
@@ -666,6 +725,8 @@ class ChatService:
                 llm_provider=provider_name,
                 llm_model=model,
                 response_time_ms=response_time,
+                verification_attempts=verification_attempts,
+                verification_approved=verification_approved,
             )
             self.db.add(assistant_message)
 

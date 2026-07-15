@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { BarChart3, TrendingUp, TrendingDown, MessageSquare, Users, Activity, Clock, Minus, RefreshCw } from "lucide-react";
+import { BarChart3, TrendingUp, TrendingDown, MessageSquare, Users, Activity, Clock, Minus, RefreshCw, ShieldCheck, RotateCcw, AlertTriangle } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { toast } from "@/components/ui/Toast";
@@ -205,6 +205,77 @@ export default function AnalyticsPage() {
                   ))}
                 </div>
               </div>
+            </div>
+
+            {/* Verification loop (LangGraph self-correction) — see
+                app/services/verification_graph.py. Only messages that went
+                through it (RAG returned context) count here. */}
+            <div className="card" style={{ padding: 24, marginTop: 24 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+                <div>
+                  <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 800, margin: "0 0 2px", color: "var(--text-1)", letterSpacing: "-0.02em" }}>
+                    Verificación de respuestas
+                  </h3>
+                  <div style={{ fontSize: 12, color: "var(--text-3)" }}>
+                    Antes de mostrar una respuesta con contexto, un segundo paso revisa que esté respaldada por las fuentes — y reintenta si no lo está
+                  </div>
+                </div>
+                <ShieldCheck size={18} style={{ color: "var(--brand-primary)", flexShrink: 0 }} />
+              </div>
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: data.verification.recent_corrected.length ? 20 : 4 }}>
+                {[
+                  { label: "Respuestas verificadas", value: data.verification.verified_total, icon: ShieldCheck, color: "var(--brand-primary)" },
+                  { label: "Tasa de reintento", value: `${data.verification.retry_rate}%`, icon: RotateCcw, color: "var(--warning)" },
+                  {
+                    label: "Sin aprobar tras reintentos",
+                    value: data.verification.never_approved_total,
+                    icon: AlertTriangle,
+                    color: data.verification.never_approved_total > 0 ? "var(--danger)" : "var(--text-3)",
+                  },
+                ].map(({ label, value, icon: Icon, color }) => (
+                  <div key={label} style={{ flex: "1 1 160px", padding: "12px 14px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                      <Icon size={12} style={{ color }} />
+                      <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</span>
+                    </div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 800, color: "var(--text-1)" }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {data.verification.recent_corrected.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "16px 0 4px", color: "var(--text-3)", fontSize: 13 }}>
+                  Ningún caso ha necesitado reintento todavía — las respuestas verificadas pasaron la revisión al primer intento.
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 10 }}>
+                    Casos corregidos recientemente
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {data.verification.recent_corrected.map((c, i) => (
+                      <div key={i} style={{ padding: "12px 14px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)" }}>
+                            {c.question ?? "(pregunta no disponible)"}
+                          </span>
+                          <span style={{
+                            flexShrink: 0, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99,
+                            background: c.approved ? "var(--success-bg)" : "var(--error-dim)",
+                            color: c.approved ? "var(--success)" : "var(--danger)",
+                          }}>
+                            {c.attempts} intentos · {c.approved ? "aprobada" : "sin aprobar"}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+                          {c.answer.length > 220 ? `${c.answer.slice(0, 220)}…` : c.answer}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}

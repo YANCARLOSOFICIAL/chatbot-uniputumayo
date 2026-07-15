@@ -90,6 +90,8 @@ services:
       RAG_CANDIDATES_MULTIPLIER: "3"
       RAG_HYDE_ENABLED: "true"
       RAG_DIVERSITY_ENABLED: "true"
+      VERIFICATION_LOOP_ENABLED: "true"
+      VERIFICATION_MAX_ATTEMPTS: "2"
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_DIMENSIONS: "768"
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001,http://localhost:80,http://localhost"

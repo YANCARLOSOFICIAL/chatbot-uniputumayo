@@ -14,6 +14,9 @@ alembic==1.14.1
 openai==1.59.3
 httpx==0.28.1
 
+# Orchestration — self-correction/verification loop for RAG answers
+langgraph>=1.2,<2.0
+
 # Document Processing
 PyMuPDF==1.25.1
 pdfplumber>=0.11.4

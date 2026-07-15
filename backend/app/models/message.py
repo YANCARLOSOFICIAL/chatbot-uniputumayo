@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, Text, Integer, DateTime, ForeignKey
+from sqlalchemy import String, Text, Integer, Boolean, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -26,6 +26,11 @@ class Message(Base):
     llm_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     llm_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     response_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Set only for answers that went through the LangGraph self-correction
+    # loop (see verification_graph.py) — NULL for greetings/refusals/user
+    # messages, where the loop never runs.
+    verification_attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    verification_approved: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

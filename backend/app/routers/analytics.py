@@ -105,6 +105,51 @@ async def analytics_overview(
         for k, v in sorted(freq.items(), key=lambda x: -x[1])[:5]
     ]
 
+    # ── Verification loop (LangGraph self-correction, see verification_graph.py) ─
+    # verification_attempts is only set on answers the loop actually ran on
+    # (RAG returned context) — NULL for greetings, refusals and user messages.
+    verified_total = (await db.execute(
+        select(func.count(Message.id))
+        .where(Message.verification_attempts.isnot(None))
+    )).scalar() or 0
+
+    retried_total = (await db.execute(
+        select(func.count(Message.id))
+        .where(Message.verification_attempts > 1)
+    )).scalar() or 0
+
+    never_approved_total = (await db.execute(
+        select(func.count(Message.id))
+        .where(Message.verification_approved.is_(False))
+    )).scalar() or 0
+
+    retry_rate = round(retried_total / verified_total * 100, 1) if verified_total else 0.0
+
+    corrected_rows = (await db.execute(
+        select(Message)
+        .where(Message.verification_attempts > 1)
+        .order_by(Message.created_at.desc())
+        .limit(5)
+    )).scalars().all()
+
+    recent_corrected = []
+    for m in corrected_rows:
+        prev_user = (await db.execute(
+            select(Message.content)
+            .where(Message.conversation_id == m.conversation_id)
+            .where(Message.role == "user")
+            .where(Message.created_at < m.created_at)
+            .order_by(Message.created_at.desc())
+            .limit(1)
+        )).scalar()
+        recent_corrected.append({
+            "question": prev_user,
+            "answer": m.content,
+            "attempts": m.verification_attempts,
+            "approved": m.verification_approved,
+            "created_at": m.created_at.isoformat(),
+        })
+
     return {
         "total_conversations": total_conv,
         "total_messages": total_msg,
@@ -115,4 +160,11 @@ async def analytics_overview(
         "last_week_conversations": last_week,
         "conversations_per_day": conversations_per_day,
         "top_queries": top_queries,
+        "verification": {
+            "verified_total": verified_total,
+            "retried_total": retried_total,
+            "retry_rate": retry_rate,
+            "never_approved_total": never_approved_total,
+            "recent_corrected": recent_corrected,
+        },
     }

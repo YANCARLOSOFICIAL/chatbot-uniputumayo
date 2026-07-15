@@ -77,6 +77,15 @@ class Settings(BaseSettings):
     # nomic-embed-text=768 | text-embedding-3-small=1536
     embedding_dimensions: int = 768
 
+    # Verification loop (LangGraph): tras generar una respuesta con contexto RAG
+    # ("good"), un segundo nodo la revisa contra ese contexto antes de mostrarla.
+    # Si no está respaldada, se reintenta (ver app/services/verification_graph.py).
+    # No aplica a saludos ni a "no tengo información" — ahí no hay nada que
+    # verificar. Cada intento extra es una llamada más al LLM: en Ollama CPU
+    # esto agrega latencia real, por eso es apagable sin tocar código.
+    verification_loop_enabled: bool = True
+    verification_max_attempts: int = 2
+
     # Answer cache: sirve respuestas completas ya generadas para preguntas con
     # significado similar (no solo texto exacto), saltándose RAG + LLM por
     # completo en un acierto. Clave en Ollama sin AVX2/GPU, donde la generación
