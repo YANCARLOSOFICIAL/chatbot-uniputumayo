@@ -35,7 +35,7 @@ export function ChatContainer() {
     conversations, activeConversationId, messages, sources,
     isLoading, avatarState, error,
     loadConversations, createConversation, selectConversation,
-    sendMessage, deleteConversation, renameConversation, dispatch,
+    sendMessage, cancelActiveStream, deleteConversation, renameConversation, dispatch,
   } = useChat();
 
   // Prevents double-tap / rapid calls from creating two conversations simultaneously
@@ -178,19 +178,24 @@ export function ChatContainer() {
   const handleVoiceCancel = useCallback(() => {
     stopListening();
     voicePlayback.stop();
+    cancelActiveStream();
     dispatchAvatarEvent("CANCEL");
     setVoiceOverlayOpen(false);
-  }, [stopListening, voicePlayback, dispatchAvatarEvent]);
+  }, [stopListening, voicePlayback, cancelActiveStream, dispatchAvatarEvent]);
 
   // Barge-in: the user starts talking while Guaca is still speaking. Cuts
   // audio immediately and starts listening — a real conversation lets you
-  // interrupt instead of waiting out the whole reply.
+  // interrupt instead of waiting out the whole reply. Also aborts the
+  // in-flight response stream if it's still generating (a sentence can
+  // already be playing before the SSE stream finishes) — otherwise the
+  // backend keeps burning tokens on an answer nobody will hear.
   const handleBargeIn = useCallback(() => {
     voicePlayback.stop();
+    cancelActiveStream();
     setVoiceError(null);
     dispatchAvatarEvent("MIC_STARTED");
     startListening();
-  }, [voicePlayback, dispatchAvatarEvent, startListening]);
+  }, [voicePlayback, cancelActiveStream, dispatchAvatarEvent, startListening]);
 
   const handleSelectConversation = useCallback((id: string) => {
     selectConversation(id);

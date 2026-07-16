@@ -324,10 +324,10 @@ export default function DocumentsPage() {
                       Arrastra o{" "}
                       <label style={{ color: "var(--brand-primary)", cursor: "pointer", fontWeight: 600 }}>
                         selecciona
-                        <input id="doc-file-input" type="file" accept=".pdf,.docx,.txt" style={{ display: "none" }} onChange={handleFileSelect} />
+                        <input id="doc-file-input" type="file" accept=".pdf,.doc,.docx,.txt,.md,.xlsx,.xls,.csv,.pptx" style={{ display: "none" }} onChange={handleFileSelect} />
                       </label>
                     </p>
-                    <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0 }}>PDF · DOCX · TXT</p>
+                    <p style={{ fontSize: 11, color: "var(--text-3)", margin: 0 }}>PDF · DOC(X) · TXT · MD · XLS(X) · CSV · PPTX</p>
                   </>
                 )}
               </div>

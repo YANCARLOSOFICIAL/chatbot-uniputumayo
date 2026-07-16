@@ -81,6 +81,10 @@ export function useVoicePlayback(
   const sourceConnectedRef = useRef(false);
   const rafRef = useRef<number | null>(null);
   const resolveCurrentRef = useRef<(() => void) | null>(null);
+  // The object URL of whatever's currently loaded into <audio>, so stop()
+  // (barge-in, cancel) can revoke it — pause() fires neither onended nor
+  // onerror, so playItem's own cleanup() never runs on a forced stop.
+  const currentUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     audioRef.current = new Audio();
@@ -146,10 +150,12 @@ export function useVoicePlayback(
       }
       resolveCurrentRef.current = resolve;
       const url = URL.createObjectURL(blob);
+      currentUrlRef.current = url;
       audio.src = url;
 
       const cleanup = () => {
         URL.revokeObjectURL(url);
+        if (currentUrlRef.current === url) currentUrlRef.current = null;
         stopAmplitudeLoop();
         resolveCurrentRef.current = null;
       };
@@ -293,6 +299,10 @@ export function useVoicePlayback(
     advancingRef.current = false;
     resolveCurrentRef.current?.();
     resolveCurrentRef.current = null;
+    if (currentUrlRef.current) {
+      URL.revokeObjectURL(currentUrlRef.current);
+      currentUrlRef.current = null;
+    }
     audioRef.current?.pause();
     stopAmplitudeLoop();
     setIsSpeaking(false);

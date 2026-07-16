@@ -19,6 +19,14 @@ export function useChat() {
     return () => activeStreamController.current?.abort();
   }, []);
 
+  // Lets callers (e.g. voice mode's cancel/barge-in) stop an in-flight
+  // response early. Without this, cancelling voice mode only stopped local
+  // playback — the backend kept generating the full answer for nothing, and
+  // it would still land in the chat once "done" eventually fired.
+  const cancelActiveStream = useCallback(() => {
+    activeStreamController.current?.abort();
+  }, []);
+
   // ── Guest session lifecycle ──────────────────────────────────────────────
 
   // Ref keeps a stable pointer to selectConversation so the mount effect
@@ -252,6 +260,20 @@ export function useChat() {
 
         return assistantContent;
       } catch (error) {
+        // An intentional cancel (voice mode "Detener"/"Interrumpir") also
+        // aborts this same controller, which surfaces here as a thrown
+        // AbortError — distinguish it from a real failure so the user
+        // doesn't get a spurious error toast for something they chose to do,
+        // and so this cleanup doesn't dispatch its own avatar-state event
+        // below. Whoever called cancelActiveStream() already put avatarState
+        // wherever it needs to be *synchronously* (CANCEL → idle for a full
+        // stop, or MIC_STARTED → listening for barge-in, which immediately
+        // kicks off a new turn) — this catch can run an arbitrary amount of
+        // time later, after that new turn may already be well underway, so
+        // it must not also dispatch an event here (a stray CANCEL would
+        // force the state machine back to "idle" out from under it).
+        const wasCancelled = controller.signal.aborted;
+
         // Keep the user's message and whatever partial answer already
         // streamed in — losing both on a mid-stream failure is confusing and
         // gives the user nothing to retry. An empty partial answer becomes a
@@ -264,15 +286,19 @@ export function useChat() {
             tempUserMessage,
             {
               ...streamingMessage,
-              content: assistantContent.trim() || "⚠️ No se pudo completar la respuesta.",
+              content:
+                assistantContent.trim() ||
+                (wasCancelled ? "(Interrumpido)" : "⚠️ No se pudo completar la respuesta."),
             },
           ],
         });
-        dispatch({ type: "AVATAR_EVENT", payload: "ERROR" });
-        dispatch({
-          type: "SET_ERROR",
-          payload: error instanceof Error ? error.message : "Error enviando mensaje",
-        });
+        if (!wasCancelled) {
+          dispatch({ type: "AVATAR_EVENT", payload: "ERROR" });
+          dispatch({
+            type: "SET_ERROR",
+            payload: error instanceof Error ? error.message : "Error enviando mensaje",
+          });
+        }
         return null;
       } finally {
         activeStreamController.current = null;
@@ -318,6 +344,7 @@ export function useChat() {
     createConversation,
     selectConversation,
     sendMessage,
+    cancelActiveStream,
     deleteConversation,
     renameConversation,
     dispatch,
