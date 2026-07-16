@@ -1,4 +1,6 @@
 import logging
+import re
+from xml.etree import ElementTree as ET
 
 logger = logging.getLogger(__name__)
 
@@ -140,21 +142,202 @@ def _xlsx_cell_str(val) -> str:
     return str(val).strip()
 
 
+_ROMAN_RE = re.compile(r"^[IVXLCDM]+$")
+
+# Roman numeral → word ordinal, for semester-grid labels. Curriculum grids
+# label semesters "I".."X" as textbox shapes (see _semester_column_ranges),
+# but a real question is never phrased that way ("segundo semestre", never
+# "semestre II") — confirmed live: retrieval for "segundo semestre" pulled in
+# semesters I and IV instead of II, purely because nothing in the chunk text
+# shared any token with the query's ordinal. Embedding cosine similarity and
+# the keyword-overlap rerank both need a literal match to work with.
+_ROMAN_TO_ORDINAL = {
+    "I": "primer", "II": "segundo", "III": "tercer", "IV": "cuarto",
+    "V": "quinto", "VI": "sexto", "VII": "séptimo", "VIII": "octavo",
+    "IX": "noveno", "X": "décimo", "XI": "undécimo", "XII": "duodécimo",
+}
+
+_NS_MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+_NS_DOC_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+_NS_PKG_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
+_NS_XDR = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+_NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+
+
+def _sheet_drawing_parts(zf) -> dict[str, str]:
+    """Map each sheet's visible name to its drawing XML part, if it has one.
+
+    Needed because semester labels on a "malla curricular" grid (see
+    `_semester_column_ranges`) are floating textbox shapes, not cell values —
+    openpyxl's cell API can't see them at all, only the raw drawing XML can.
+    """
+    wb_xml = ET.fromstring(zf.read("xl/workbook.xml"))
+    wb_rels = ET.fromstring(zf.read("xl/_rels/workbook.xml.rels"))
+
+    rid_to_target = {
+        rel.get("Id"): rel.get("Target")
+        for rel in wb_rels.findall(f"{{{_NS_PKG_REL}}}Relationship")
+    }
+
+    result: dict[str, str] = {}
+    for sheet_el in wb_xml.findall(f".//{{{_NS_MAIN}}}sheet"):
+        rid = sheet_el.get(f"{{{_NS_DOC_REL}}}id")
+        target = rid_to_target.get(rid)
+        name = sheet_el.get("name")
+        if not target or not name:
+            continue
+        sheet_part = target if target.startswith("xl/") else f"xl/{target}"
+        rels_part = sheet_part.rsplit("/", 1)[0] + "/_rels/" + sheet_part.rsplit("/", 1)[1] + ".rels"
+        try:
+            sheet_rels = ET.fromstring(zf.read(rels_part))
+        except KeyError:
+            continue
+        for rel in sheet_rels.findall(f"{{{_NS_PKG_REL}}}Relationship"):
+            if rel.get("Type", "").endswith("/drawing"):
+                drawing_file = rel.get("Target").rsplit("/", 1)[-1]
+                result[name] = f"xl/drawings/{drawing_file}"
+                break
+
+    return result
+
+
+def _semester_column_ranges(zf, drawing_part: str) -> list[tuple[int, int, str]]:
+    """Extract 1-indexed (start_col, end_col, label) ranges for Roman-numeral
+    textbox shapes overlaid on a sheet (semester headers on a curriculum grid
+    where each semester is a block of columns, not a row) — see docstring on
+    `_extract_xlsx` for why this exists at all.
+    """
+    try:
+        root = ET.fromstring(zf.read(drawing_part))
+    except KeyError:
+        return []
+
+    ranges: list[tuple[int, int, str]] = []
+    for anchor in root.findall(f"{{{_NS_XDR}}}twoCellAnchor"):
+        frm, to = anchor.find(f"{{{_NS_XDR}}}from"), anchor.find(f"{{{_NS_XDR}}}to")
+        text_el = anchor.find(f".//{{{_NS_A}}}t")
+        if frm is None or to is None or text_el is None or not text_el.text:
+            continue
+        label = text_el.text.strip()
+        if not _ROMAN_RE.match(label):
+            continue  # not a semester label — an arrow, box, or other decoration
+        from_col_el, to_col_el = frm.find(f"{{{_NS_XDR}}}col"), to.find(f"{{{_NS_XDR}}}col")
+        if from_col_el is None or to_col_el is None:
+            continue
+        ranges.append((int(from_col_el.text) + 1, int(to_col_el.text) + 1, label))
+
+    ranges.sort(key=lambda r: r[0])
+    # A single stray Roman-numeral shape elsewhere on an otherwise normal sheet
+    # isn't a semester grid — need at least 2 blocks for the column-range
+    # split below to mean anything.
+    return ranges if len(ranges) >= 2 else []
+
+
+def _load_semester_shape_map(file_path: str) -> dict[str, list[tuple[int, int, str]]]:
+    import zipfile
+
+    try:
+        with zipfile.ZipFile(file_path) as zf:
+            drawing_parts = _sheet_drawing_parts(zf)
+            return {
+                name: _semester_column_ranges(zf, part)
+                for name, part in drawing_parts.items()
+            }
+    except Exception as e:
+        # Best-effort enhancement only — any surprise here (different Excel
+        # generator, no drawings, unexpected XML shape) just means every
+        # sheet falls back to the plain row-based extraction below.
+        logger.debug("Could not read semester-grid shape labels (%s): %s", file_path, e)
+        return {}
+
+
+def _extract_semester_grid_sheet(
+    ws, sheet_name: str, semester_ranges: list[tuple[int, int, str]]
+) -> list[str]:
+    """Extract a "malla curricular" sheet where each semester is a block of
+    COLUMNS (course code/name/hours stacked vertically within it) rather than
+    a row — plain row-by-row extraction concatenates every semester's courses
+    onto the same line with no way to tell them apart (confirmed live: a RAG
+    query for "segundo semestre" returned zero matches because the retrieved
+    chunks were an unreadable mix of 6+ semesters' course names on one line).
+    Splitting by each semester's own column range keeps them separate, the
+    same way a normal one-row-per-course sheet already reads cleanly.
+    """
+    max_row = ws.max_row
+    first_semester_col = semester_ranges[0][0]
+
+    # Row-category labels (e.g. "FORMACIÓN BÁSICA") live in the columns to the
+    # left of the first semester block, in cells merged down across many rows
+    # — carry the last-seen value forward per row, same as a merged cell reads
+    # in every other row-based extractor in this file.
+    category_by_row: dict[int, str] = {}
+    running: list[str] = []
+    for r in range(1, max_row + 1):
+        for i, c in enumerate(range(1, first_semester_col)):
+            val = _xlsx_cell_str(ws.cell(row=r, column=c).value)
+            if val:
+                if i < len(running):
+                    running[i] = val
+                else:
+                    running.append(val)
+        category_by_row[r] = " - ".join(x for x in running if x)
+
+    parts: list[str] = []
+    for start_col, end_col, label in semester_ranges:
+        rows_text: list[str] = []
+        for r in range(1, max_row + 1):
+            cells = [
+                _xlsx_cell_str(ws.cell(row=r, column=c).value)
+                for c in range(start_col, end_col + 1)
+            ]
+            if not any(cells):
+                continue
+            line = " | ".join(cells).strip(" |")
+            category = category_by_row.get(r, "")
+            rows_text.append(f"{category} | {line}" if category else line)
+
+        if rows_text:
+            ordinal = _ROMAN_TO_ORDINAL.get(label)
+            header_label = f"SEMESTRE {label} ({ordinal} semestre)" if ordinal else f"SEMESTRE {label}"
+            parts.append(f"=== HOJA: {sheet_name} — {header_label} ===")
+            parts.append("\n".join(rows_text))
+
+    return parts
+
+
 def _extract_xlsx(file_path: str) -> str:
     """Extract all sheets from an XLSX file as labeled pipe-separated rows.
 
     data_only=True returns computed values instead of formulas, which is what we
     want for embedding (e.g. curricula with calculated credit totals).
+
+    Most institutional spreadsheets are simple one-row-per-record tables, where
+    reading top-to-bottom/left-to-right and pipe-joining each row already
+    produces something an embedding model and an LLM can use. But some
+    curriculum files ("mallas") lay semesters out as column BLOCKS instead —
+    course code/name/hours stacked vertically within each semester's columns,
+    with the semester number itself drawn as a floating textbox shape rather
+    than a cell value. Flat row extraction on one of these interleaves every
+    semester's courses onto the same line with nothing to tell them apart.
+    `_load_semester_shape_map` detects this shape (via the sheet's own
+    embedded drawing XML) and, when found, `_extract_semester_grid_sheet`
+    splits that sheet by semester column-range instead of by row.
     """
     import openpyxl
 
     wb = openpyxl.load_workbook(file_path, data_only=True)
+    semester_map = _load_semester_shape_map(file_path)
     parts = []
 
     for sheet_name in wb.sheetnames:
         ws = wb[sheet_name]
-        rows_text: list[str] = []
+        semester_ranges = semester_map.get(sheet_name) or []
 
+        if semester_ranges:
+            parts.extend(_extract_semester_grid_sheet(ws, sheet_name, semester_ranges))
+            continue
+
+        rows_text: list[str] = []
         for row in ws.iter_rows(values_only=True):
             cells = [_xlsx_cell_str(c) for c in row]
             non_empty = [c for c in cells if c]

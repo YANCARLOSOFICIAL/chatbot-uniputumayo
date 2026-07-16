@@ -61,10 +61,20 @@ class RAGService:
     def _apply_diversity(
         self,
         results: list[SearchResultItem],
-        max_per_doc: int = 2,
+        max_per_doc: int = 3,
         top_k: int = 5,
     ) -> list[SearchResultItem]:
-        """Limit to max_per_doc chunks per source document to diversify results."""
+        """Limit to max_per_doc chunks per source document to diversify results.
+
+        Was 2 — too aggressive for row-aware-chunked spreadsheets/slide decks,
+        which routinely produce 20-60+ chunks per document (a curriculum with
+        many semesters/subjects). A question needing broad coverage of one
+        such document (e.g. "todas las materias de tal programa") could only
+        ever surface 2 of them, no matter how many actually scored well —
+        confirmed live via /admin/rag-eval on a real uploaded curriculum.
+        Still bounded by top_k overall, so this doesn't grow the total
+        context sent to the LLM when multiple different documents match.
+        """
         seen: dict[str, int] = {}
         filtered: list[SearchResultItem] = []
         for item in results:
@@ -348,7 +358,7 @@ class RAGService:
 
         # 6. Diversity filter (max N chunks per document)
         if settings.rag_diversity_enabled and candidates:
-            final_results = self._apply_diversity(candidates, max_per_doc=2, top_k=request.top_k)
+            final_results = self._apply_diversity(candidates, max_per_doc=3, top_k=request.top_k)
         else:
             final_results = candidates[:request.top_k]
 
