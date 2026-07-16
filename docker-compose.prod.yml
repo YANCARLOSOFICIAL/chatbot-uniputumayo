@@ -141,6 +141,11 @@ services:
       - "8001:8000"
     volumes:
       - uploads_data:/app/uploads
+      # Whisper "small" (~500MB) downloads from Hugging Face on first STT
+      # fallback request. The deploy step below runs `up --force-recreate`
+      # on every push to main, so without this volume that ~100s download
+      # would repeat on every single deploy instead of just the first one.
+      - whisper_cache:/root/.cache/huggingface
     depends_on:
       postgres:
         condition: service_healthy
@@ -199,6 +204,7 @@ volumes:
   pgdata:
   ollama_data:
   uploads_data:
+  whisper_cache:
 
 networks:
   chatbot-net:

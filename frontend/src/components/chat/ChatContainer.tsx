@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useChat } from "@/hooks/useChat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useVoicePlayback } from "@/hooks/useVoicePlayback";
+import type { AvatarEvent } from "@/lib/avatarMachine";
 import { isAuthenticated, getUser, logout, type AuthUser } from "@/lib/auth";
 import { toast } from "@/components/ui/Toast";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
@@ -44,21 +45,35 @@ export function ChatContainer() {
     ((content: string, inputType: "text" | "voice") => Promise<void>) | null
   >(null);
 
+  // Tracks which AVATAR_EVENT most recently fired, so the idle-transition
+  // effect below can tell "Guaca just finished answering" (keep the
+  // conversation going) apart from "the user/an error ended this turn"
+  // (close the overlay). Only events dispatched from this component matter —
+  // see the effect for why that's sufficient.
+  const lastAvatarEventRef = useRef<AvatarEvent | null>(null);
+  const dispatchAvatarEvent = useCallback(
+    (payload: AvatarEvent) => {
+      lastAvatarEventRef.current = payload;
+      dispatch({ type: "AVATAR_EVENT", payload });
+    },
+    [dispatch]
+  );
+
   const voicePlayback = useVoicePlayback({
-    onPlaybackStarted: () => dispatch({ type: "AVATAR_EVENT", payload: "TTS_CHUNK_PLAYBACK_STARTED" }),
-    onQueueDrained: () => dispatch({ type: "AVATAR_EVENT", payload: "TTS_QUEUE_DRAINED" }),
-    onPlaybackFailed: () => dispatch({ type: "AVATAR_EVENT", payload: "ERROR" }),
+    onPlaybackStarted: () => dispatchAvatarEvent("TTS_CHUNK_PLAYBACK_STARTED"),
+    onQueueDrained: () => dispatchAvatarEvent("TTS_QUEUE_DRAINED"),
+    onPlaybackFailed: () => dispatchAvatarEvent("ERROR"),
     onError: (msg) => toast.error(msg),
   });
 
   const { interimTranscript, micStatus, startListening, stopListening, error: sttError, isSupported } =
     useSpeechRecognition({
       onFinal: (transcript) => {
-        dispatch({ type: "AVATAR_EVENT", payload: "SPEECH_FINAL" });
+        dispatchAvatarEvent("SPEECH_FINAL");
         handleSendRef.current?.(transcript, "voice");
       },
       onCancelled: (reason) => {
-        dispatch({ type: "AVATAR_EVENT", payload: "CANCEL" });
+        dispatchAvatarEvent("CANCEL");
         if (reason && reason !== "empty-recording" && reason !== "no-speech") {
           toast.error("No se pudo capturar audio. Intenta de nuevo.");
         }
@@ -94,13 +109,29 @@ export function ChatContainer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-close the voice overlay a beat after the avatar settles back to idle
-  // (gives the "done speaking" moment room to breathe instead of snapping shut).
+  // What happens a beat after the avatar settles back to idle depends on WHY
+  // it got there: if Guaca just finished speaking, keep the conversation
+  // going hands-free by listening again; anything else (the user cancelled,
+  // said nothing, or something errored) ends the voice session. This is what
+  // turns voice mode from "one question per tap" into a real back-and-forth.
+  const prevAvatarStateRef = useRef(avatarState);
   useEffect(() => {
-    if (!voiceOverlayOpen || avatarState !== "idle") return;
+    const prev = prevAvatarStateRef.current;
+    prevAvatarStateRef.current = avatarState;
+    if (!voiceOverlayOpen || avatarState !== "idle" || prev === "idle") return;
+
+    if (lastAvatarEventRef.current === "TTS_QUEUE_DRAINED") {
+      const t = setTimeout(() => {
+        setVoiceError(null);
+        dispatchAvatarEvent("MIC_STARTED");
+        startListening();
+      }, 550);
+      return () => clearTimeout(t);
+    }
+
     const t = setTimeout(() => setVoiceOverlayOpen(false), 450);
     return () => clearTimeout(t);
-  }, [voiceOverlayOpen, avatarState]);
+  }, [voiceOverlayOpen, avatarState, dispatchAvatarEvent, startListening]);
 
   const handleSend = useCallback(
     async (content: string, inputType: "text" | "voice" = "text") => {
@@ -140,16 +171,26 @@ export function ChatContainer() {
   const handleVoiceStart = useCallback(() => {
     setVoiceError(null);
     setVoiceOverlayOpen(true);
-    dispatch({ type: "AVATAR_EVENT", payload: "MIC_STARTED" });
+    dispatchAvatarEvent("MIC_STARTED");
     startListening();
-  }, [dispatch, startListening]);
+  }, [dispatchAvatarEvent, startListening]);
 
   const handleVoiceCancel = useCallback(() => {
     stopListening();
     voicePlayback.stop();
-    dispatch({ type: "AVATAR_EVENT", payload: "CANCEL" });
+    dispatchAvatarEvent("CANCEL");
     setVoiceOverlayOpen(false);
-  }, [stopListening, voicePlayback, dispatch]);
+  }, [stopListening, voicePlayback, dispatchAvatarEvent]);
+
+  // Barge-in: the user starts talking while Guaca is still speaking. Cuts
+  // audio immediately and starts listening — a real conversation lets you
+  // interrupt instead of waiting out the whole reply.
+  const handleBargeIn = useCallback(() => {
+    voicePlayback.stop();
+    setVoiceError(null);
+    dispatchAvatarEvent("MIC_STARTED");
+    startListening();
+  }, [voicePlayback, dispatchAvatarEvent, startListening]);
 
   const handleSelectConversation = useCallback((id: string) => {
     selectConversation(id);
@@ -172,6 +213,7 @@ export function ChatContainer() {
           amplitude={voicePlayback.amplitude}
           error={voiceError}
           onCancel={handleVoiceCancel}
+          onBargeIn={handleBargeIn}
         />
       )}
 

@@ -11,6 +11,14 @@ const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").re
 // only decides *when to stop listening*, never the avatar's visual state.
 const SILENCE_TIMEOUT_MS = 1300;
 
+// Grace period to start talking after the mic opens (e.g. right after Guaca
+// finishes speaking, in hands-free mode). Reuses the same timer ref as
+// SILENCE_TIMEOUT_MS: onresult below shortens it the moment real speech
+// shows up. Without this, silent air time (user walked away, decided not to
+// reply) would leave the mic open forever — "continuous" is not the same as
+// "never" listening.
+const NO_SPEECH_TIMEOUT_MS = 6000;
+
 export type MicStatus = "idle" | "recording" | "transcribing";
 
 interface UseSpeechRecognitionOptions {
@@ -59,6 +67,37 @@ export function useSpeechRecognition(
     }
   };
 
+  // Single source of truth for "this session is over" — called from the real
+  // recognition.onend/onerror events, but also directly by the watchdog below
+  // for when those events never fire at all (observed in practice: a stalled
+  // network path to the browser's speech-recognition backend can leave a
+  // continuous session running with no further events, ever — .stop() alone
+  // doesn't guarantee onend fires). Idempotent via sessionEndedRef.
+  const forceFinalize = useCallback((reason?: string) => {
+    if (sessionEndedRef.current) return;
+    sessionEndedRef.current = true;
+    clearSilenceTimer();
+    setMicStatus("idle");
+    setInterimTranscript("");
+
+    const text = finalPartsRef.current.join(" ").trim();
+    finalPartsRef.current = [];
+    if (text) onFinalRef.current(text);
+    else onCancelledRef.current(reason);
+  }, []);
+
+  // Asks the recognizer to stop and guarantees the session actually ends
+  // within a bounded time even if the underlying browser API hangs and never
+  // fires onend/onerror — without this, a stuck session leaves the mic
+  // button permanently stuck on "Detener" with no way to recover.
+  const requestStop = useCallback(
+    (reason?: string) => {
+      recognitionRef.current?.stop();
+      setTimeout(() => forceFinalize(reason), 1500);
+    },
+    [forceFinalize]
+  );
+
   // Detect capabilities once mounted (SSR-safe)
   useEffect(() => {
     const hasNativeApi =
@@ -87,19 +126,6 @@ export function useSpeechRecognition(
     recognition.continuous = true;
     recognition.interimResults = true;
 
-    const finalizeSession = (reason?: string) => {
-      if (sessionEndedRef.current) return; // already finalized (onerror already ran)
-      sessionEndedRef.current = true;
-      clearSilenceTimer();
-      setMicStatus("idle");
-      setInterimTranscript("");
-
-      const text = finalPartsRef.current.join(" ").trim();
-      finalPartsRef.current = [];
-      if (text) onFinalRef.current(text);
-      else onCancelledRef.current(reason);
-    };
-
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interim = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -114,18 +140,16 @@ export function useSpeechRecognition(
 
       // Any new speech resets the "did the user stop talking?" timer.
       clearSilenceTimer();
-      silenceTimerRef.current = setTimeout(() => {
-        recognitionRef.current?.stop();
-      }, SILENCE_TIMEOUT_MS);
+      silenceTimerRef.current = setTimeout(() => requestStop(), SILENCE_TIMEOUT_MS);
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       setError(`Error de reconocimiento: ${event.error}`);
-      finalizeSession(event.error);
+      forceFinalize(event.error);
     };
 
     recognition.onend = () => {
-      finalizeSession();
+      forceFinalize();
     };
 
     recognitionRef.current = recognition;
@@ -134,7 +158,7 @@ export function useSpeechRecognition(
       clearSilenceTimer();
       recognition.abort();
     };
-  }, [useNativeApi]);
+  }, [useNativeApi, requestStop, forceFinalize]);
 
   const startListening = useCallback(async () => {
     setError(null);
@@ -146,9 +170,25 @@ export function useSpeechRecognition(
       setMicStatus("recording");
       try {
         recognitionRef.current.start();
-      } catch {
-        // start() throws if already started — ignore, a session is already active
+      } catch (err) {
+        // start() throws InvalidStateError if a session is already active —
+        // harmless, one is already running so the timer below still applies.
+        // Anything else is a real failure (e.g. no capture device): surface
+        // it and bail instead of leaving the UI stuck in "recording" forever
+        // with no listener ever going to fire onend/onerror to unstick it.
+        if (!(err instanceof DOMException && err.name === "InvalidStateError")) {
+          setMicStatus("idle");
+          setError("No se pudo iniciar el reconocimiento de voz.");
+          sessionEndedRef.current = true;
+          onCancelledRef.current("start-failed");
+          return;
+        }
       }
+      // Grace period to start talking, whether this call just started a
+      // fresh session or one was already active — always reachable so a
+      // session can never be left listening with no way out.
+      clearSilenceTimer();
+      silenceTimerRef.current = setTimeout(() => requestStop("no-speech"), NO_SPEECH_TIMEOUT_MS);
     } else {
       // ── MediaRecorder fallback (Firefox and others) ──────────────────────
       try {
@@ -216,19 +256,19 @@ export function useSpeechRecognition(
         onCancelledRef.current("permission-denied");
       }
     }
-  }, [useNativeApi]);
+  }, [useNativeApi, requestStop]);
 
   const stopListening = useCallback(() => {
     clearSilenceTimer();
     if (useNativeApi && recognitionRef.current) {
-      recognitionRef.current.stop();
+      requestStop();
     } else if (
       mediaRecorderRef.current &&
       mediaRecorderRef.current.state !== "inactive"
     ) {
       mediaRecorderRef.current.stop();
     }
-  }, [useNativeApi]);
+  }, [useNativeApi, requestStop]);
 
   return {
     interimTranscript,

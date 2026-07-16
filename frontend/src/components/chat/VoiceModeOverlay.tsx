@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { X, Square, AlertCircle } from "lucide-react";
+import { X, Square, Mic, AlertCircle } from "lucide-react";
 import { GuacamayaAvatar, type GuacamayaState } from "./GuacamayaAvatar";
 import type { MicStatus } from "@/hooks/useSpeechRecognition";
 
@@ -13,6 +13,9 @@ interface VoiceModeOverlayProps {
   amplitude: number;
   error: string | null;
   onCancel: () => void;
+  /** Cuts Guaca off mid-sentence and starts listening right away — a real
+   *  conversation lets you interrupt instead of waiting out the whole reply. */
+  onBargeIn: () => void;
 }
 
 const STATUS_LABEL: Record<GuacamayaState, string> = {
@@ -59,7 +62,7 @@ function AudioBars({ mode, amplitude }: { mode: "listening" | "thinking" | "spea
 }
 
 export function VoiceModeOverlay({
-  isOpen, avatarState, interimTranscript, micStatus, amplitude, error, onCancel,
+  isOpen, avatarState, interimTranscript, micStatus, amplitude, error, onCancel, onBargeIn,
 }: VoiceModeOverlayProps) {
   useEffect(() => {
     if (!isOpen) return;
@@ -131,16 +134,29 @@ export function VoiceModeOverlay({
           )}
         </div>
 
-        <button
-          onClick={onCancel}
-          className="glass-navy"
-          style={{
-            display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 999,
-            color: "#fff", fontSize: 13.5, fontWeight: 500, cursor: "pointer",
-          }}
-        >
-          <Square size={12} fill="currentColor" /> Detener
-        </button>
+        {avatarState === "speaking" ? (
+          <button
+            onClick={onBargeIn}
+            className="glass-navy"
+            style={{
+              display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 999,
+              color: "#fff", fontSize: 13.5, fontWeight: 500, cursor: "pointer",
+            }}
+          >
+            <Mic size={13} /> Interrumpir
+          </button>
+        ) : (
+          <button
+            onClick={onCancel}
+            className="glass-navy"
+            style={{
+              display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 999,
+              color: "#fff", fontSize: 13.5, fontWeight: 500, cursor: "pointer",
+            }}
+          >
+            <Square size={12} fill="currentColor" /> Detener
+          </button>
+        )}
       </div>
     </div>
   );

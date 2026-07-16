@@ -106,6 +106,10 @@ services:
       - "8000:8000"
     volumes:
       - uploads_data:/app/uploads
+      # Whisper "small" (~500MB) downloads from Hugging Face on first STT
+      # request; without this volume it re-downloads on every container
+      # recreate (each deploy), stalling the first fallback-STT request ~100s.
+      - whisper_cache:/root/.cache/huggingface
     depends_on:
       postgres:
         condition: service_healthy
@@ -168,6 +172,7 @@ volumes:
   pgdata:
   ollama_data:
   uploads_data:
+  whisper_cache:
 
 networks:
   chatbot-net:

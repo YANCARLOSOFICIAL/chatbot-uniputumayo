@@ -56,9 +56,13 @@ def _get_whisper_model():
         try:
             from faster_whisper import WhisperModel
 
-            logger.info("Cargando modelo Whisper 'tiny'...")
+            # "small" trades a bit of latency for meaningfully better Spanish
+            # accuracy than "tiny" — worth it since this only runs for the
+            # cross-browser fallback path (native Web Speech API covers
+            # Chrome/Edge and needs no server-side STT at all).
+            logger.info("Cargando modelo Whisper 'small'...")
             _get_whisper_model._model = WhisperModel(
-                "tiny", device="cpu", compute_type="int8"
+                "small", device="cpu", compute_type="int8"
             )
             logger.info("Modelo Whisper cargado correctamente")
         except ImportError:
