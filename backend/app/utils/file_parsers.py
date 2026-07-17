@@ -266,13 +266,42 @@ def _extract_semester_grid_sheet(
     max_row = ws.max_row
     first_semester_col = semester_ranges[0][0]
 
+    # The grid ends with a "TOTAL" row (per-semester credit sums) followed by
+    # a "REQUISITOS DE GRADO" legend/footnotes block. Both are real
+    # information, but neither can be handled like a normal course row:
+    # - The legend text is identical no matter which semester's columns it's
+    #   sliced from, so treating it like a course row would repeat it
+    #   verbatim in every semester's chunk — confirmed live to actively break
+    #   retrieval (a query for "materias de formación básica" returned only
+    #   this repeated footer, no real courses, because it out-scored every
+    #   semester's actual content). It's pulled into its own section instead,
+    #   appearing once.
+    # - The TOTAL row genuinely IS per-semester data (each semester's own
+    #   credit sum lives in that semester's columns) — but as a *separate*
+    #   section it's one long, mostly-numeric row spanning all semesters,
+    #   which (confirmed live) still out-scores real course content for
+    #   broader questions ("cuántos créditos tiene el programa"). It reads
+    #   correctly, and stays out of competition with course chunks, once
+    #   folded into the semester section it actually belongs to instead.
+    total_row: int | None = None
+    footer_start_row = max_row + 1
+    for r in range(1, max_row + 1):
+        label = _xlsx_cell_str(ws.cell(row=r, column=1).value).upper()
+        if label == "TOTAL":
+            total_row = r
+        if label == "TOTAL" or "REQUISITOS DE GRADO" in label:
+            footer_start_row = r
+            break
+
+    course_rows_end = total_row if total_row is not None else footer_start_row
+
     # Row-category labels (e.g. "FORMACIÓN BÁSICA") live in the columns to the
     # left of the first semester block, in cells merged down across many rows
     # — carry the last-seen value forward per row, same as a merged cell reads
     # in every other row-based extractor in this file.
     category_by_row: dict[int, str] = {}
     running: list[str] = []
-    for r in range(1, max_row + 1):
+    for r in range(1, course_rows_end):
         for i, c in enumerate(range(1, first_semester_col)):
             val = _xlsx_cell_str(ws.cell(row=r, column=c).value)
             if val:
@@ -284,23 +313,106 @@ def _extract_semester_grid_sheet(
 
     parts: list[str] = []
     for start_col, end_col, label in semester_ranges:
+        # Credits/hours in this grid are always whole numbers, so a column
+        # that ever holds a fractional value anywhere in the course-row range
+        # isn't part of the course grid at all — it's a leaked calculation
+        # artifact. Confirmed live: a hidden helper column (used to compute
+        # the sheet's own %-of-program breakdown, e.g. "14.516129032258064",
+        # alongside its own whole-number counterpart like "9") landed inside
+        # the last semester's detected column range purely by position,
+        # contaminating that semester's chunk with unrelated figures.
+        # Dropping the whole column (not just the fractional rows) once any
+        # fractional value is seen in it also clears the paired whole-number
+        # rows, which look exactly like a real credit value in isolation.
+        tainted_cols = {
+            c for c in range(start_col, end_col + 1)
+            if any(
+                isinstance(v := ws.cell(row=r, column=c).value, float) and v != int(v)
+                for r in range(1, course_rows_end)
+            )
+        }
+
         rows_text: list[str] = []
-        for r in range(1, max_row + 1):
+        semester_credits = 0
+        for r in range(1, course_rows_end):
             cells = [
-                _xlsx_cell_str(ws.cell(row=r, column=c).value)
+                "" if c in tainted_cols else _xlsx_cell_str(ws.cell(row=r, column=c).value)
                 for c in range(start_col, end_col + 1)
             ]
             if not any(cells):
                 continue
+            # A course's "numbers" row (hours presenciales, hours
+            # independiente, tipo, créditos — e.g. "4 | 8 | T | 4") always
+            # carries its type marker second-to-last and its credit value
+            # last. Summing these directly from the course rows already
+            # being read here is self-consistent with what the chunk itself
+            # says, unlike trusting the sheet's own TOTAL row: that row's
+            # columns don't line up 1:1 with each semester's course columns,
+            # and naively taking the first non-blank cell in it overcounted
+            # every semester (confirmed live: 15 instead of the real 13 for
+            # Semestre I, verified by hand-summing that semester's courses).
+            non_empty = [c for c in cells if c]
+            if len(non_empty) >= 2 and non_empty[-2] in ("T", "TP", "P"):
+                try:
+                    semester_credits += int(non_empty[-1])
+                except ValueError:
+                    pass
             line = " | ".join(cells).strip(" |")
             category = category_by_row.get(r, "")
             rows_text.append(f"{category} | {line}" if category else line)
+
+        if semester_credits:
+            rows_text.append(f"Total créditos de este semestre: {semester_credits}")
 
         if rows_text:
             ordinal = _ROMAN_TO_ORDINAL.get(label)
             header_label = f"SEMESTRE {label} ({ordinal} semestre)" if ordinal else f"SEMESTRE {label}"
             parts.append(f"=== HOJA: {sheet_name} — {header_label} ===")
             parts.append("\n".join(rows_text))
+
+    if footer_start_row <= max_row:
+        # The footer isn't one flowing block of text — it's several unrelated
+        # tables placed side by side in disjoint column ranges that just
+        # happen to share the same rows (an abbreviation legend, per-cycle
+        # graduation requirements, the electives portfolio, program-wide
+        # credit totals). Joining every column of every row as if it were a
+        # single table interleaves them into noise — confirmed live: rows
+        # from the electives list came out mixed with unrelated legend cells
+        # ("CODIG | | PR. | CODIG | ... | 2 | Diseño de Apps"). Grouping
+        # columns into contiguous runs (a run ends at the first fully-empty
+        # column) and keeping each run's rows in their own section stops the
+        # unrelated tables from bleeding into each other.
+        footer_row_range = range(footer_start_row, max_row + 1)
+        occupied_cols = [
+            c for c in range(1, ws.max_column + 1)
+            if any(
+                _xlsx_cell_str(ws.cell(row=r, column=c).value)
+                for r in footer_row_range if r != total_row
+            )
+        ]
+        col_blocks: list[list[int]] = []
+        for c in occupied_cols:
+            if col_blocks and c == col_blocks[-1][-1] + 1:
+                col_blocks[-1].append(c)
+            else:
+                col_blocks.append([c])
+
+        for block in col_blocks:
+            block_rows: list[str] = []
+            for r in footer_row_range:
+                if r == total_row:
+                    continue
+                cells = [_xlsx_cell_str(ws.cell(row=r, column=c).value) for c in block]
+                if any(cells):
+                    block_rows.append(" | ".join(cells).strip(" |"))
+            # A block with no label at all — just a bare number, e.g. a
+            # stray per-semester sub-total column whose own header column
+            # fell outside this contiguous run — carries no retrievable
+            # meaning on its own, so it's dropped instead of surfacing as a
+            # floating, context-less digit.
+            if block_rows and any(re.search(r"[^\W\d_]", row) for row in block_rows):
+                parts.append(f"=== HOJA: {sheet_name} — INFORMACIÓN COMPLEMENTARIA ===")
+                parts.append("\n".join(block_rows))
 
     return parts
 

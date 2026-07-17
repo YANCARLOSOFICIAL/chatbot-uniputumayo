@@ -198,8 +198,46 @@ def chunk_tabular_text(
                 return section_prefix + active_subheader + "\n"
             return section_prefix
 
-        for row in rows:
-            is_subheader = has_multi_column_rows and "|" not in row
+        def flush_pending() -> None:
+            # Nothing pending at all — fresh section, or the previous
+            # sub-header already got its own standalone chunk below.
+            if not current_rows and active_subheader is None:
+                return
+            content = (
+                chunk_prefix() + "\n".join(current_rows) if current_rows
+                # A sub-header with zero data rows under it (e.g. a flat list
+                # where every entry is nominally its own "sub-header" — see
+                # has_multi_column_rows below) still needs its own chunk so
+                # it's never silently lost, but WITHOUT re-adding the label
+                # as if it were a data row too: chunk_prefix() already shows
+                # it. Doing that unconditionally used to render every such
+                # entry twice — confirmed live on a real elective-course list
+                # ("Ética" chunk read "Ética\nÉtica") and on a curriculum's
+                # own semester labels ("SEMESTRE I" duplicated at chunk top).
+                else chunk_prefix().rstrip()
+            )
+            if not content.strip():
+                return
+            result.append({
+                "content": content,
+                "token_count": _count_tokens(content),
+                "metadata": {"chunk_index": len(result)},
+            })
+
+        for idx, row in enumerate(rows):
+            # A single-column row only acts as a *header* when it introduces
+            # a multi-column group right after it (e.g. "CICLO TECNOLÓGICO"
+            # followed by "TD406 | 1 | Redes LAN"). When the next row is
+            # itself single-column, this row is just another peer item in a
+            # flat list (e.g. a run of elective names with no code/credits
+            # attached) — confirmed live: without this check, a 25-item flat
+            # list turned into 25 one-line chunks, each re-showing the
+            # section header for a single course name.
+            next_row = rows[idx + 1] if idx + 1 < len(rows) else None
+            is_subheader = (
+                has_multi_column_rows and "|" not in row
+                and next_row is not None and "|" in next_row
+            )
 
             if is_subheader:
                 # Force a clean boundary: whatever was pending under the OLD
@@ -207,30 +245,15 @@ def chunk_tabular_text(
                 # so a transition row is never grouped under the wrong label
                 # — a query about "segundo semestre" should never retrieve a
                 # chunk still labeled/mixed with "primer semestre" content.
-                if current_rows:
-                    content = chunk_prefix() + "\n".join(current_rows)
-                    result.append({
-                        "content": content,
-                        "token_count": _count_tokens(content),
-                        "metadata": {"chunk_index": len(result)},
-                    })
+                flush_pending()
                 active_subheader = row
-                # Seed the new batch with the header row itself (not just the
-                # tracked label) so it's always real, visible content and can
-                # never be silently lost even if this sub-section turns out to
-                # have zero data rows under it.
-                current_rows = [row]
-                current_len = len(row) + 1
+                current_rows = []
+                current_len = 0
                 continue
 
             row_len = len(row) + 1  # +1 for the joining newline
             if current_rows and len(chunk_prefix()) + current_len + row_len > max_chars:
-                content = chunk_prefix() + "\n".join(current_rows)
-                result.append({
-                    "content": content,
-                    "token_count": _count_tokens(content),
-                    "metadata": {"chunk_index": len(result)},
-                })
+                flush_pending()
                 # Carry the last row(s) forward as overlap so a record split
                 # across a chunk boundary still has its neighbor for context.
                 carry: list[str] = []
@@ -246,12 +269,6 @@ def chunk_tabular_text(
             current_rows.append(row)
             current_len += row_len
 
-        if current_rows:
-            content = chunk_prefix() + "\n".join(current_rows)
-            result.append({
-                "content": content,
-                "token_count": _count_tokens(content),
-                "metadata": {"chunk_index": len(result)},
-            })
+        flush_pending()
 
     return result

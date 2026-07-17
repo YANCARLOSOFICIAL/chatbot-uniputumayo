@@ -63,7 +63,15 @@ class Settings(BaseSettings):
     # RAG Configuration
     chunk_size: int = 512
     chunk_overlap: int = 77
-    rag_top_k: int = 5
+    # Was 5 — too small for curriculum documents with many semesters/sections:
+    # measured live that a document with 25 chunks needed top_k=10 (alongside
+    # a matching max_per_doc bump, see rag_service.py) for every "materias de
+    # tal semestre" question to retrieve its chunk at all; top_k=5 missed
+    # "séptimo" and "décimo semestre" outright. Aggregate questions ("cuántos
+    # créditos tiene el programa") still aren't reliably fixed by this —
+    # confirmed even top_k=20 leaves one such question unanswered — that
+    # needs a structured-data answer path, not a bigger retrieval budget.
+    rag_top_k: int = 10
     # nomic-embed-text en docs español puntúa ~0.4-0.65; 0.35 captura lo relevante
     rag_score_threshold: float = 0.35
     # Candidatos = top_k × multiplier, luego se filtran por diversidad

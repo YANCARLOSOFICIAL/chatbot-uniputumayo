@@ -111,7 +111,16 @@ services:
       DEFAULT_MAX_TOKENS: "1536"
       CHUNK_SIZE: "512"
       CHUNK_OVERLAP: "77"
-      RAG_TOP_K: "5"
+      # Was 5 — too small for curriculum documents with many semesters:
+      # measured live that "décimo semestre" never retrieved its own chunk
+      # at top_k=5 no matter how high max_per_doc went (see rag_service.py's
+      # _apply_diversity, now max_per_doc=10 to match). Doubling top_k also
+      # doubles how much context the LLM has to process per answer — on this
+      # CPU-without-AVX2 host that's already tuned close to the 300s
+      # timeout (see OLLAMA_THINK_ENABLED/RAG_HYDE_ENABLED below), so if
+      # prod logs start showing responses near that timeout after this
+      # change, dropping back toward 5-7 here is the first thing to try.
+      RAG_TOP_K: "10"
       RAG_SCORE_THRESHOLD: "0.35"
       # Desactivado en prod: HyDE agrega una llamada completa a Ollama por
       # mensaje (generar un "documento hipotético" antes de embeder). En este

@@ -85,7 +85,7 @@ services:
       DEFAULT_MAX_TOKENS: "2048"
       CHUNK_SIZE: "512"
       CHUNK_OVERLAP: "77"
-      RAG_TOP_K: "5"
+      RAG_TOP_K: "10"
       RAG_SCORE_THRESHOLD: "0.35"
       RAG_CANDIDATES_MULTIPLIER: "3"
       RAG_HYDE_ENABLED: "true"

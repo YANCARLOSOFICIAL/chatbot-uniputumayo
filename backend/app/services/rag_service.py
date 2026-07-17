@@ -61,19 +61,27 @@ class RAGService:
     def _apply_diversity(
         self,
         results: list[SearchResultItem],
-        max_per_doc: int = 3,
+        max_per_doc: int = 10,
         top_k: int = 5,
     ) -> list[SearchResultItem]:
         """Limit to max_per_doc chunks per source document to diversify results.
 
-        Was 2 — too aggressive for row-aware-chunked spreadsheets/slide decks,
-        which routinely produce 20-60+ chunks per document (a curriculum with
-        many semesters/subjects). A question needing broad coverage of one
-        such document (e.g. "todas las materias de tal programa") could only
-        ever surface 2 of them, no matter how many actually scored well —
-        confirmed live via /admin/rag-eval on a real uploaded curriculum.
-        Still bounded by top_k overall, so this doesn't grow the total
-        context sent to the LLM when multiple different documents match.
+        Was 2, then 3 — too aggressive for row-aware-chunked spreadsheets/
+        slide decks, which routinely produce 20-60+ chunks per document (a
+        curriculum with many semesters/subjects). A question needing broad
+        coverage of one such document (e.g. "todas las materias de tal
+        programa") could only ever surface 2-3 of them, no matter how many
+        actually scored well — confirmed live via /admin/rag-eval on a real
+        uploaded curriculum.
+
+        Bounded by top_k overall, but measured live that max_per_doc alone
+        does nothing once it exceeds top_k: a 25-chunk curriculum still
+        missed "séptimo"/"décimo semestre" at top_k=5 with max_per_doc as
+        high as 20, because the final list is truncated to top_k before
+        those lower-ranked-but-relevant chunks ever get in. Raising top_k
+        (see settings.rag_top_k) alongside this is what actually fixed it —
+        this alone is not a complete answer to "not enough of document X's
+        chunks are showing up".
         """
         seen: dict[str, int] = {}
         filtered: list[SearchResultItem] = []
@@ -358,7 +366,7 @@ class RAGService:
 
         # 6. Diversity filter (max N chunks per document)
         if settings.rag_diversity_enabled and candidates:
-            final_results = self._apply_diversity(candidates, max_per_doc=3, top_k=request.top_k)
+            final_results = self._apply_diversity(candidates, max_per_doc=10, top_k=request.top_k)
         else:
             final_results = candidates[:request.top_k]
 

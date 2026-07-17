@@ -92,6 +92,27 @@ class TestChunkTabularText:
         # SEMESTRE I's label must not bleed into SEMESTRE II's chunks.
         assert all("SEMESTRE II" not in c["content"] for c in sem1_chunks)
 
+    def test_flat_list_among_multicolumn_rows_is_not_fragmented(self):
+        # A section can mix multi-column course rows with a plain, headerless
+        # list (e.g. an electives portfolio's name-only entries). A row with
+        # no " | " is only a real sub-header when it introduces a
+        # multi-column group right after it — a run of consecutive
+        # single-column rows is just flat list content, not one sub-header
+        # per line. Confirmed live on a real curriculum file: a 25-item
+        # electives list turned into 25 separate one-line chunks before this.
+        list_items = "\n".join(f"Electiva complementaria {i}" for i in range(25))
+        text = (
+            "=== HOJA: Pensum === \n"
+            "CICLO TECNOLOGICO\n"
+            "TD406 | 1 | Redes LAN\n"
+            "ELECTIVAS COMPLEMENTARIAS\n"
+            f"{list_items}"
+        )
+        chunks = chunk_tabular_text(text, chunk_size=512, chunk_overlap=77)
+        list_chunks = [c for c in chunks if "Electiva complementaria 0" in c["content"]]
+        assert len(list_chunks) == 1
+        assert "Electiva complementaria 24" in list_chunks[0]["content"]
+
     def test_row_overlap_carries_forward(self):
         rows = "\n".join(f"row{i:03d}" for i in range(50))
         text = f"=== DIAPOSITIVA 1 ===\n{rows}"
