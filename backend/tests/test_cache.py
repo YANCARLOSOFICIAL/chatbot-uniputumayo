@@ -92,6 +92,71 @@ class TestAnswerCacheEntityGuard:
         entry = self._entry([{"program": None, "faculty": "Ingeniería"}])
         assert AsyncAnswerCache._entity_guard_passes(entry, "quiero estudiar salud pública") is False
 
+    def test_falls_back_to_document_title_when_program_and_faculty_unset(self):
+        # Every document currently uploaded has program/faculty empty (both
+        # are optional, admin-filled fields) — the guard must still catch a
+        # cross-program collision using the document title instead of
+        # silently doing nothing.
+        entry = self._entry([{
+            "program": None, "faculty": None,
+            "document_title": "07_DesarrolloSoftware_e_IngSistemas",
+        }])
+        assert AsyncAnswerCache._entity_guard_passes(
+            entry, "que materias hay en quinto semestre de contaduria"
+        ) is False
+        assert AsyncAnswerCache._entity_guard_passes(
+            entry, "que materias hay en quinto semestre de sistemas"
+        ) is True
+
+    def test_title_fallback_splits_camel_case(self):
+        # "IngSistemas" must be recognized as the word "sistemas", not one
+        # opaque "ingsistemas" token that never matches a real query.
+        entry = self._entry([{
+            "program": None, "faculty": None,
+            "document_title": "09_GestionContable_e_ContaduriaPublica",
+        }])
+        assert AsyncAnswerCache._entity_guard_passes(
+            entry, "cuantos creditos tiene contaduria"
+        ) is True
+
+
+class TestAnswerCacheSemesterGuard:
+    def _entry(self, question):
+        return {"question": question, "sources": [], "embedding": []}
+
+    def test_blocks_different_semester_same_program(self):
+        # Confirmed live: this exact pair scores 0.9250 cosine similarity
+        # with the answer-cache embedding model — above the default 0.90
+        # threshold — despite being about different semesters.
+        entry = self._entry("que veo en tercer semestre de obras civiles")
+        assert AsyncAnswerCache._semester_guard_passes(
+            entry, "que veo en cuarto semestre de obras civiles"
+        ) is False
+
+    def test_passes_same_semester_different_phrasing(self):
+        entry = self._entry("cuales son las materias de quinto semestre de ingenieria de sistemas")
+        assert AsyncAnswerCache._semester_guard_passes(
+            entry, "que asignaturas veo en el quinto semestre de sistemas"
+        ) is True
+
+    def test_passes_when_neither_mentions_a_semester(self):
+        entry = self._entry("cuantos creditos tiene el programa de gastronomia")
+        assert AsyncAnswerCache._semester_guard_passes(
+            entry, "cuantos creditos suma toda la carrera de gastronomia"
+        ) is True
+
+    def test_blocks_numeric_semestre_n_form(self):
+        entry = self._entry("creditos del semestre 1 de contaduria")
+        assert AsyncAnswerCache._semester_guard_passes(
+            entry, "creditos del semestre 2 de contaduria"
+        ) is False
+
+    def test_blocks_ultimo_semestre_against_specific_number(self):
+        entry = self._entry("materias del primer semestre de gastronomia")
+        assert AsyncAnswerCache._semester_guard_passes(
+            entry, "materias del ultimo semestre de gastronomia"
+        ) is False
+
 
 class TestAnswerCacheFindSimilar:
     @pytest.mark.asyncio
@@ -137,4 +202,20 @@ class TestAnswerCacheFindSimilar:
         # Same embedding vector (similarity 1.0) simulates a near-identical
         # phrasing that differs only in the named program.
         result = await cache.find_similar([1.0, 0.0], query_text="requisitos de admisión para enfermería")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_semester_guard_rejects_hit_despite_high_similarity(self):
+        cache = AsyncAnswerCache(similarity_threshold=0.9)
+        await cache.store(
+            embedding=[1.0, 0.0],
+            question="que veo en tercer semestre de obras civiles",
+            answer="Respuesta sobre tercer semestre",
+            sources=[],
+            llm_provider="ollama",
+            llm_model="qwen3:8b",
+        )
+        # Same embedding vector (similarity 1.0) simulates the real 0.9250
+        # measured similarity between these two questions.
+        result = await cache.find_similar([1.0, 0.0], query_text="que veo en cuarto semestre de obras civiles")
         assert result is None

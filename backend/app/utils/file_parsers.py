@@ -110,7 +110,11 @@ def _extract_docx(file_path: str) -> str:
         for row in table.rows:
             cells = [cell.text.strip() for cell in row.cells]
             non_empty = [c for c in cells if c]
-            if len(non_empty) >= 2:
+            # >= 1 — a merged/spanning header cell in a docx table has the
+            # same single-populated-cell shape as the xlsx case; see
+            # _extract_xlsx. This one was missed when that fix was applied
+            # everywhere else (xls, csv, pptx already use >= 1).
+            if len(non_empty) >= 1:
                 parts.append(" | ".join(non_empty))
 
     return "\n\n".join(parts)
@@ -140,6 +144,14 @@ def _xlsx_cell_str(val) -> str:
     if isinstance(val, float) and val == int(val):
         return str(int(val))
     return str(val).strip()
+
+
+def _looks_numeric(s: str) -> bool:
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
 
 
 _ROMAN_RE = re.compile(r"^[IVXLCDM]+$")
@@ -233,6 +245,45 @@ def _semester_column_ranges(zf, drawing_part: str) -> list[tuple[int, int, str]]
     return ranges if len(ranges) >= 2 else []
 
 
+def _semester_column_ranges_from_cells(
+    ws,
+) -> tuple[list[tuple[int, int, str]], int] | None:
+    """Same idea as `_semester_column_ranges`, but for mallas where the
+    semester header is a literal cell value (e.g. "I" typed into a cell)
+    rather than a floating textbox shape overlaid on the sheet.
+
+    Both styles are real, common institutional exports — confirmed live on
+    two different programs' curriculum files (Contaduría, Gastronomía) using
+    plain cell values instead of shapes. Without this fallback those sheets
+    have no semester-grid detected at all and fall through to the plain
+    row-based path below, which — for a "semester is a column block" layout
+    — interleaves every semester's courses onto the same line (the exact
+    failure `_semester_column_ranges` exists to prevent for the shape-based
+    style).
+
+    Also returns the 1-indexed row the header was found on: front-matter
+    above it (title blocks, the table's own column-header row) sits in the
+    same left-margin columns real per-section category labels use further
+    down, and would otherwise be picked up as if it were one — confirmed
+    live on a real file where a column header ("CREDITOS POR CICLO") ended
+    up glued onto every single course's category label.
+    """
+    for row_idx, row in enumerate(ws.iter_rows(), start=1):
+        matches = [
+            (cell.column, str(cell.value).strip())
+            for cell in row
+            if cell.value is not None and _ROMAN_RE.match(str(cell.value).strip())
+        ]
+        if len(matches) < 2:
+            continue
+        ranges: list[tuple[int, int, str]] = []
+        for i, (col, label) in enumerate(matches):
+            end_col = matches[i + 1][0] - 1 if i + 1 < len(matches) else ws.max_column
+            ranges.append((col, end_col, label))
+        return ranges, row_idx
+    return None
+
+
 def _load_semester_shape_map(file_path: str) -> dict[str, list[tuple[int, int, str]]]:
     import zipfile
 
@@ -252,7 +303,10 @@ def _load_semester_shape_map(file_path: str) -> dict[str, list[tuple[int, int, s
 
 
 def _extract_semester_grid_sheet(
-    ws, sheet_name: str, semester_ranges: list[tuple[int, int, str]]
+    ws,
+    sheet_name: str,
+    semester_ranges: list[tuple[int, int, str]],
+    category_start_row: int = 1,
 ) -> list[str]:
     """Extract a "malla curricular" sheet where each semester is a block of
     COLUMNS (course code/name/hours stacked vertically within it) rather than
@@ -283,13 +337,27 @@ def _extract_semester_grid_sheet(
     #   broader questions ("cuántos créditos tiene el programa"). It reads
     #   correctly, and stays out of competition with course chunks, once
     #   folded into the semester section it actually belongs to instead.
+    # The "TOTAL"/"REQUISITOS DE GRADO" label doesn't always sit in column 1 —
+    # confirmed live on a real file where it's in column 2 instead (with
+    # column 1 empty on that row). Scanning every column left of the first
+    # semester block (the same range category_by_row already reads) instead
+    # of hardcoding column 1 catches both layouts.
     total_row: int | None = None
     footer_start_row = max_row + 1
     for r in range(1, max_row + 1):
-        label = _xlsx_cell_str(ws.cell(row=r, column=1).value).upper()
-        if label == "TOTAL":
+        row_labels = [
+            _xlsx_cell_str(ws.cell(row=r, column=c).value).upper()
+            for c in range(1, first_semester_col)
+        ]
+        # Exact "TOTAL" works for a plain total row, but not every file's
+        # total row is that bare — confirmed live on one that reads "TOTAL
+        # CREDITOS CICLO TECNOLOGICO" instead. A prefix check catches both
+        # without matching real category text (none of it starts with the
+        # word "TOTAL" in any file seen so far).
+        is_total_row = any(lbl.startswith("TOTAL") for lbl in row_labels)
+        if is_total_row:
             total_row = r
-        if label == "TOTAL" or "REQUISITOS DE GRADO" in label:
+        if is_total_row or any("REQUISITOS DE GRADO" in lbl for lbl in row_labels):
             footer_start_row = r
             break
 
@@ -298,18 +366,31 @@ def _extract_semester_grid_sheet(
     # Row-category labels (e.g. "FORMACIÓN BÁSICA") live in the columns to the
     # left of the first semester block, in cells merged down across many rows
     # — carry the last-seen value forward per row, same as a merged cell reads
-    # in every other row-based extractor in this file.
+    # in every other row-based extractor in this file. Keyed by the actual
+    # column number, not by scan position — a sibling category (e.g.
+    # "COMPONENTE BÁSICO" replaced later by "COMPONENTE PROFESIONAL", both in
+    # the same column) must overwrite its own slot even when an earlier,
+    # unrelated column (e.g. the leftmost one) is never populated at all.
+    # Keying by scan position instead let the old value keep accumulating
+    # alongside the new one instead of being replaced — confirmed live on a
+    # real file where column 1 is always blank: rows ended up labeled
+    # "COMPONENTE BÁSICO - COMPONENTE PROFESIONAL - COMPONENTE TÉCNICO
+    # PRODUCCIÓN" all at once, mixing categories that are mutually exclusive.
     category_by_row: dict[int, str] = {}
-    running: list[str] = []
-    for r in range(1, course_rows_end):
-        for i, c in enumerate(range(1, first_semester_col)):
-            val = _xlsx_cell_str(ws.cell(row=r, column=c).value)
-            if val:
-                if i < len(running):
-                    running[i] = val
-                else:
-                    running.append(val)
-        category_by_row[r] = " - ".join(x for x in running if x)
+    running: dict[int, str] = {}
+    for r in range(category_start_row, course_rows_end):
+        for c in range(1, first_semester_col):
+            raw = ws.cell(row=r, column=c).value
+            val = _xlsx_cell_str(raw)
+            # Some layouts pack a per-category credit count / percentage
+            # (e.g. "28", "0.264...") into these same left-margin columns,
+            # alongside the actual text labels — confirmed live on a real
+            # file where that produced a "category" like "AREA DE FORMACION
+            # BASICA - ... - 28 - 0.264...". A bare number here is summary
+            # data, never a category name, so it's excluded from the label.
+            if val and not isinstance(raw, (int, float)):
+                running[c] = val
+        category_by_row[r] = " - ".join(running[c] for c in sorted(running))
 
     parts: list[str] = []
     for start_col, end_col, label in semester_ranges:
@@ -341,20 +422,41 @@ def _extract_semester_grid_sheet(
             ]
             if not any(cells):
                 continue
-            # A course's "numbers" row (hours presenciales, hours
-            # independiente, tipo, créditos — e.g. "4 | 8 | T | 4") always
-            # carries its type marker second-to-last and its credit value
-            # last. Summing these directly from the course rows already
-            # being read here is self-consistent with what the chunk itself
-            # says, unlike trusting the sheet's own TOTAL row: that row's
-            # columns don't line up 1:1 with each semester's course columns,
-            # and naively taking the first non-blank cell in it overcounted
-            # every semester (confirmed live: 15 instead of the real 13 for
-            # Semestre I, verified by hand-summing that semester's courses).
             non_empty = [c for c in cells if c]
-            if len(non_empty) >= 2 and non_empty[-2] in ("T", "TP", "P"):
+            if non_empty == [label]:
+                # The semester's own header row, when it's a literal cell
+                # value rather than a floating shape (see
+                # _semester_column_ranges_from_cells) — it's already shown in
+                # this section's own header line, so keeping it here too
+                # would just repeat it as a floating, context-less row.
+                continue
+            # A course's "numbers" row always carries its credit value, but
+            # not always in the same shape — confirmed live across three
+            # different real templates: "4 | 8 | T | 4" (type marker
+            # second-to-last), "3 |  | 3" (no marker, just numbers), and
+            # "HP | 3 | HTI | 3 | TP | 3 | CR | 3" (label/value pairs, credit
+            # is the value right after the literal "CR" label). Checking for
+            # a literal "CR" label first catches that third shape directly;
+            # falling back to the positional heuristics below covers the
+            # other two instead of silently summing to 0 for whichever shape
+            # isn't handled. Summing these directly from the course rows
+            # already being read here is self-consistent with what the
+            # chunk itself says, unlike trusting the sheet's own TOTAL row:
+            # that row's columns don't line up 1:1 with each semester's
+            # course columns, and naively taking the first non-blank cell in
+            # it overcounted every semester (confirmed live: 15 instead of
+            # the real 13 for Semestre I, verified by hand-summing that
+            # semester's courses).
+            credit_str: str | None = None
+            if "CR" in non_empty and non_empty.index("CR") + 1 < len(non_empty):
+                credit_str = non_empty[non_empty.index("CR") + 1]
+            elif len(non_empty) >= 2 and non_empty[-2] in ("T", "TP", "P"):
+                credit_str = non_empty[-1]
+            elif non_empty and all(_looks_numeric(v) for v in non_empty):
+                credit_str = non_empty[-1]
+            if credit_str is not None:
                 try:
-                    semester_credits += int(non_empty[-1])
+                    semester_credits += int(float(credit_str))
                 except ValueError:
                     pass
             line = " | ".join(cells).strip(" |")
@@ -443,10 +545,17 @@ def _extract_xlsx(file_path: str) -> str:
 
     for sheet_name in wb.sheetnames:
         ws = wb[sheet_name]
-        semester_ranges = semester_map.get(sheet_name) or []
+        semester_ranges = semester_map.get(sheet_name)
+        category_start_row = 1
+        if not semester_ranges:
+            detected = _semester_column_ranges_from_cells(ws)
+            if detected:
+                semester_ranges, category_start_row = detected
 
         if semester_ranges:
-            parts.extend(_extract_semester_grid_sheet(ws, sheet_name, semester_ranges))
+            parts.extend(
+                _extract_semester_grid_sheet(ws, sheet_name, semester_ranges, category_start_row)
+            )
             continue
 
         rows_text: list[str] = []
@@ -470,6 +579,66 @@ def _extract_xlsx(file_path: str) -> str:
 
 # ── Excel XLS (legacy 97-2003) ────────────────────────────────────────────────
 
+class _XlrdCellAdapter:
+    """A single cell, adapted to expose `.value` (converted the same way as
+    the plain xlrd extraction path below) and a 1-indexed `.column`.
+    """
+
+    def __init__(self, cell, datemode, column: int):
+        self._cell = cell
+        self._datemode = datemode
+        self.column = column
+
+    @property
+    def value(self):
+        import xlrd
+
+        cell = self._cell
+        if cell.ctype == xlrd.XL_CELL_EMPTY or cell.value == "":
+            return None
+        if cell.ctype == xlrd.XL_CELL_DATE:
+            try:
+                return xlrd.xldate_as_datetime(cell.value, self._datemode).strftime("%Y-%m-%d")
+            except Exception:
+                return str(cell.value)
+        if cell.ctype == xlrd.XL_CELL_NUMBER:
+            v = cell.value
+            return int(v) if v == int(v) else v
+        return cell.value
+
+
+class _XlrdSheetAdapter:
+    """Adapts an xlrd sheet to the 1-indexed `.cell(row=, column=)` /
+    `.max_row` / `.max_column` / `.iter_rows()` interface openpyxl exposes,
+    so `_extract_semester_grid_sheet` and `_semester_column_ranges_from_cells`
+    — already battle-tested on real xlsx curriculum files — work unmodified
+    on legacy .xls files too, instead of duplicating that logic for a
+    second cell-access API.
+    """
+
+    def __init__(self, sheet, datemode):
+        self._sheet = sheet
+        self._datemode = datemode
+
+    @property
+    def max_row(self) -> int:
+        return self._sheet.nrows
+
+    @property
+    def max_column(self) -> int:
+        return self._sheet.ncols
+
+    def cell(self, row: int, column: int) -> _XlrdCellAdapter:
+        return _XlrdCellAdapter(self._sheet.cell(row - 1, column - 1), self._datemode, column)
+
+    def iter_rows(self):
+        for r in range(self._sheet.nrows):
+            yield [
+                _XlrdCellAdapter(self._sheet.cell(r, c), self._datemode, c + 1)
+                for c in range(self._sheet.ncols)
+            ]
+
+
 def _extract_xls(file_path: str) -> str:
     """Extract an old-format .xls workbook using xlrd."""
     import xlrd
@@ -479,6 +648,16 @@ def _extract_xls(file_path: str) -> str:
 
     for sheet_idx in range(wb.nsheets):
         ws = wb.sheet_by_index(sheet_idx)
+
+        adapter = _XlrdSheetAdapter(ws, wb.datemode)
+        detected = _semester_column_ranges_from_cells(adapter)
+        if detected:
+            semester_ranges, category_start_row = detected
+            parts.extend(
+                _extract_semester_grid_sheet(adapter, ws.name, semester_ranges, category_start_row)
+            )
+            continue
+
         rows_text: list[str] = []
 
         for r in range(ws.nrows):

@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 _SENTINEL = object()
 
 
+_CAMEL_BOUNDARY_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+
+
 def _normalize(text: str) -> str:
     decomposed = unicodedata.normalize("NFKD", text.lower())
     return "".join(c for c in decomposed if not unicodedata.combining(c))
@@ -31,8 +34,59 @@ def _normalize(text: str) -> str:
 
 def _significant_words(text: str) -> set[str]:
     """Words of length >= 4 from normalized text — cheap proxy for named entities
-    (program/faculty names) without needing a fixed vocabulary or extra calls."""
+    (program/faculty names) without needing a fixed vocabulary or extra calls.
+
+    Splits CamelCase boundaries before normalizing — real uploaded document
+    titles are filenames like "07_DesarrolloSoftware_e_IngSistemas", where
+    underscores already separate "e" from "IngSistemas" but nothing splits
+    "Ing" from "Sistemas". Without this, the whole run comes out as one
+    token ("ingsistemas") that never matches a query saying just "sistemas",
+    which — confirmed live against every real document currently uploaded —
+    silently defeats the entity guard on document-title fallback (see
+    _entity_guard_passes): it would reject the document's own program name.
+    """
+    text = _CAMEL_BOUNDARY_RE.sub(" ", text)
     return {w for w in re.findall(r"[a-z0-9]+", _normalize(text)) if len(w) >= 4}
+
+
+_SEMESTER_ORDINAL_WORDS = {
+    "primer": "1", "primero": "1", "segundo": "2", "tercer": "3", "tercero": "3",
+    "cuarto": "4", "quinto": "5", "sexto": "6", "septimo": "7", "octavo": "8",
+    "noveno": "9", "decimo": "10", "undecimo": "11", "duodecimo": "12",
+    "ultimo": "ULTIMO",
+}
+_SEMESTER_CARDINAL_WORDS = {
+    "uno": "1", "dos": "2", "tres": "3", "cuatro": "4", "cinco": "5",
+    "seis": "6", "siete": "7", "ocho": "8", "nueve": "9", "diez": "10",
+}
+_SEMESTER_ROMAN_WORDS = {
+    "i": "1", "ii": "2", "iii": "3", "iv": "4", "v": "5", "vi": "6",
+    "vii": "7", "viii": "8", "ix": "9", "x": "10", "xi": "11", "xii": "12",
+}
+
+
+def _semester_reference(text: str) -> str | None:
+    """Extract which semester (as a canonical string, e.g. "3") a question
+    refers to, if any — "tercer semestre", "semestre 3", "semestre III" and
+    "semestre tres" all resolve to "3"; "último semestre" resolves to the
+    sentinel "ULTIMO" (its actual number varies by program, but it's still a
+    specific, single semester, distinct from any numbered one). Returns None
+    when the text doesn't mention a semester at all.
+    """
+    words = re.findall(r"[a-z0-9]+", _normalize(text))
+    for w in words:
+        if w in _SEMESTER_ORDINAL_WORDS:
+            return _SEMESTER_ORDINAL_WORDS[w]
+    for i, w in enumerate(words):
+        if w == "semestre" and i + 1 < len(words):
+            nxt = words[i + 1]
+            if nxt.isdigit():
+                return nxt
+            if nxt in _SEMESTER_CARDINAL_WORDS:
+                return _SEMESTER_CARDINAL_WORDS[nxt]
+            if nxt in _SEMESTER_ROMAN_WORDS:
+                return _SEMESTER_ROMAN_WORDS[nxt]
+    return None
 
 
 # ── Sync in-memory cache (embeddings) ────────────────────────────────────────
@@ -258,23 +312,59 @@ class AsyncAnswerCache:
         program/faculty the cached sources were scoped to. Skipped entirely
         when the cached sources span multiple programs/faculties (a genuinely
         general question), since there's no single entity to check against.
+
+        `document.program`/`document.faculty` are optional, admin-filled
+        fields at upload time — confirmed live that every document currently
+        uploaded has both empty, which would make this guard a silent no-op
+        for all of them. Falling back to the document title (always
+        populated) when neither field gave anything to check keeps the
+        guard active instead of quietly doing nothing.
         """
         sources = entry.get("sources") or []
         query_words = _significant_words(query_text)
 
+        checked_any_field = False
         for field in ("program", "faculty"):
             values = {s.get(field) for s in sources if s.get(field)}
             if len(values) != 1:
                 continue  # ambiguous/generic — nothing specific to guard
             entity_words = _significant_words(next(iter(values)))
-            if entity_words and not (entity_words & query_words):
+            if not entity_words:
+                continue
+            checked_any_field = True
+            if not (entity_words & query_words):
                 return False
+
+        if not checked_any_field:
+            titles = {s.get("document_title") for s in sources if s.get("document_title")}
+            if len(titles) == 1:
+                entity_words = _significant_words(next(iter(titles)))
+                if entity_words and not (entity_words & query_words):
+                    return False
+
         return True
+
+    @staticmethod
+    def _semester_guard_passes(entry: dict, query_text: str) -> bool:
+        """Reject a match when the query and the cached question name
+        different semesters of what's otherwise the same program/document.
+
+        Confirmed live: "tercer semestre" vs "cuarto semestre" of the same
+        curriculum scores 0.9250 cosine similarity with the answer-cache
+        embedding model — above even a conservative similarity threshold —
+        and the program/faculty/title entity guard above doesn't help at
+        all here, since both questions are about the exact same document,
+        just a different semester within it. Skipped when either side
+        doesn't name a semester at all.
+        """
+        query_sem = _semester_reference(query_text)
+        cached_sem = _semester_reference(entry.get("question", ""))
+        return query_sem is None or cached_sem is None or query_sem == cached_sem
 
     async def find_similar(self, embedding: list[float], query_text: str = "") -> dict | None:
         """Return the best-matching cached entry if similarity clears the
-        threshold AND it passes the entity guard, else None. Entry dict has:
-        question, answer, sources, llm_provider, llm_model."""
+        threshold AND it passes the entity/semester guards, else None. Entry
+        dict has: question, answer, sources, llm_provider, llm_model."""
         entries = await self._load_entries()
         now = time.time()
         best: dict | None = None
@@ -287,6 +377,12 @@ class AsyncAnswerCache:
                 best_score = score
                 best = entry
         if best is not None and best_score >= self._threshold:
+            if query_text and not self._semester_guard_passes(best, query_text):
+                logger.info(
+                    "Answer cache guard rejected hit (similarity=%.3f, semester mismatch): '%.60s…'",
+                    best_score, query_text,
+                )
+                return None
             if query_text and not self._entity_guard_passes(best, query_text):
                 logger.info(
                     "Answer cache guard rejected hit (similarity=%.3f, entity mismatch): '%.60s…'",

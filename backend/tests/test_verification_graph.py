@@ -1,3 +1,4 @@
+from app.config import settings
 from app.services import verification_graph
 from app.utils.prompts import REFUSAL_MARKER
 
@@ -92,6 +93,46 @@ async def test_refusal_answer_skips_grading_call(monkeypatch):
     assert result["approved"] is True
     assert result["attempts"] == 1
     assert len(fake.calls) == 1  # grading short-circuited, no wasted LLM call
+
+
+async def test_grading_sees_context_beyond_old_4000_char_cap(monkeypatch):
+    # The grader used to truncate context_text at a flat 4000 chars — too
+    # small once rag_top_k=10 makes a full context routinely longer than
+    # that, which could cut off the very chunk an answer was grounded in
+    # and cause a false "not grounded" verdict. The cap now scales with
+    # chunk_size * rag_top_k, so a marker placed just past the old cutoff
+    # must still reach the grading prompt.
+    marker = "MARCADOR_DESPUES_DE_4000_CHARS"
+    padding = "x" * 4500
+    context_text = f"{padding}{marker}"
+    assert len(context_text) > 4000
+
+    fake = patch_provider(monkeypatch, [
+        make_response("Respuesta basada en el contexto."),
+        make_response("SI"),
+    ])
+    await verification_graph.generate_verified(
+        messages=BASE_MESSAGES, context_text=context_text,
+        provider_name="ollama", model="qwen3:8b", temperature=0.05, max_tokens=2048,
+    )
+    grade_call = fake.calls[1]
+    assert marker in grade_call[0]["content"]
+
+
+async def test_malformed_grade_response_fails_open(monkeypatch):
+    # A grader response that isn't a clean "SI"/"NO" (e.g. an unclosed
+    # reasoning fragment truncated by max_tokens=5) is not an exception, so
+    # it must still fail open rather than being silently treated as "NO".
+    fake = patch_provider(monkeypatch, [
+        make_response("El programa tiene 160 créditos [1]."),
+        make_response("<think>Voy a anali"),
+    ])
+    result = await verification_graph.generate_verified(
+        messages=BASE_MESSAGES, context_text="Contexto: 160 créditos [1]",
+        provider_name="ollama", model="qwen3:8b", temperature=0.05, max_tokens=2048,
+    )
+    assert result["approved"] is True
+    assert result["attempts"] == 1
 
 
 async def test_grading_error_fails_open(monkeypatch):

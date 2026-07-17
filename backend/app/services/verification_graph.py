@@ -88,11 +88,20 @@ async def _grade(state: VerificationState) -> dict:
 
     try:
         provider = ProviderFactory.get_provider(state["provider_name"])
+        # Sized to the actual retrieval budget (chunk_size × 4 chars/token ×
+        # rag_top_k), not a fixed guess — a flat 4000-char cap silently fell
+        # behind when rag_top_k was raised from 5 to 10 (see rag_service.py),
+        # cutting the grader off well before the end of a full context_text
+        # and risking a "not grounded" verdict for an answer whose actual
+        # supporting chunk just hadn't been seen yet. Still comfortably
+        # under the 8192-token OLLAMA_NUM_CTX window even at the current
+        # top_k.
+        max_context_chars = settings.chunk_size * 4 * settings.rag_top_k
         result = await provider.generate(
             messages=[{
                 "role": "user",
                 "content": _GRADE_PROMPT.format(
-                    context=state["context_text"][:4000],
+                    context=state["context_text"][:max_context_chars],
                     answer=state["draft_answer"],
                 ),
             }],
@@ -100,8 +109,16 @@ async def _grade(state: VerificationState) -> dict:
             temperature=0.0,
             max_tokens=5,
         )
+        # Approve unless the grader clearly says "NO" — not the other way
+        # around. `max_tokens=5` leaves little room for a model that doesn't
+        # follow the one-word instruction (e.g. an unclosed reasoning
+        # fragment cut off mid-token): that garbled output isn't an
+        # exception, so it would skip the except-block fail-open below and
+        # silently reject a perfectly good answer instead. Requiring an
+        # explicit "NO" keeps the same fail-open guarantee the comment below
+        # already promises for outright errors.
         verdict = result["content"].strip().upper()
-        approved = verdict.startswith("S")
+        approved = not verdict.startswith("NO")
     except Exception as e:
         # A broken grader must never block the chat entirely — fail open and
         # let the answer through, same as if the loop were disabled.

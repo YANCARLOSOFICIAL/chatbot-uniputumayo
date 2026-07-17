@@ -542,6 +542,13 @@ class ChatService:
                 and query_embedding is not None
                 and quality == "good"
                 and content.strip()
+                # quality=="good" only means RAG retrieval succeeded, not that
+                # this specific answer is grounded in it — that's exactly what
+                # the verification loop just checked. Caching regardless would
+                # let an answer the loop explicitly flagged as ungrounded
+                # (verification_approved=False) get served to every future
+                # semantically-similar question, not just this one-off reply.
+                and verification_approved is not False
             ):
                 await answer_cache.store(
                     query_embedding, data.content, content,
@@ -704,11 +711,17 @@ class ChatService:
 
                 # Only cache answers actually grounded in retrieved context — never
                 # cache "no tengo esa información" refusals or ungrounded guesses.
+                # quality=="good" only means RAG retrieval succeeded — checking
+                # verification_approved too excludes an answer the verification
+                # loop explicitly flagged as ungrounded after exhausting its
+                # retries, which would otherwise get served to every future
+                # semantically-similar question instead of just this one reply.
                 if (
                     settings.answer_cache_enabled
                     and query_embedding is not None
                     and quality == "good"
                     and full_content.strip()
+                    and verification_approved is not False
                 ):
                     await answer_cache.store(
                         query_embedding, data.content, full_content,
