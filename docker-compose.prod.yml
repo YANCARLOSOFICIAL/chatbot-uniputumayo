@@ -122,11 +122,25 @@ services:
       # change, dropping back toward 5-7 here is the first thing to try.
       RAG_TOP_K: "10"
       RAG_SCORE_THRESHOLD: "0.35"
-      # Desactivado en prod: HyDE agrega una llamada completa a Ollama por
-      # mensaje (generar un "documento hipotético" antes de embeder). En este
-      # hardware esa llamada de más es la diferencia entre responder y que el
-      # timeout de 300s la mate. Local (CPU con AVX2) puede seguir usándolo.
-      RAG_HYDE_ENABLED: "false"
+      # Reactivado en prod (2026-07-21): el razonamiento original de dejarlo
+      # en "false" asumía que HyDE siempre pega contra Ollama — cierto cuando
+      # DEFAULT_LLM_PROVIDER era ollama, pero _generate_hyde_doc (rag_service.py)
+      # en realidad usa runtime_config.default_llm_provider, el proveedor de
+      # chat ACTIVO en runtime (persistido en BD vía /admin), no este env var.
+      # Con OpenAI activo (caso actual en prod) esa llamada extra va a OpenAI,
+      # no a Ollama — no compite por el timeout de 300s. Y aunque un admin
+      # vuelva a poner Ollama como proveedor activo, rag_service.py ya
+      # desactiva HyDE solo en ese caso (`hyde_active = rag_hyde_enabled and
+      # default_llm_provider != "ollama"`), así que este flag no puede
+      # reintroducir la doble carga sobre Ollama que motivó el "false"
+      # original. Confirmado en vivo: con HyDE apagado, la pregunta "cuales
+      # son los requisitos de admision?" traía el chunk equivocado del
+      # Estatuto Estudiantil (el de "SELECCIÓN Y ADMISIÓN", genérico) en vez
+      # del que realmente lista los requisitos (bajo "DE LA INSCRIPCIÓN") —
+      # la query cruda empata más con el título de capítulo que con el
+      # contenido. HyDE corrige esto embediendo una respuesta hipotética en
+      # vez de la pregunta literal.
+      RAG_HYDE_ENABLED: "true"
       RAG_DIVERSITY_ENABLED: "true"
       RAG_CANDIDATES_MULTIPLIER: "3"
       # Habilitado, pero sin reintento (1 intento = genera + revisa, nunca
