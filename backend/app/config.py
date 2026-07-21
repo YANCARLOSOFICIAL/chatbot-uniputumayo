@@ -135,6 +135,17 @@ class Settings(BaseSettings):
     # antes de expirar. 1000 entradas ≈ 17 MB en Redis — insignificante
     # frente al límite de 384 MB del contenedor.
     answer_cache_max_entries: int = 1000
+    # Esta llamada SIEMPRE va a Ollama (embeddinggemma), incluso con OpenAI
+    # como proveedor de chat — ver _embed_query en chat_service.py. El cliente
+    # HTTP de OllamaProvider.embed() usa timeout=120s pensado para lotes
+    # grandes de embeddings al ingerir documentos; heredar ese mismo timeout
+    # aquí significa que un solo mensaje puede quedarse colgado hasta 2
+    # minutos si Ollama tiene que intercambiar el modelo de embedding en RAM
+    # (confirmado en vivo: nomic-embed-text cargado, embeddinggemma pedido,
+    # timeout completo agotado) antes de que RAG/LLM siquiera arranquen. El
+    # fallo ya se maneja con gracia (se salta la caché y sigue el flujo
+    # normal), así que no hay razón para esperar más que unos segundos.
+    answer_cache_embed_timeout_seconds: float = 8.0
 
     # Server
     host: str = "0.0.0.0"

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import random
@@ -300,16 +301,26 @@ class ChatService:
         model via Ollama directly, regardless of `embedding_provider` or
         `default_llm_provider`.
 
-        Returns None (instead of raising) when Ollama is unreachable, so a
-        deployment running only OpenAI for chat doesn't lose the ability to
-        chat at all just because the answer-cache's embedding call fails.
+        Returns None (instead of raising) when Ollama is unreachable or too
+        slow, so a deployment running only OpenAI for chat doesn't lose the
+        ability to chat at all — or get stuck for minutes — just because the
+        answer-cache's embedding call fails. Bounded by
+        `answer_cache_embed_timeout_seconds` (short) rather than the 120s
+        client timeout `OllamaProvider.embed()` uses for bulk document
+        ingestion — see that setting's docstring for why.
         """
         try:
             provider = ProviderFactory.get_provider("ollama")
-            result = await provider.embed([query], model=settings.answer_cache_embedding_model)
+            result = await asyncio.wait_for(
+                provider.embed([query], model=settings.answer_cache_embedding_model),
+                timeout=settings.answer_cache_embed_timeout_seconds,
+            )
             return result["embeddings"][0]
         except Exception as e:
-            logger.warning("Answer-cache embedding unavailable, skipping cache lookup: %s", e)
+            logger.warning(
+                "Answer-cache embedding unavailable, skipping cache lookup: %s: %s",
+                type(e).__name__, e,
+            )
             return None
 
     async def _check_answer_cache(self, query: str) -> tuple[list[float] | None, dict | None]:

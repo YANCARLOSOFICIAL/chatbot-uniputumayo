@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -22,6 +23,8 @@ from app.services.chat_service import ChatService
 from app.auth import get_current_user
 from app.models.user import User
 from app.utils.rate_limit import limiter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -195,10 +198,15 @@ async def send_message_stream(
                         async for chunk in service.process_message_stream(conversation_id, data):
                             await q.put(chunk)
                     except Exception as e:
+                        # Without this, a failure here is invisible in the logs — the
+                        # HTTP response still logs 200 (StreamingResponse headers were
+                        # already sent), and the only trace is this in-band SSE event.
+                        logger.exception("Streaming chat message failed | conv=%s", conversation_id)
                         await q.put(
                             f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
                         )
             except Exception as e:
+                logger.exception("Streaming chat setup failed | conv=%s", conversation_id)
                 await q.put(
                     f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
                 )
