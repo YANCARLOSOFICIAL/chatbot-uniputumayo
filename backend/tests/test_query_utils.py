@@ -31,6 +31,28 @@ class TestIsGreeting:
         long_msg = "hola buenas tardes " * 5
         assert is_greeting(long_msg) is False
 
+    def test_help_verb_with_real_topic_is_not_greeting(self):
+        # Confirmed live before the fix: "ayuda" was in _CONVERSATIONAL_PATTERNS
+        # and "carrera" isn't a _FACTUAL_PATTERNS keyword, so this misclassified
+        # as a greeting — the canned welcome reply was sent and RAG never ran.
+        assert is_greeting("ayuda con la carrera de sistemas") is False
+
+    def test_explain_verb_with_plural_requisito_is_not_greeting(self):
+        # Confirmed live before the fix: _FACTUAL_PATTERNS only had the
+        # singular "requisito" (no `s?`), so "requisitos" never matched, and
+        # "explica" was still in _CONVERSATIONAL_PATTERNS — same failure mode.
+        assert is_greeting("explica los requisitos") is False
+
+    def test_tell_me_about_university_is_not_greeting(self):
+        assert is_greeting("cuentame sobre la universidad") is False
+
+    def test_plural_costos_is_recognized_as_factual(self):
+        assert is_greeting("ayuda, cuales son los costos") is False
+
+    def test_true_greeting_words_still_short_circuit(self):
+        assert is_greeting("hola buenas") is True
+        assert is_greeting("muchas gracias") is True
+
 
 class TestKeywordScore:
     def test_full_overlap_scores_one(self):
