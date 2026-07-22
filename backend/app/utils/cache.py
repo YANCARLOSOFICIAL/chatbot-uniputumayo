@@ -227,12 +227,19 @@ class AsyncRAGCache:
         self._store[key] = (value, time.monotonic())
 
     async def invalidate_all(self) -> None:
+        """Clear all entries. Logs a warning (not "invalidated") on Redis
+        failure — this runs after a document upload/edit specifically so
+        stale RAG results don't get served; silently logging success when
+        the delete actually failed would hide exactly the scenario this
+        exists to prevent (confirmed live: the previous code logged
+        "invalidated" unconditionally, even inside the except branch)."""
         if self._redis is not None:
             try:
                 async for k in self._redis.scan_iter("rag:*"):
                     await self._redis.delete(k)
             except Exception as e:
-                logger.debug("Redis invalidate error: %s", e)
+                logger.warning("RAG cache invalidate FAILED (stale entries may remain): %s", e)
+                return
         else:
             self._store.clear()
         logger.info("RAG cache invalidated")
@@ -488,11 +495,14 @@ class AsyncAnswerCache:
             self._store.pop()
 
     async def invalidate_all(self) -> None:
+        """Clear all entries. See AsyncRAGCache.invalidate_all — same fix,
+        same reason: a failed Redis delete must not be logged as success."""
         if self._redis is not None:
             try:
                 await self._redis.delete(self._REDIS_KEY)
             except Exception as e:
-                logger.debug("Answer cache invalidate error: %s", e)
+                logger.warning("Answer cache invalidate FAILED (stale entries may remain): %s", e)
+                return
         else:
             self._store.clear()
         logger.info("Answer cache invalidated")

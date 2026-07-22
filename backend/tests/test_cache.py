@@ -67,6 +67,26 @@ class TestAsyncRAGCache:
         await cache.invalidate_all()
         assert await cache.get(key) is None
 
+    @pytest.mark.asyncio
+    async def test_invalidate_all_does_not_log_success_when_redis_fails(self, caplog):
+        # Confirmed live before the fix: invalidate_all() logged "RAG cache
+        # invalidated" unconditionally, even from inside the except branch —
+        # a failed Redis delete looked identical to a successful one in the
+        # logs, right after a document upload/edit (the one place this
+        # matters: stale RAG results could keep being served with no trace).
+        cache = AsyncRAGCache()
+
+        class FailingRedis:
+            def scan_iter(self, _pattern):
+                raise RuntimeError("redis unavailable")
+
+        cache._redis = FailingRedis()
+        with caplog.at_level("WARNING", logger="app.utils.cache"):
+            await cache.invalidate_all()
+
+        assert "invalidate FAILED" in caplog.text
+        assert "RAG cache invalidated" not in caplog.text
+
 
 class TestAnswerCacheEntityGuard:
     def _entry(self, sources, question="q"):
@@ -272,3 +292,23 @@ class TestAnswerCacheFindSimilar:
         # measured similarity between these two questions.
         result = await cache.find_similar([1.0, 0.0], query_text="que veo en cuarto semestre de obras civiles")
         assert result is None
+
+
+class TestAnswerCacheInvalidate:
+    @pytest.mark.asyncio
+    async def test_invalidate_all_does_not_log_success_when_redis_fails(self, caplog):
+        # Same fix and same reason as AsyncRAGCache's equivalent test: a
+        # failed Redis delete was previously logged as "Answer cache
+        # invalidated" unconditionally, from inside the except branch.
+        cache = AsyncAnswerCache()
+
+        class FailingRedis:
+            async def delete(self, _key):
+                raise RuntimeError("redis unavailable")
+
+        cache._redis = FailingRedis()
+        with caplog.at_level("WARNING", logger="app.utils.cache"):
+            await cache.invalidate_all()
+
+        assert "invalidate FAILED" in caplog.text
+        assert "Answer cache invalidated" not in caplog.text
