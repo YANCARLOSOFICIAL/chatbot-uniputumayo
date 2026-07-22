@@ -32,6 +32,23 @@ def _normalize(text: str) -> str:
     return "".join(c for c in decomposed if not unicodedata.combining(c))
 
 
+# Spanish interrogative/functional words that happen to be >= 4 chars —
+# excluded from _significant_words because they show up interchangeably
+# across paraphrases of the SAME question ("de admision" vs "para admision")
+# without changing its meaning, and would never legitimately be part of a
+# program/faculty/document-title entity name. Confirmed live: swapping "de"
+# for "para" alone dropped what should have been a same-question match
+# (query_words no longer a subset of the cached question's words) purely
+# because "para" (4 chars) counted as significant while "de" (2 chars)
+# didn't — an artifact of the length cutoff, not a real topic difference.
+_STOPWORDS: frozenset[str] = frozenset({
+    "para", "cual", "cuales", "como", "donde", "cuando", "porque", "sobre",
+    "entre", "desde", "hasta", "este", "esta", "estos", "estas", "esos",
+    "esas", "otro", "otra", "otros", "otras", "todo", "toda", "todos",
+    "todas", "sera", "seran", "hacer",
+})
+
+
 def _significant_words(text: str) -> set[str]:
     """Words of length >= 4 from normalized text — cheap proxy for named entities
     (program/faculty names) without needing a fixed vocabulary or extra calls.
@@ -44,9 +61,16 @@ def _significant_words(text: str) -> set[str]:
     which — confirmed live against every real document currently uploaded —
     silently defeats the entity guard on document-title fallback (see
     _entity_guard_passes): it would reject the document's own program name.
+
+    Filters out _STOPWORDS (see above) for the same reason: a length cutoff
+    alone can't tell "para" apart from an actual entity word just because
+    both are 4+ characters.
     """
     text = _CAMEL_BOUNDARY_RE.sub(" ", text)
-    return {w for w in re.findall(r"[a-z0-9]+", _normalize(text)) if len(w) >= 4}
+    return {
+        w for w in re.findall(r"[a-z0-9]+", _normalize(text))
+        if len(w) >= 4 and w not in _STOPWORDS
+    }
 
 
 _SEMESTER_ORDINAL_WORDS = {
@@ -319,9 +343,34 @@ class AsyncAnswerCache:
         for all of them. Falling back to the document title (always
         populated) when neither field gave anything to check keeps the
         guard active instead of quietly doing nothing.
+
+        The title fallback backfires on general institutional documents
+        (e.g. "ESTATUTO ESTUDIANTIL 25 DE FEBRERO 2025") that aren't scoped
+        to any one program — confirmed live that "cuales son los requisitos
+        para admision?" against a cached "...de admision?" scored 0.995
+        similarity (same question) but still got rejected, because neither
+        question mentions "estatuto"/"estudiantil". When every significant
+        word in the new query already appears in the cached entry's own
+        question, skip *only the title check* — that overlap is direct
+        "same question" evidence, stronger than anything derived from a
+        filename, but it must NOT also skip the program/faculty field check
+        above: those fields are admin-set ground truth for what the cached
+        answer is actually scoped to, and a subset query can still collide
+        across programs when the question text itself never names either
+        one (e.g. cached question "requisitos de admision para medicina"
+        with program="Medicina" — the query "requisitos de admision" is a
+        genuine subset but says nothing about medicina at all, so it must
+        still be forced through the field check rather than waved through).
+        The medicina/enfermería-style case from the original bug report
+        (query names the OTHER program) already can't satisfy the subset
+        check either way, since that introduces a new significant word not
+        in the cached question — but that's not the only path to a
+        collision, hence keeping the field check unconditional.
         """
         sources = entry.get("sources") or []
         query_words = _significant_words(query_text)
+        cached_question_words = _significant_words(entry.get("question", ""))
+        question_overlap = bool(query_words) and query_words <= cached_question_words
 
         checked_any_field = False
         for field in ("program", "faculty"):
@@ -335,7 +384,7 @@ class AsyncAnswerCache:
             if not (entity_words & query_words):
                 return False
 
-        if not checked_any_field:
+        if not checked_any_field and not question_overlap:
             titles = {s.get("document_title") for s in sources if s.get("document_title")}
             if len(titles) == 1:
                 entity_words = _significant_words(next(iter(titles)))
@@ -394,6 +443,15 @@ class AsyncAnswerCache:
                 best_score, best.get("question", ""),
             )
             return best
+        if best is not None:
+            # Below threshold — logged even on a miss (unlike the guard-rejection
+            # cases above) so real paraphrase-similarity data can be collected
+            # from production traffic before ever considering moving the
+            # threshold. See answer_cache_similarity_threshold in config.py.
+            logger.info(
+                "Answer cache MISS (best similarity=%.3f, threshold=%.2f): '%.60s…' vs '%.60s…'",
+                best_score, self._threshold, query_text, best.get("question", ""),
+            )
         return None
 
     async def store(

@@ -69,8 +69,8 @@ class TestAsyncRAGCache:
 
 
 class TestAnswerCacheEntityGuard:
-    def _entry(self, sources):
-        return {"sources": sources, "question": "q", "embedding": []}
+    def _entry(self, sources, question="q"):
+        return {"sources": sources, "question": question, "embedding": []}
 
     def test_passes_when_no_sources_scoped_to_single_program(self):
         entry = self._entry([{"program": None, "faculty": None}])
@@ -118,6 +118,59 @@ class TestAnswerCacheEntityGuard:
         assert AsyncAnswerCache._entity_guard_passes(
             entry, "cuantos creditos tiene contaduria"
         ) is True
+
+    def test_question_overlap_bypasses_title_fallback_on_general_document(self):
+        # Confirmed live: "cuales son los requisitos para admision?" scored
+        # 0.995 similarity against the cached "...de admision?" (same
+        # question) but the title fallback rejected it anyway, because
+        # neither question mentions the source document's title words
+        # ("estatuto", "estudiantil") — a general institutional document has
+        # no single program/faculty to protect. Every significant word in
+        # the new query already appearing in the cached question is direct
+        # same-topic evidence, so the title check should be skipped.
+        entry = self._entry(
+            [{
+                "program": None, "faculty": None,
+                "document_title": "ESTATUTO ESTUDIANTIL 25 DE FEBRERO 2025",
+            }],
+            question="Cuales son los requisitos de admision?",
+        )
+        assert AsyncAnswerCache._entity_guard_passes(
+            entry, "Cuales son los requisitos para admision?"
+        ) is True
+
+    def test_question_overlap_bypass_never_skips_program_field_check(self):
+        # The bypass must be scoped to the title fallback ONLY. If the cached
+        # answer has an explicit program field, a subset query that never
+        # names that program must still be rejected — even though it's a
+        # textual subset of the cached question, "requisitos de admision"
+        # (generic) says nothing about medicina and could just as easily be
+        # someone asking about a different program.
+        entry = self._entry(
+            [{"program": "Medicina", "faculty": None}],
+            question="requisitos de admision para medicina",
+        )
+        assert AsyncAnswerCache._entity_guard_passes(
+            entry, "requisitos de admision"
+        ) is False
+
+    def test_question_overlap_bypass_does_not_reopen_cross_program_collision(self):
+        # The bypass must not undermine the exact protection
+        # test_falls_back_to_document_title_when_program_and_faculty_unset
+        # exists for: a query naming a DIFFERENT program than the cached
+        # question always introduces a new significant word ("contaduria")
+        # that isn't in the cached question's words, so it can never satisfy
+        # the subset check and must still fall through to the title check.
+        entry = self._entry(
+            [{
+                "program": None, "faculty": None,
+                "document_title": "07_DesarrolloSoftware_e_IngSistemas",
+            }],
+            question="que materias hay en quinto semestre de sistemas",
+        )
+        assert AsyncAnswerCache._entity_guard_passes(
+            entry, "que materias hay en quinto semestre de contaduria"
+        ) is False
 
 
 class TestAnswerCacheSemesterGuard:
