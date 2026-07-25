@@ -9,7 +9,7 @@ from uuid import UUID
 import httpx
 
 from fastapi import UploadFile
-from sqlalchemy import select, delete, desc
+from sqlalchemy import select, delete, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.document import Document
@@ -400,6 +400,14 @@ class DocumentService:
                 document.ingestion_status = "failed"
                 await db.commit()
 
+    @staticmethod
+    def _apply_document_filters(query, status: str | None, program: str | None):
+        if status:
+            query = query.where(Document.ingestion_status == status)
+        if program:
+            query = query.where(Document.program == program)
+        return query
+
     async def list_documents(
         self,
         status: str | None = None,
@@ -407,15 +415,24 @@ class DocumentService:
         page: int = 1,
         per_page: int = 20,
     ) -> list[Document]:
-        query = select(Document)
-        if status:
-            query = query.where(Document.ingestion_status == status)
-        if program:
-            query = query.where(Document.program == program)
+        query = self._apply_document_filters(select(Document), status, program)
         query = query.order_by(desc(Document.created_at))
         query = query.limit(per_page).offset((page - 1) * per_page)
         result = await self.db.execute(query)
         return list(result.scalars().all())
+
+    async def count_documents(
+        self, status: str | None = None, program: str | None = None
+    ) -> int:
+        """Total matching rows, ignoring page/per_page — powers the
+        X-Total-Count header so the admin UI can paginate instead of
+        silently truncating at per_page (see routers/documents.py).
+        """
+        query = self._apply_document_filters(
+            select(func.count()).select_from(Document), status, program
+        )
+        result = await self.db.execute(query)
+        return result.scalar_one()
 
     async def get_document(self, document_id: UUID) -> Document | None:
         result = await self.db.execute(

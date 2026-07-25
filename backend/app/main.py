@@ -301,6 +301,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Custom response headers are invisible to browser JS by default even
+    # with allow_headers=["*"] (that governs REQUEST headers) — X-Total-Count
+    # (routers/documents.py pagination) needs to be explicitly exposed or
+    # frontend's response.headers.get("X-Total-Count") silently returns null.
+    expose_headers=["X-Total-Count"],
 )
 
 # Global exception handler

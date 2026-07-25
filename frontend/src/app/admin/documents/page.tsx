@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Upload, FileText, AlertCircle, Trash2, X, ArrowUp, RefreshCw, ChevronDown, Pencil, Check } from "lucide-react";
+import { Upload, FileText, AlertCircle, Trash2, X, ArrowUp, RefreshCw, Pencil, Check, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "@/components/ui/Toast";
 import { AdminHeader } from "@/components/admin/AdminHeader";
@@ -26,18 +26,31 @@ const STATUS_CFG: Record<string, { label: string; bg: string; color: string; bor
   pending:    { label: "Pendiente",   bg: "var(--surface-2)",      color: "var(--text-3)",        border: "var(--border)"        },
 };
 
-// Strip the UUID prefix the backend adds to stored filenames (collision
-// avoidance) — showing it to an admin is noise, not information, and on
-// the mobile card it's long enough to wrap across multiple lines.
-function cleanFileName(name: string) {
-  return name.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i, "");
-}
-
 function StatusPill({ status }: { status: string }) {
   const cfg = STATUS_CFG[status] ?? STATUS_CFG.pending;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 9999, fontSize: 11, fontWeight: 600, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
       {cfg.label}
+    </span>
+  );
+}
+
+// Taxonomy cell — a muted tag when the field is set, an unobtrusive dash
+// when it isn't. Un-tagged fields are exactly the gap admins need to spot at
+// a glance (see ChatService._detect_ambiguity: the disambiguation feature
+// silently does nothing for documents missing this metadata), so this must
+// stay visually distinct from "has a value" rather than just rendering "".
+function TaxonomyTag({ value }: { value: string | null }) {
+  if (!value) {
+    return <span style={{ color: "var(--text-3)", fontSize: 12 }} title="Sin asignar">—</span>;
+  }
+  return (
+    <span style={{
+      display: "inline-block", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 500,
+      background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)",
+    }} title={value}>
+      {value}
     </span>
   );
 }
@@ -108,8 +121,12 @@ interface TaxonomyItem {
   name: string;
 }
 
+const DOCS_PER_PAGE = 20;
+
 export default function DocumentsPage() {
   const [documents, setDocuments]       = useState<DocumentItem[]>([]);
+  const [totalDocuments, setTotalDocuments] = useState(0);
+  const [page, setPage]                 = useState(1);
   const [loading, setLoading]           = useState(true);
   const [uploading, setUploading]       = useState(false);
   const [error, setError]               = useState<string | null>(null);
@@ -121,6 +138,7 @@ export default function DocumentsPage() {
   const [editProgram, setEditProgram]   = useState("");
   const [editDocType, setEditDocType]   = useState("");
   const [savingEdit, setSavingEdit]     = useState(false);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [file, setFile]                 = useState<File | null>(null);
   const [title, setTitle]               = useState("");
   const [faculty, setFaculty]           = useState("");
@@ -129,14 +147,6 @@ export default function DocumentsPage() {
   const [faculties, setFaculties]       = useState<TaxonomyItem[]>([]);
   const [programs, setPrograms]         = useState<TaxonomyItem[]>([]);
   const [docTypes, setDocTypes]         = useState<TaxonomyItem[]>([]);
-  // Upload panel starts open on desktop; collapsed on mobile so the docs
-  // list (the thing admins check most often) doesn't require a long scroll
-  // past the whole form first. Deferred to an effect to avoid an SSR/client
-  // markup mismatch (matchMedia isn't available during render).
-  const [uploadOpen, setUploadOpen] = useState(true);
-  useEffect(() => {
-    if (window.matchMedia("(max-width: 767px)").matches) setUploadOpen(false);
-  }, []);
 
   useEffect(() => {
     // allSettled (not all) — un catálogo caído no debe vaciar los otros dos
@@ -158,7 +168,8 @@ export default function DocumentsPage() {
   const loadDocuments = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const data = await apiClient.getDocuments() as unknown as DocumentItem[];
+      const { data, total } = await apiClient.getDocumentsPage(page, DOCS_PER_PAGE) as unknown as
+        { data: DocumentItem[]; total: number };
 
       for (const doc of data) {
         const prev = lastStatusRef.current.get(doc.id);
@@ -171,10 +182,11 @@ export default function DocumentsPage() {
       }
 
       setDocuments(data);
+      setTotalDocuments(total);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error cargando documentos");
     } finally { if (!silent) setLoading(false); }
-  }, []);
+  }, [page]);
 
   useEffect(() => { loadDocuments(); }, [loadDocuments]);
 
@@ -187,6 +199,10 @@ export default function DocumentsPage() {
     const interval = setInterval(() => { loadDocuments(true); }, 4000);
     return () => clearInterval(interval);
   }, [hasProcessing, loadDocuments]);
+
+  const resetUploadForm = () => {
+    setFile(null); setTitle(""); setFaculty(""); setProgram(""); setDocType("");
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false);
@@ -216,15 +232,15 @@ export default function DocumentsPage() {
         // hasProcessing polling above) so the request doesn't block on slow
         // Ollama calls and time out at the proxy/edge.
         toast.info(result.message || "Documento recibido. Procesando en segundo plano...");
-        setFile(null); setTitle(""); setFaculty(""); setProgram(""); setDocType("");
-        await loadDocuments();
+        resetUploadForm(); setUploadModalOpen(false);
+        setPage(1); await loadDocuments();
       } else if (result.status === "completed") {
         toast.success(result.message || "Documento procesado correctamente");
-        setFile(null); setTitle(""); setFaculty(""); setProgram(""); setDocType("");
-        await loadDocuments();
+        resetUploadForm(); setUploadModalOpen(false);
+        setPage(1); await loadDocuments();
       } else if (result.status === "duplicate") {
         toast.warning(result.message || "El documento ya existe en la base de conocimientos");
-        setFile(null); setTitle(""); setFaculty(""); setProgram(""); setDocType("");
+        resetUploadForm();
       } else {
         // status === "failed"
         throw new Error(result.message || "Error procesando el documento");
@@ -245,7 +261,11 @@ export default function DocumentsPage() {
     try {
       await apiClient.deleteDocument(id);
       toast.success("Documento eliminado");
-      await loadDocuments();
+      // Deleting the last row of a page beyond the first would otherwise
+      // leave the view stuck on a now-empty page — step back instead
+      // (triggers a reload via loadDocuments' `page` dependency).
+      if (documents.length === 1 && page > 1) setPage((p) => p - 1);
+      else await loadDocuments();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error eliminando documento";
       setError(msg); toast.error(msg);
@@ -296,16 +316,45 @@ export default function DocumentsPage() {
     }
   };
 
+  const totalPages = Math.max(1, Math.ceil(totalDocuments / DOCS_PER_PAGE));
+  const rangeStart = totalDocuments === 0 ? 0 : (page - 1) * DOCS_PER_PAGE + 1;
+  const rangeEnd = Math.min(page * DOCS_PER_PAGE, totalDocuments);
+
+  const taxonomyFields = (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+      <div>
+        <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Facultad</label>
+        <select value={faculty} onChange={(e) => setFaculty(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
+          <option value="">Sin especificar</option>
+          {faculties.map((f) => <option key={f.id} value={f.name}>{f.name}</option>)}
+        </select>
+      </div>
+      <div>
+        <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Programa</label>
+        <select value={program} onChange={(e) => setProgram(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
+          <option value="">Sin especificar</option>
+          {programs.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+        </select>
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
       <AdminHeader
         title="Base de conocimiento"
-        subtitle={loading ? "Cargando..." : `${documents.length} documento${documents.length !== 1 ? "s" : ""} indexados`}
+        subtitle={loading ? "Cargando..." : `${totalDocuments} documento${totalDocuments !== 1 ? "s" : ""} indexados`}
         action={
-          <button onClick={() => loadDocuments()} disabled={loading} className="btn btn-secondary btn-sm"
-            style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Actualizar
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => loadDocuments()} disabled={loading} className="btn btn-secondary btn-sm"
+              style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Actualizar
+            </button>
+            <button onClick={() => setUploadModalOpen(true)} className="btn btn-primary btn-sm"
+              style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <Plus size={12} /> Subir documento
+            </button>
+          </div>
         }
       />
 
@@ -318,25 +367,162 @@ export default function DocumentsPage() {
           </div>
         )}
 
-        {/* Two-col: upload card (sticky) + docs table */}
-        <div className="docs-layout">
+        {/* Full-width documents table — the upload form used to live in a
+            permanent sticky sidebar here, which starved the table of room
+            and clipped the Acciones column on anything but a very wide
+            screen. It now opens on demand (see the "Subir documento" button
+            above), same modal pattern as Editar. */}
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "13px 18px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
+            <FileText size={13} style={{ color: "var(--brand-primary)" }} />
+            <span style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Documentos indexados</span>
+            <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-3)" }}>{totalDocuments}</span>
+          </div>
 
-          {/* Upload panel — collapsible on mobile (see uploadOpen above) */}
-          <div className="card" style={{ padding: 24, position: "sticky", top: 24 }}>
-            <button
-              type="button"
-              onClick={() => setUploadOpen((v) => !v)}
-              className="upload-panel-toggle"
-              style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", background: "none", border: "none", padding: 0, cursor: "pointer", marginBottom: uploadOpen ? 20 : 0, textAlign: "left" }}
-            >
-              <div style={{ width: 32, height: 32, borderRadius: 9, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <Upload size={14} style={{ color: "var(--brand-primary)" }} />
+          {loading ? (
+            <div style={{ padding: "56px 0", display: "flex", justifyContent: "center", gap: 5 }}>
+              {[0, 0.12, 0.24].map((d) => (
+                <span key={d} style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
+              ))}
+            </div>
+          ) : documents.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "56px 0" }}>
+              <div style={{ width: 48, height: 48, borderRadius: 14, background: "var(--surface-2)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+                <FileText size={22} style={{ color: "var(--text-3)" }} strokeWidth={1.5} />
               </div>
-              <span style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--text-1)", flex: 1 }}>Subir documento</span>
-              <ChevronDown size={16} className="upload-panel-chevron" style={{ color: "var(--text-3)", transition: "transform 0.2s", transform: uploadOpen ? "rotate(180deg)" : "none", flexShrink: 0 }} />
-            </button>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-2)", marginBottom: 4 }}>Sin documentos</div>
+              <div style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 16 }}>Sube el primer documento para empezar a construir la base de conocimiento.</div>
+              <button onClick={() => setUploadModalOpen(true)} className="btn btn-primary btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <Plus size={12} /> Subir documento
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Desktop: table */}
+              <div className="hidden md:block" style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "var(--surface-2)" }}>
+                      {["Título", "Facultad", "Programa", "Tipo", "Estado", "Chunks", "Fecha", ""].map((h, i) => (
+                        <th key={i} style={{ padding: "10px 16px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-3)", textAlign: i === 5 ? "right" : i === 7 ? "right" : "left", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {documents.map((doc, i) => (
+                      <tr key={doc.id}
+                        style={{ borderBottom: i < documents.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.1s" }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                      >
+                        <td style={{ padding: "13px 16px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: 7, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              <FileText size={12} style={{ color: "var(--brand-primary)" }} />
+                            </div>
+                            <span style={{ fontWeight: 500, fontSize: 13, color: "var(--text-1)", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={doc.title}>
+                              {doc.title}
+                            </span>
+                          </div>
+                        </td>
+                        <td style={{ padding: "13px 16px" }}><TaxonomyTag value={doc.faculty} /></td>
+                        <td style={{ padding: "13px 16px" }}><TaxonomyTag value={doc.program} /></td>
+                        <td style={{ padding: "13px 16px" }}><TaxonomyTag value={doc.document_type} /></td>
+                        <td style={{ padding: "13px 16px" }}>
+                          <StatusPill status={doc.ingestion_status} />
+                        </td>
+                        <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-2)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                          {doc.total_chunks}
+                        </td>
+                        <td style={{ padding: "13px 16px", fontSize: 12, color: "var(--text-3)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>
+                          {new Date(doc.created_at).toLocaleDateString("es-CO")}
+                        </td>
+                        <td style={{ padding: "13px 16px", textAlign: "right" }}>
+                          <DocRowActions doc={doc} reindexingId={reindexingId} confirmDeleteId={confirmDeleteId} onReindex={handleReindex} onDelete={handleDeleteClick} onEdit={handleEditOpen} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-            {uploadOpen && (
+              {/* Mobile: card list — no horizontal scroll, one glance per doc */}
+              <div className="md:hidden">
+                {documents.map((doc) => (
+                  <div key={doc.id} className="admin-row-card">
+                    <div className="admin-row-card-top">
+                      <div className="admin-row-card-title">
+                        <div style={{ width: 28, height: 28, borderRadius: 7, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <FileText size={12} style={{ color: "var(--brand-primary)" }} />
+                        </div>
+                        <span>{doc.title}</span>
+                      </div>
+                      <StatusPill status={doc.ingestion_status} />
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "2px 0 8px" }}>
+                      <TaxonomyTag value={doc.faculty} />
+                      <TaxonomyTag value={doc.program} />
+                      <TaxonomyTag value={doc.document_type} />
+                    </div>
+                    <div className="admin-row-card-meta">
+                      <span>{doc.total_chunks} chunks</span>
+                      <span>{new Date(doc.created_at).toLocaleDateString("es-CO")}</span>
+                    </div>
+                    <div className="admin-row-card-actions">
+                      <DocRowActions doc={doc} reindexingId={reindexingId} confirmDeleteId={confirmDeleteId} onReindex={handleReindex} onDelete={handleDeleteClick} onEdit={handleEditOpen} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Pagination footer */}
+              {totalDocuments > DOCS_PER_PAGE && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 18px", borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, color: "var(--text-3)" }}>
+                    Mostrando <strong style={{ color: "var(--text-2)", fontWeight: 600 }}>{rangeStart}–{rangeEnd}</strong> de {totalDocuments}
+                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}
+                      className="btn btn-secondary btn-sm" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <ChevronLeft size={13} /> Anterior
+                    </button>
+                    <span style={{ fontSize: 12, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>{page} / {totalPages}</span>
+                    <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+                      className="btn btn-secondary btn-sm" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      Siguiente <ChevronRight size={13} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Upload modal */}
+      {uploadModalOpen && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16, overflowY: "auto" }}
+          onClick={() => !uploading && setUploadModalOpen(false)}
+          onKeyDown={(e) => { if (e.key === "Escape" && !uploading) setUploadModalOpen(false); }}
+          role="dialog" aria-modal="true" aria-label="Subir documento"
+        >
+          <div className="card" style={{ maxWidth: 440, width: "100%", padding: 24, margin: "24px 0" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 9, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Upload size={14} style={{ color: "var(--brand-primary)" }} />
+                </div>
+                <span style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 800, color: "var(--text-1)" }}>Subir documento</span>
+              </div>
+              <button onClick={() => !uploading && setUploadModalOpen(false)} disabled={uploading}
+                style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: uploading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)" }}>
+                <X size={14} />
+              </button>
+            </div>
+
             <form onSubmit={handleUpload}>
               {/* Drop zone */}
               <div
@@ -394,22 +580,7 @@ export default function DocumentsPage() {
               </div>
 
               {/* Optional fields — poblados desde /admin/catalogos */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-                <div>
-                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Facultad</label>
-                  <select value={faculty} onChange={(e) => setFaculty(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
-                    <option value="">Sin especificar</option>
-                    {faculties.map((f) => <option key={f.id} value={f.name}>{f.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Programa</label>
-                  <select value={program} onChange={(e) => setProgram(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
-                    <option value="">Sin especificar</option>
-                    {programs.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
-                  </select>
-                </div>
-              </div>
+              {taxonomyFields}
 
               <div style={{ marginBottom: 18 }}>
                 <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Tipo</label>
@@ -432,114 +603,9 @@ export default function DocumentsPage() {
                 )}
               </button>
             </form>
-            )}
-          </div>
-
-          {/* Documents list */}
-          <div>
-            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-              <div style={{ padding: "13px 18px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
-                <FileText size={13} style={{ color: "var(--brand-primary)" }} />
-                <span style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Documentos indexados</span>
-                <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-3)" }}>{documents.length}</span>
-              </div>
-
-              {loading ? (
-                <div style={{ padding: "56px 0", display: "flex", justifyContent: "center", gap: 5 }}>
-                  {[0, 0.12, 0.24].map((d) => (
-                    <span key={d} style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--brand-primary)", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
-                  ))}
-                </div>
-              ) : documents.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "56px 0" }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 14, background: "var(--surface-2)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
-                    <FileText size={22} style={{ color: "var(--text-3)" }} strokeWidth={1.5} />
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-2)", marginBottom: 4 }}>Sin documentos</div>
-                  <div style={{ fontSize: 12, color: "var(--text-3)" }}>Sube el primer documento desde el panel izquierdo.</div>
-                </div>
-              ) : (
-                <>
-                  {/* Desktop: table */}
-                  <div className="hidden md:block" style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr style={{ background: "var(--surface-2)" }}>
-                          {["Titulo", "Archivo", "Estado", "Chunks", "Fecha", ""].map((h, i) => (
-                            <th key={i} style={{ padding: "10px 16px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-3)", textAlign: i === 5 ? "right" : "left", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>
-                              {h}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {documents.map((doc, i) => (
-                          <tr key={doc.id}
-                            style={{ borderBottom: i < documents.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.1s" }}
-                            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
-                            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                          >
-                            <td style={{ padding: "13px 16px" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <div style={{ width: 28, height: 28, borderRadius: 7, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                  <FileText size={12} style={{ color: "var(--brand-primary)" }} />
-                                </div>
-                                <span style={{ fontWeight: 500, fontSize: 13, color: "var(--text-1)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                  {doc.title}
-                                </span>
-                              </div>
-                            </td>
-                            <td style={{ padding: "13px 16px", maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-3)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                              {doc.file_name}
-                            </td>
-                            <td style={{ padding: "13px 16px" }}>
-                              <StatusPill status={doc.ingestion_status} />
-                            </td>
-                            <td style={{ padding: "13px 16px", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-2)" }}>
-                              {doc.total_chunks}
-                            </td>
-                            <td style={{ padding: "13px 16px", fontSize: 12, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
-                              {new Date(doc.created_at).toLocaleDateString("es-CO")}
-                            </td>
-                            <td style={{ padding: "13px 16px", textAlign: "right" }}>
-                              <DocRowActions doc={doc} reindexingId={reindexingId} confirmDeleteId={confirmDeleteId} onReindex={handleReindex} onDelete={handleDeleteClick} onEdit={handleEditOpen} />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Mobile: card list — no horizontal scroll, one glance per doc */}
-                  <div className="md:hidden">
-                    {documents.map((doc) => (
-                      <div key={doc.id} className="admin-row-card">
-                        <div className="admin-row-card-top">
-                          <div className="admin-row-card-title">
-                            <div style={{ width: 28, height: 28, borderRadius: 7, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                              <FileText size={12} style={{ color: "var(--brand-primary)" }} />
-                            </div>
-                            <span>{doc.title}</span>
-                          </div>
-                          <StatusPill status={doc.ingestion_status} />
-                        </div>
-                        <div className="admin-row-card-meta">
-                          <span>{cleanFileName(doc.file_name)}</span>
-                          <span>{doc.total_chunks} chunks</span>
-                          <span>{new Date(doc.created_at).toLocaleDateString("es-CO")}</span>
-                        </div>
-                        <div className="admin-row-card-actions">
-                          <DocRowActions doc={doc} reindexingId={reindexingId} confirmDeleteId={confirmDeleteId} onReindex={handleReindex} onDelete={handleDeleteClick} onEdit={handleEditOpen} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Edit metadata modal */}
       {editingDoc && (

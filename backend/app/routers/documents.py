@@ -1,7 +1,7 @@
 import asyncio
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -78,6 +78,7 @@ async def upload_document(
 
 @router.get("", response_model=list[DocumentResponse])
 async def list_documents(
+    response: Response,
     status: str | None = None,
     program: str | None = None,
     page: int = 1,
@@ -86,6 +87,11 @@ async def list_documents(
     admin: User = Depends(require_admin),
 ):
     service = DocumentService(db)
+    # X-Total-Count (not part of the JSON body) lets the admin UI paginate
+    # instead of the list silently truncating at per_page with no signal
+    # that more documents exist beyond the current page.
+    total = await service.count_documents(status=status, program=program)
+    response.headers["X-Total-Count"] = str(total)
     return await service.list_documents(
         status=status, program=program, page=page, per_page=per_page
     )

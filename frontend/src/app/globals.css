@@ -860,25 +860,9 @@ p           { text-wrap: pretty; }
   .cta-grid { grid-template-columns: 1fr; gap: 40px; }
 }
 
-/* Admin: sticky upload panel + docs table — fixed 360px sidebar overflows
-   on mobile if not collapsed to a single column. */
-.docs-layout {
-  display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 24px; align-items: start;
-}
-/* Grid items default to min-width:auto, i.e. they refuse to shrink below
-   their content's min-content size — a long unbroken card meta string
-   (filename/email) was blowing the right column past the 1fr track width
-   even with the parent's overflow:hidden, since that alone doesn't reset
-   an ANCESTOR grid item's automatic minimum size. */
-.docs-layout > * { min-width: 0; }
-@media (max-width: 900px) {
-  .docs-layout { grid-template-columns: 1fr; }
-}
-
-/* Admin: RAG eval config panel + results — fixed 260px sidebar, same
-   mobile-overflow risk as .docs-layout. */
+/* Admin: RAG eval config panel + results — fixed 260px sidebar, collapses
+   to a single column on mobile to avoid the same overflow risk a fixed
+   sidebar width causes on narrow screens. */
 .rag-eval-layout {
   display: grid;
   grid-template-columns: 1fr 260px;

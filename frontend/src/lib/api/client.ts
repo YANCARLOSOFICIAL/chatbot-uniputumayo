@@ -5,10 +5,10 @@ function getStoredToken(): string | null {
   return localStorage.getItem("auth_token");
 }
 
-async function request<T>(
+async function rawRequest(
   endpoint: string,
   options: RequestInit = {}
-): Promise<T> {
+): Promise<Response> {
   const url = `${API_BASE}${endpoint}`;
 
   const defaultHeaders: HeadersInit = {};
@@ -49,7 +49,27 @@ async function request<T>(
     throw new Error(error.detail || `Error ${response.status}`);
   }
 
+  return response;
+}
+
+async function request<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const response = await rawRequest(endpoint, options);
   return response.json();
+}
+
+// For endpoints that carry pagination info in a response header (e.g.
+// X-Total-Count) rather than the JSON body — see getDocumentsPage.
+async function requestPaginated<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<{ data: T; total: number }> {
+  const response = await rawRequest(endpoint, options);
+  const total = Number(response.headers.get("X-Total-Count") ?? "0");
+  const data = await response.json();
+  return { data, total };
 }
 
 import type { AuthUser } from "@/lib/auth";
@@ -269,6 +289,16 @@ export const apiClient = {
     request<Array<{
       id: string; title: string; ingestion_status: string; total_chunks: number;
       faculty: string | null; program: string | null; document_type: string | null;
+    }>>(`/api/v1/documents?page=${page}&per_page=${perPage}`),
+
+  // Same endpoint as getDocuments, but also surfaces the real total (via the
+  // X-Total-Count response header) so callers can paginate instead of the
+  // list silently truncating at perPage with no signal more pages exist.
+  getDocumentsPage: (page = 1, perPage = 20) =>
+    requestPaginated<Array<{
+      id: string; title: string; ingestion_status: string; total_chunks: number;
+      faculty: string | null; program: string | null; document_type: string | null;
+      file_name: string; file_type: string; created_at: string;
     }>>(`/api/v1/documents?page=${page}&per_page=${perPage}`),
 
   getDocument: (id: string) =>
