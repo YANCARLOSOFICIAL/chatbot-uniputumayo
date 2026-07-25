@@ -71,6 +71,42 @@ El usuario te acaba de saludar o hacer un comentario conversacional breve (no un
 Responde de forma breve, cálida y natural en español colombiano — como un saludo real, no un guion. Invítalo a preguntar sobre programas académicos, admisiones, sedes o requisitos. No inventes datos ni cites fuentes (no tienes contexto de la base de conocimientos para este mensaje). No uses emojis."""
 
 
+# Same purpose as REFUSAL_MARKER: a fixed phrase both shown to the user and
+# used by chat_service.py to detect, in the conversation history, that the
+# PREVIOUS assistant turn was a program/faculty clarification question — so
+# the next user turn can be treated as its reply (combined with the original
+# question for retrieval) instead of asked again.
+CLARIFICATION_MARKER = "Tu pregunta puede aplicar a varios"
+
+_CLARIFICATION_ENTITY_LABEL = {
+    "program": "programas académicos",
+    "faculty": "facultades",
+}
+_CLARIFICATION_QUESTION = {
+    "program": "¿Sobre cuál programa te gustaría saber específicamente?",
+    "faculty": "¿Sobre cuál facultad te gustaría saber específicamente?",
+}
+
+
+def build_clarification_message(entity_type: str, names: list[str]) -> str:
+    """Build the "which program/faculty do you mean?" reply used when a
+    genuinely program/faculty-varying question (see
+    query_utils.is_varying_topic_query) matched retrieval results spanning
+    several distinct programs/faculties without the question already naming
+    one — see ChatService._detect_ambiguity.
+
+    No LLM call: cheap and deterministic, same reasoning as
+    ChatService.get_suggested_questions (avoids an extra generation round-trip
+    on CPU-only Ollama for something that doesn't need one).
+    """
+    label = _CLARIFICATION_ENTITY_LABEL[entity_type]
+    question = _CLARIFICATION_QUESTION[entity_type]
+    bullets = "\n".join(f"- {name}" for name in names)
+    return (
+        f"{CLARIFICATION_MARKER} {label} de Uniputumayo. {question}\n\n{bullets}"
+    )
+
+
 def build_chat_prompt(context: str) -> str:
     """Build the system prompt.
 

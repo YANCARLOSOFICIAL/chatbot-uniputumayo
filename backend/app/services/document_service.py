@@ -433,6 +433,44 @@ class DocumentService:
         await answer_cache.invalidate_all()
         return True
 
+    async def update_metadata(
+        self,
+        document_id: UUID,
+        faculty: str | None = ...,
+        program: str | None = ...,
+        document_type: str | None = ...,
+    ) -> Document | None:
+        """Update a document's faculty/program/document_type in place.
+
+        No reprocessing: these fields are only used for retrieval filtering
+        and grouping (see RAGService.search, ChatService._detect_ambiguity)
+        — they don't affect the stored chunk text or embeddings, so there's
+        no need to re-extract or re-embed anything, unlike `reindex()`.
+
+        Each param defaults to Ellipsis (not None) so "not provided" (leave
+        unchanged) is distinguishable from "clear this field" (None) — the
+        router only passes fields the caller actually included in the PATCH
+        body.
+        """
+        doc = await self.get_document(document_id)
+        if not doc:
+            return None
+        if faculty is not ...:
+            doc.faculty = faculty
+        if program is not ...:
+            doc.program = program
+        if document_type is not ...:
+            doc.document_type = document_type
+        await self.db.commit()
+        await self.db.refresh(doc)
+        # Retrieval results and cached answers may have been computed against
+        # the old (often blank) metadata — e.g. ChatService._detect_ambiguity
+        # groups sources by program/faculty, so a stale rag_cache entry built
+        # before this document was tagged would still show it as unattributed.
+        await rag_cache.invalidate_all()
+        await answer_cache.invalidate_all()
+        return doc
+
     async def get_chunks(
         self, document_id: UUID, page: int = 1, per_page: int = 20
     ) -> list[DocumentChunk]:

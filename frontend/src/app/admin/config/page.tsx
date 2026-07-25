@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   CheckCircle2, XCircle, Key, Server, Cloud,
-  Zap, X, AlertCircle, Check, RefreshCw
+  Zap, X, AlertCircle, Check, RefreshCw, Trash2
 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { AdminHeader } from "@/components/admin/AdminHeader";
@@ -45,6 +45,8 @@ export default function ConfigPage() {
   const [keyError, setKeyError]         = useState<string | null>(null);
   const [keySuccess, setKeySuccess]     = useState<string | null>(null);
 
+  const [clearingCache, setClearingCache] = useState(false);
+
   const activeProvider = providers.find((p) => p.is_default);
 
   const loadProviders = useCallback(async () => {
@@ -74,6 +76,16 @@ export default function ConfigPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error actualizando modelo");
     } finally { setSwitching(false); }
+  };
+
+  const handleClearAnswerCache = async () => {
+    setClearingCache(true); setError(null); setSuccess(null);
+    try {
+      await apiClient.invalidateAnswerCache();
+      setSuccess("Caché de respuestas limpiado — las próximas preguntas se responderán de nuevo, sin usar respuestas guardadas.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error limpiando el caché de respuestas");
+    } finally { setClearingCache(false); }
   };
 
   const handleSaveApiKey = async () => {
@@ -291,6 +303,24 @@ export default function ConfigPage() {
                   </ol>
                 </div>
               </div>
+            </div>
+
+            {/* Caché de respuestas */}
+            <div className="card" style={{ padding: 22, marginTop: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                <Trash2 size={14} style={{ color: "var(--brand-primary)" }} />
+                <div>
+                  <div style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Caché de respuestas</div>
+                  <div style={{ fontSize: 12, color: "var(--text-2)", marginTop: 2 }}>
+                    Respuestas ya generadas se reutilizan para preguntas similares. Límpialo si cambiaste cómo se generan las respuestas y quieres que se vuelvan a calcular.
+                  </div>
+                </div>
+              </div>
+              <button onClick={handleClearAnswerCache} disabled={clearingCache}
+                className="btn btn-secondary btn-sm" style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                <Trash2 size={12} className={clearingCache ? "animate-spin" : ""} />
+                {clearingCache ? "Limpiando..." : "Limpiar caché"}
+              </button>
             </div>
           </>
         )}

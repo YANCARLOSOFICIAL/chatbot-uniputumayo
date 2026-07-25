@@ -26,8 +26,13 @@ from app.services.llm_service import LLMService
 from app.services.verification_graph import generate_verified
 from app.schemas.rag import SearchRequest
 from app.schemas.llm import GenerateRequest, LLMMessage
-from app.utils.prompts import build_chat_prompt, REFUSAL_MARKER, GREETING_PROMPT
-from app.utils.query_utils import detect_temperature, is_greeting
+from app.utils.prompts import (
+    build_chat_prompt, REFUSAL_MARKER, GREETING_PROMPT,
+    CLARIFICATION_MARKER, build_clarification_message,
+)
+from app.utils.query_utils import (
+    detect_temperature, is_greeting, is_varying_topic_query, mentions_entity,
+)
 from app.utils.cache import answer_cache, suggestion_cache
 from app.runtime_config import runtime_config
 from app.config import settings
@@ -341,6 +346,74 @@ class ChatService:
         cached = await answer_cache.find_similar(embedding, query_text=query)
         return embedding, cached
 
+    _AMBIGUITY_SCORE_MARGIN = 0.15
+
+    @staticmethod
+    def _resolve_followup_query(
+        history: list[LLMMessage], current_content: str
+    ) -> tuple[bool, str]:
+        """If the previous assistant turn asked a program/faculty clarification
+        question, treat this message as its reply: combine the original
+        question with this reply for retrieval (a bare "Ingeniería de
+        Sistemas" reply alone often won't retrieve well on its own), and
+        signal the caller to skip asking again — see _detect_ambiguity.
+
+        Reuses `history` as already fetched by `_get_history` (chronological,
+        oldest first) — no extra DB query.
+        """
+        if len(history) < 2:
+            return False, current_content
+        prev_assistant, prev_user = history[-1], history[-2]
+        if prev_assistant.role != "assistant" or CLARIFICATION_MARKER not in prev_assistant.content:
+            return False, current_content
+        if prev_user.role != "user":
+            return False, current_content
+        return True, f"{prev_user.content} {current_content}"
+
+    def _detect_ambiguity(
+        self, query: str, rag_ctx: "_RAGContext"
+    ) -> tuple[str, list[str]] | None:
+        """Decide whether to ask "which program/faculty?" instead of answering.
+
+        Three conditions, all required (see query_utils.is_varying_topic_query
+        and mentions_entity docstrings for the first two):
+        1. The question is about a topic confirmed to genuinely differ by
+           program/faculty (pensum, créditos, misión, ...) — institution-wide
+           topics like "requisitos de admisión" never trigger this, no matter
+           how many programs' documents retrieval happens to match.
+        2. Among the retrieved sources, >=2 distinct programs appear whose
+           best score is within _AMBIGUITY_SCORE_MARGIN of the top score —
+           the margin excludes a program that only shows up via a weak,
+           non-competitive match. Checked first at program level (more
+           specific); falls back to faculty level only if program-level
+           doesn't yield >=2 candidates.
+        3. None of the candidates is already named in the question.
+
+        Returns (entity_type, sorted candidate names) or None.
+        """
+        if not is_varying_topic_query(query) or not rag_ctx.source_infos:
+            return None
+
+        top_score = max(s.score for s in rag_ctx.source_infos)
+
+        for attr, entity_type in (("program", "program"), ("faculty", "faculty")):
+            best_by_name: dict[str, float] = {}
+            for s in rag_ctx.source_infos:
+                name = getattr(s, attr)
+                if not name:
+                    continue
+                if name not in best_by_name or s.score > best_by_name[name]:
+                    best_by_name[name] = s.score
+
+            candidates = sorted(
+                name for name, score in best_by_name.items()
+                if top_score - score <= self._AMBIGUITY_SCORE_MARGIN
+            )
+            if len(candidates) >= 2 and not any(mentions_entity(query, c) for c in candidates):
+                return entity_type, candidates
+
+        return None
+
     async def _get_history(
         self, conversation_id: UUID, exclude_message_id: UUID
     ) -> list[LLMMessage]:
@@ -472,6 +545,7 @@ class ChatService:
         query_embedding, cached = await self._check_answer_cache(data.content)
         verification_attempts: int | None = None
         verification_approved: bool | None = None
+        ambiguity: tuple[str, list[str]] | None = None
 
         if cached is not None:
             content = cached["answer"]
@@ -483,88 +557,108 @@ class ChatService:
             tokens_used = None
         else:
             greeting = is_greeting(data.content)
-            rag_ctx = self._empty_rag_ctx() if greeting else await self._run_rag(data.content)
             history = await self._get_history(conversation_id, user_message.id)
-            provider_name = data.llm_provider or runtime_config.default_llm_provider
-            messages = self._build_messages(
-                rag_ctx, history, data.content, is_greeting_msg=greeting, provider_name=provider_name,
+            is_followup, retrieval_query = (
+                (False, data.content) if greeting
+                else self._resolve_followup_query(history, data.content)
             )
+            rag_ctx = self._empty_rag_ctx() if greeting else await self._run_rag(retrieval_query)
+            provider_name = data.llm_provider or runtime_config.default_llm_provider
 
-            temperature = detect_temperature(data.content, default=runtime_config.default_temperature)
+            if not greeting and not is_followup and settings.program_clarification_enabled:
+                ambiguity = self._detect_ambiguity(data.content, rag_ctx)
 
-            quality = rag_ctx.quality
-            finish_reason: str | None
-            if quality == "good" and settings.verification_loop_enabled:
-                # Self-correction loop (LangGraph): generate -> grade against
-                # rag_ctx.context_text -> retry if ungrounded. See
-                # app/services/verification_graph.py for why this only runs
-                # here (RAG returned context) and not for greetings/refusals.
-                model_name = data.llm_model or runtime_config.resolve_model(provider_name)
-                verified = await generate_verified(
-                    messages=[{"role": m.role, "content": m.content} for m in messages],
-                    context_text=rag_ctx.context_text,
-                    provider_name=provider_name,
-                    model=model_name,
-                    temperature=temperature,
-                    max_tokens=runtime_config.default_max_tokens,
+            if ambiguity is not None:
+                entity_type, candidates = ambiguity
+                logger.info(
+                    "Clarification triggered | conv=%s | entity_type=%s | candidates=%s",
+                    conversation_id, entity_type, candidates,
                 )
-                content = verified["content"]
-                finish_reason = verified["finish_reason"]
-                tokens_used = verified["tokens_used"]["total"] if verified["tokens_used"] else None
-                verification_attempts = verified["attempts"]
-                verification_approved = verified["approved"]
-                if not verified["approved"]:
-                    logger.warning(
-                        "Verification loop exhausted retries without approval | conv=%s | "
-                        "attempts=%d", conversation_id, verified["attempts"],
-                    )
-            else:
-                llm_service = LLMService()
-                llm_response = await llm_service.generate(
-                    GenerateRequest(
-                        messages=messages,
-                        provider=provider_name,
-                        model=data.llm_model,
-                        temperature=temperature,
-                    )
-                )
-                content = llm_response.content
-                provider_name = llm_response.provider
-                model_name = llm_response.model
-                tokens_used = llm_response.tokens_used.total if llm_response.tokens_used else None
-                finish_reason = llm_response.finish_reason
-
-            if finish_reason == "length":
-                logger.warning(
-                    "Truncated response (finish_reason=length) | conv=%s | provider=%s | model=%s | "
-                    "content_len=%d — max_tokens too low for this answer",
-                    conversation_id, provider_name, model_name, len(content),
-                )
-
-            # Only show sources actually grounded in the answer — never the
-            # raw retrieval list (see _filter_cited_sources / _run_rag).
-            if quality == "good":
-                sources_payload, source_infos = self._filter_cited_sources(content, rag_ctx)
-            else:
+                content = build_clarification_message(entity_type, candidates)
+                model_name = runtime_config.resolve_model(provider_name)
+                quality = "clarification"
                 sources_payload, source_infos = [], []
-
-            if (
-                settings.answer_cache_enabled
-                and query_embedding is not None
-                and quality == "good"
-                and content.strip()
-                # quality=="good" only means RAG retrieval succeeded, not that
-                # this specific answer is grounded in it — that's exactly what
-                # the verification loop just checked. Caching regardless would
-                # let an answer the loop explicitly flagged as ungrounded
-                # (verification_approved=False) get served to every future
-                # semantically-similar question, not just this one-off reply.
-                and verification_approved is not False
-            ):
-                await answer_cache.store(
-                    query_embedding, data.content, content,
-                    sources_payload, provider_name, model_name,
+                tokens_used = None
+            else:
+                messages = self._build_messages(
+                    rag_ctx, history, data.content, is_greeting_msg=greeting, provider_name=provider_name,
                 )
+
+                temperature = detect_temperature(data.content, default=runtime_config.default_temperature)
+
+                quality = rag_ctx.quality
+                finish_reason: str | None
+                if quality == "good" and settings.verification_loop_enabled:
+                    # Self-correction loop (LangGraph): generate -> grade against
+                    # rag_ctx.context_text -> retry if ungrounded. See
+                    # app/services/verification_graph.py for why this only runs
+                    # here (RAG returned context) and not for greetings/refusals.
+                    model_name = data.llm_model or runtime_config.resolve_model(provider_name)
+                    verified = await generate_verified(
+                        messages=[{"role": m.role, "content": m.content} for m in messages],
+                        context_text=rag_ctx.context_text,
+                        provider_name=provider_name,
+                        model=model_name,
+                        temperature=temperature,
+                        max_tokens=runtime_config.default_max_tokens,
+                    )
+                    content = verified["content"]
+                    finish_reason = verified["finish_reason"]
+                    tokens_used = verified["tokens_used"]["total"] if verified["tokens_used"] else None
+                    verification_attempts = verified["attempts"]
+                    verification_approved = verified["approved"]
+                    if not verified["approved"]:
+                        logger.warning(
+                            "Verification loop exhausted retries without approval | conv=%s | "
+                            "attempts=%d", conversation_id, verified["attempts"],
+                        )
+                else:
+                    llm_service = LLMService()
+                    llm_response = await llm_service.generate(
+                        GenerateRequest(
+                            messages=messages,
+                            provider=provider_name,
+                            model=data.llm_model,
+                            temperature=temperature,
+                        )
+                    )
+                    content = llm_response.content
+                    provider_name = llm_response.provider
+                    model_name = llm_response.model
+                    tokens_used = llm_response.tokens_used.total if llm_response.tokens_used else None
+                    finish_reason = llm_response.finish_reason
+
+                if finish_reason == "length":
+                    logger.warning(
+                        "Truncated response (finish_reason=length) | conv=%s | provider=%s | model=%s | "
+                        "content_len=%d — max_tokens too low for this answer",
+                        conversation_id, provider_name, model_name, len(content),
+                    )
+
+                # Only show sources actually grounded in the answer — never the
+                # raw retrieval list (see _filter_cited_sources / _run_rag).
+                if quality == "good":
+                    sources_payload, source_infos = self._filter_cited_sources(content, rag_ctx)
+                else:
+                    sources_payload, source_infos = [], []
+
+                if (
+                    settings.answer_cache_enabled
+                    and query_embedding is not None
+                    and quality == "good"
+                    and content.strip()
+                    # quality=="good" only means RAG retrieval succeeded, not that
+                    # this specific answer is grounded in it — that's exactly what
+                    # the verification loop just checked. Caching regardless would
+                    # let an answer the loop explicitly flagged as ungrounded
+                    # (verification_approved=False) get served to every future
+                    # semantically-similar question, not just this one-off reply.
+                    and verification_approved is not False
+                ):
+                    await answer_cache.store(
+                        query_embedding, data.content, content,
+                        sources_payload, provider_name, model_name,
+                    )
 
         response_time = int((time.time() - t0) * 1000)
 
@@ -584,7 +678,7 @@ class ChatService:
 
         await self._maybe_set_title(
             conversation_id, data.content, content, provider_name,
-            use_llm_title=(cached is None),
+            use_llm_title=(cached is None and ambiguity is None),
         )
         await self.db.commit()
         await self.db.refresh(user_message)
@@ -628,6 +722,7 @@ class ChatService:
             query_embedding, cached = await self._check_answer_cache(data.content)
             verification_attempts: int | None = None
             verification_approved: bool | None = None
+            ambiguity: tuple[str, list[str]] | None = None
 
             if cached is not None:
                 # Semantic cache hit — skip RAG + LLM entirely. See AsyncAnswerCache
@@ -643,101 +738,124 @@ class ChatService:
                 yield f"data: {json.dumps({'type': 'token', 'content': full_content})}\n\n"
             else:
                 greeting = is_greeting(data.content)
-                rag_ctx = self._empty_rag_ctx() if greeting else await self._run_rag(data.content)
                 history = await self._get_history(conversation_id, user_message.id)
-                provider_name = data.llm_provider or runtime_config.default_llm_provider
-                messages = self._build_messages(
-                    rag_ctx, history, data.content, is_greeting_msg=greeting, provider_name=provider_name,
+                is_followup, retrieval_query = (
+                    (False, data.content) if greeting
+                    else self._resolve_followup_query(history, data.content)
                 )
+                rag_ctx = self._empty_rag_ctx() if greeting else await self._run_rag(retrieval_query)
+                provider_name = data.llm_provider or runtime_config.default_llm_provider
 
-                # Send candidate sources immediately so the UI renders them while
-                # the LLM streams — corrected down to only-cited (or cleared
-                # entirely) once generation finishes, below. Skipped when the LLM
-                # never received context (quality != "good") to avoid flashing
-                # sources next to what will be a "no tengo información" refusal.
-                if rag_ctx.quality == "good":
-                    yield f"data: {json.dumps({'type': 'sources', 'sources': rag_ctx.sources_payload})}\n\n"
+                if not greeting and not is_followup and settings.program_clarification_enabled:
+                    ambiguity = self._detect_ambiguity(data.content, rag_ctx)
 
-                model = data.llm_model or runtime_config.resolve_model(provider_name)
-                temperature = detect_temperature(data.content, default=runtime_config.default_temperature)
-                messages_dicts = [{"role": m.role, "content": m.content} for m in messages]
-
-                # Second heartbeat: Ollama on CPU can take 10-20 s before the first token
-                yield ": generating\n\n"
-
-                if rag_ctx.quality == "good" and settings.verification_loop_enabled:
-                    # Self-correction loop (see verification_graph.py): grading needs
-                    # the complete draft, so this path can't stream token-by-token —
-                    # it sends the whole approved answer as one event, same as the
-                    # answer-cache hit above does.
-                    verified = await generate_verified(
-                        messages=messages_dicts,
-                        context_text=rag_ctx.context_text,
-                        provider_name=provider_name,
-                        model=model,
-                        temperature=temperature,
-                        max_tokens=runtime_config.default_max_tokens,
+                if ambiguity is not None:
+                    entity_type, candidates = ambiguity
+                    logger.info(
+                        "Clarification triggered | conv=%s | entity_type=%s | candidates=%s",
+                        conversation_id, entity_type, candidates,
                     )
-                    full_content = verified["content"]
-                    finish_reason = verified["finish_reason"]
-                    verification_attempts = verified["attempts"]
-                    verification_approved = verified["approved"]
-                    if not verified["approved"]:
-                        logger.warning(
-                            "Verification loop exhausted retries without approval | conv=%s | "
-                            "attempts=%d", conversation_id, verified["attempts"],
-                        )
+                    full_content = build_clarification_message(entity_type, candidates)
+                    model = runtime_config.resolve_model(provider_name)
+                    quality = "clarification"
+                    sources_payload = []
+                    rag_count = 0
+
+                    yield f"data: {json.dumps({'type': 'sources', 'sources': []})}\n\n"
                     yield f"data: {json.dumps({'type': 'token', 'content': full_content})}\n\n"
                 else:
-                    provider = ProviderFactory.get_provider(provider_name)
-                    full_content = ""
-                    stream_meta: dict = {}
-                    async for token in provider.generate_stream(
-                        messages_dicts, model, temperature, runtime_config.default_max_tokens,
-                        meta=stream_meta,
+                    messages = self._build_messages(
+                        rag_ctx, history, data.content, is_greeting_msg=greeting, provider_name=provider_name,
+                    )
+
+                    # Send candidate sources immediately so the UI renders them while
+                    # the LLM streams — corrected down to only-cited (or cleared
+                    # entirely) once generation finishes, below. Skipped when the LLM
+                    # never received context (quality != "good") to avoid flashing
+                    # sources next to what will be a "no tengo información" refusal.
+                    if rag_ctx.quality == "good":
+                        yield f"data: {json.dumps({'type': 'sources', 'sources': rag_ctx.sources_payload})}\n\n"
+
+                    model = data.llm_model or runtime_config.resolve_model(provider_name)
+                    temperature = detect_temperature(data.content, default=runtime_config.default_temperature)
+                    messages_dicts = [{"role": m.role, "content": m.content} for m in messages]
+
+                    # Second heartbeat: Ollama on CPU can take 10-20 s before the first token
+                    yield ": generating\n\n"
+
+                    if rag_ctx.quality == "good" and settings.verification_loop_enabled:
+                        # Self-correction loop (see verification_graph.py): grading needs
+                        # the complete draft, so this path can't stream token-by-token —
+                        # it sends the whole approved answer as one event, same as the
+                        # answer-cache hit above does.
+                        verified = await generate_verified(
+                            messages=messages_dicts,
+                            context_text=rag_ctx.context_text,
+                            provider_name=provider_name,
+                            model=model,
+                            temperature=temperature,
+                            max_tokens=runtime_config.default_max_tokens,
+                        )
+                        full_content = verified["content"]
+                        finish_reason = verified["finish_reason"]
+                        verification_attempts = verified["attempts"]
+                        verification_approved = verified["approved"]
+                        if not verified["approved"]:
+                            logger.warning(
+                                "Verification loop exhausted retries without approval | conv=%s | "
+                                "attempts=%d", conversation_id, verified["attempts"],
+                            )
+                        yield f"data: {json.dumps({'type': 'token', 'content': full_content})}\n\n"
+                    else:
+                        provider = ProviderFactory.get_provider(provider_name)
+                        full_content = ""
+                        stream_meta: dict = {}
+                        async for token in provider.generate_stream(
+                            messages_dicts, model, temperature, runtime_config.default_max_tokens,
+                            meta=stream_meta,
+                        ):
+                            full_content += token
+                            yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+                        finish_reason = stream_meta.get("finish_reason")
+
+                    if finish_reason == "length":
+                        logger.warning(
+                            "Truncated stream response (finish_reason=length) | conv=%s | provider=%s | "
+                            "model=%s | content_len=%d — max_tokens too low for this answer",
+                            conversation_id, provider_name, model, len(full_content),
+                        )
+
+                    quality = rag_ctx.quality
+
+                    # Correct the candidate list sent before generation down to
+                    # only the sources actually cited in the answer (or empty if
+                    # the LLM never received context at all) — see
+                    # _filter_cited_sources / _run_rag.
+                    if quality == "good":
+                        sources_payload, _ = self._filter_cited_sources(full_content, rag_ctx)
+                    else:
+                        sources_payload = []
+                    rag_count = len(sources_payload)
+                    yield f"data: {json.dumps({'type': 'sources', 'sources': sources_payload})}\n\n"
+
+                    # Only cache answers actually grounded in retrieved context — never
+                    # cache "no tengo esa información" refusals or ungrounded guesses.
+                    # quality=="good" only means RAG retrieval succeeded — checking
+                    # verification_approved too excludes an answer the verification
+                    # loop explicitly flagged as ungrounded after exhausting its
+                    # retries, which would otherwise get served to every future
+                    # semantically-similar question instead of just this one reply.
+                    if (
+                        settings.answer_cache_enabled
+                        and query_embedding is not None
+                        and quality == "good"
+                        and full_content.strip()
+                        and verification_approved is not False
                     ):
-                        full_content += token
-                        yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
-                    finish_reason = stream_meta.get("finish_reason")
-
-                if finish_reason == "length":
-                    logger.warning(
-                        "Truncated stream response (finish_reason=length) | conv=%s | provider=%s | "
-                        "model=%s | content_len=%d — max_tokens too low for this answer",
-                        conversation_id, provider_name, model, len(full_content),
-                    )
-
-                quality = rag_ctx.quality
-
-                # Correct the candidate list sent before generation down to
-                # only the sources actually cited in the answer (or empty if
-                # the LLM never received context at all) — see
-                # _filter_cited_sources / _run_rag.
-                if quality == "good":
-                    sources_payload, _ = self._filter_cited_sources(full_content, rag_ctx)
-                else:
-                    sources_payload = []
-                rag_count = len(sources_payload)
-                yield f"data: {json.dumps({'type': 'sources', 'sources': sources_payload})}\n\n"
-
-                # Only cache answers actually grounded in retrieved context — never
-                # cache "no tengo esa información" refusals or ungrounded guesses.
-                # quality=="good" only means RAG retrieval succeeded — checking
-                # verification_approved too excludes an answer the verification
-                # loop explicitly flagged as ungrounded after exhausting its
-                # retries, which would otherwise get served to every future
-                # semantically-similar question instead of just this one reply.
-                if (
-                    settings.answer_cache_enabled
-                    and query_embedding is not None
-                    and quality == "good"
-                    and full_content.strip()
-                    and verification_approved is not False
-                ):
-                    await answer_cache.store(
-                        query_embedding, data.content, full_content,
-                        sources_payload, provider_name, model,
-                    )
+                        await answer_cache.store(
+                            query_embedding, data.content, full_content,
+                            sources_payload, provider_name, model,
+                        )
 
             response_time = int((time.time() - t0) * 1000)
 
@@ -756,7 +874,7 @@ class ChatService:
 
             await self._maybe_set_title(
                 conversation_id, data.content, full_content, provider_name,
-                use_llm_title=(cached is None),
+                use_llm_title=(cached is None and ambiguity is None),
             )
             await self.db.commit()
             await self.db.refresh(user_message)

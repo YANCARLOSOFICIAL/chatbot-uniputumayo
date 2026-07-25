@@ -147,6 +147,14 @@ class Settings(BaseSettings):
     # normal), así que no hay razón para esperar más que unos segundos.
     answer_cache_embed_timeout_seconds: float = 8.0
 
+    # Program/faculty disambiguation: for topics confirmed to genuinely differ
+    # by program or faculty (pensum, créditos, misión, etc. — see
+    # query_utils.is_varying_topic_query), if the RAG search matches several
+    # distinct programs/faculties and the question doesn't already name one,
+    # ask which one instead of answering with whichever retrieval picked at
+    # random. Heuristic only, no extra LLM call — see ChatService._detect_ambiguity.
+    program_clarification_enabled: bool = True
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

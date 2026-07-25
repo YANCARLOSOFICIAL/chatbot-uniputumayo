@@ -266,9 +266,10 @@ export const apiClient = {
     ),
 
   getDocuments: (page = 1, perPage = 20) =>
-    request<Array<{ id: string; title: string; ingestion_status: string; total_chunks: number }>>(
-      `/api/v1/documents?page=${page}&per_page=${perPage}`
-    ),
+    request<Array<{
+      id: string; title: string; ingestion_status: string; total_chunks: number;
+      faculty: string | null; program: string | null; document_type: string | null;
+    }>>(`/api/v1/documents?page=${page}&per_page=${perPage}`),
 
   getDocument: (id: string) =>
     request<{ id: string; title: string; ingestion_status: string; total_chunks: number }>(
@@ -279,6 +280,15 @@ export const apiClient = {
     request<{ success: boolean }>(`/api/v1/documents/${id}`, {
       method: "DELETE",
     }),
+
+  updateDocumentMetadata: (
+    id: string,
+    fields: { faculty?: string | null; program?: string | null; document_type?: string | null }
+  ) =>
+    request<{ id: string; faculty: string | null; program: string | null; document_type: string | null }>(
+      `/api/v1/documents/${id}`,
+      { method: "PATCH", body: JSON.stringify(fields) }
+    ),
 
   reindexDocument: (id: string) =>
     request<{ document_id: string; status: string; message: string }>(
@@ -359,6 +369,11 @@ export const apiClient = {
 
   getApiKeyStatus: () =>
     request<{ has_key: boolean; masked_key: string | null }>("/api/v1/llm/api-key-status"),
+
+  invalidateAnswerCache: () =>
+    request<{ status: string }>("/api/v1/config/invalidate-answer-cache", {
+      method: "POST",
+    }),
 
   // ── Guest session cleanup ──
   // Uses sendBeacon so the request survives tab close (fire-and-forget).

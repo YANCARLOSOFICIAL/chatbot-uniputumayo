@@ -17,60 +17,12 @@ import json
 import logging
 import re
 import time
-import unicodedata
+
+from app.utils.query_utils import _normalize, _significant_words
 
 logger = logging.getLogger(__name__)
 
 _SENTINEL = object()
-
-
-_CAMEL_BOUNDARY_RE = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
-
-
-def _normalize(text: str) -> str:
-    decomposed = unicodedata.normalize("NFKD", text.lower())
-    return "".join(c for c in decomposed if not unicodedata.combining(c))
-
-
-# Spanish interrogative/functional words that happen to be >= 4 chars —
-# excluded from _significant_words because they show up interchangeably
-# across paraphrases of the SAME question ("de admision" vs "para admision")
-# without changing its meaning, and would never legitimately be part of a
-# program/faculty/document-title entity name. Confirmed live: swapping "de"
-# for "para" alone dropped what should have been a same-question match
-# (query_words no longer a subset of the cached question's words) purely
-# because "para" (4 chars) counted as significant while "de" (2 chars)
-# didn't — an artifact of the length cutoff, not a real topic difference.
-_STOPWORDS: frozenset[str] = frozenset({
-    "para", "cual", "cuales", "como", "donde", "cuando", "porque", "sobre",
-    "entre", "desde", "hasta", "este", "esta", "estos", "estas", "esos",
-    "esas", "otro", "otra", "otros", "otras", "todo", "toda", "todos",
-    "todas", "sera", "seran", "hacer",
-})
-
-
-def _significant_words(text: str) -> set[str]:
-    """Words of length >= 4 from normalized text — cheap proxy for named entities
-    (program/faculty names) without needing a fixed vocabulary or extra calls.
-
-    Splits CamelCase boundaries before normalizing — real uploaded document
-    titles are filenames like "07_DesarrolloSoftware_e_IngSistemas", where
-    underscores already separate "e" from "IngSistemas" but nothing splits
-    "Ing" from "Sistemas". Without this, the whole run comes out as one
-    token ("ingsistemas") that never matches a query saying just "sistemas",
-    which — confirmed live against every real document currently uploaded —
-    silently defeats the entity guard on document-title fallback (see
-    _entity_guard_passes): it would reject the document's own program name.
-
-    Filters out _STOPWORDS (see above) for the same reason: a length cutoff
-    alone can't tell "para" apart from an actual entity word just because
-    both are 4+ characters.
-    """
-    text = _CAMEL_BOUNDARY_RE.sub(" ", text)
-    return {
-        w for w in re.findall(r"[a-z0-9]+", _normalize(text))
-        if len(w) >= 4 and w not in _STOPWORDS
-    }
 
 
 _SEMESTER_ORDINAL_WORDS = {

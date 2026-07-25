@@ -9,6 +9,20 @@ class DocumentUploadResponse(BaseModel):
     message: str
 
 
+class DocumentMetadataUpdate(BaseModel):
+    """PATCH body for editing an already-uploaded document's taxonomy fields.
+
+    Fields default to unset (not None) so a client can update just one field
+    (e.g. only `program`) without accidentally clearing the others — see
+    DocumentService.update_metadata.
+    """
+    faculty: str | None = None
+    program: str | None = None
+    document_type: str | None = None
+
+    model_config = {"extra": "forbid"}
+
+
 class DocumentResponse(BaseModel):
     id: UUID
     title: str

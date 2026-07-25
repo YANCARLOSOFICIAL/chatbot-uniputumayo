@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Upload, FileText, AlertCircle, Trash2, X, ArrowUp, RefreshCw, ChevronDown } from "lucide-react";
+import { Upload, FileText, AlertCircle, Trash2, X, ArrowUp, RefreshCw, ChevronDown, Pencil, Check } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "@/components/ui/Toast";
 import { AdminHeader } from "@/components/admin/AdminHeader";
@@ -11,6 +11,9 @@ interface DocumentItem {
   title: string;
   file_name: string;
   file_type: string;
+  faculty: string | null;
+  program: string | null;
+  document_type: string | null;
   ingestion_status: string;
   total_chunks: number;
   created_at: string;
@@ -39,15 +42,30 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-function DocRowActions({ doc, reindexingId, confirmDeleteId, onReindex, onDelete }: {
+function DocRowActions({ doc, reindexingId, confirmDeleteId, onReindex, onDelete, onEdit }: {
   doc: DocumentItem;
   reindexingId: string | null;
   confirmDeleteId: string | null;
   onReindex: (id: string, title: string) => void;
   onDelete: (id: string) => void;
+  onEdit: (doc: DocumentItem) => void;
 }) {
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <button
+        onClick={() => onEdit(doc)}
+        title="Editar facultad, programa y tipo"
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11,
+          padding: "3px 8px", borderRadius: 6, border: "none", cursor: "pointer",
+          background: "transparent", color: "var(--text-3)", transition: "all 0.1s",
+        }}
+        onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--brand-dim)"; b.style.color = "var(--brand-primary)"; }}
+        onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--text-3)"; }}
+      >
+        <Pencil size={11} />
+        Editar
+      </button>
       <button
         onClick={() => onReindex(doc.id, doc.title)}
         disabled={reindexingId === doc.id || doc.ingestion_status === "processing"}
@@ -98,6 +116,11 @@ export default function DocumentsPage() {
   const [dragOver, setDragOver]         = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [reindexingId, setReindexingId] = useState<string | null>(null);
+  const [editingDoc, setEditingDoc]     = useState<DocumentItem | null>(null);
+  const [editFaculty, setEditFaculty]   = useState("");
+  const [editProgram, setEditProgram]   = useState("");
+  const [editDocType, setEditDocType]   = useState("");
+  const [savingEdit, setSavingEdit]     = useState(false);
   const [file, setFile]                 = useState<File | null>(null);
   const [title, setTitle]               = useState("");
   const [faculty, setFaculty]           = useState("");
@@ -242,6 +265,34 @@ export default function DocumentsPage() {
       toast.error(msg);
     } finally {
       setReindexingId(null);
+    }
+  };
+
+  const handleEditOpen = (doc: DocumentItem) => {
+    setEditingDoc(doc);
+    setEditFaculty(doc.faculty ?? "");
+    setEditProgram(doc.program ?? "");
+    setEditDocType(doc.document_type ?? "");
+  };
+
+  const handleEditClose = () => setEditingDoc(null);
+
+  const handleEditSave = async () => {
+    if (!editingDoc) return;
+    setSavingEdit(true);
+    try {
+      await apiClient.updateDocumentMetadata(editingDoc.id, {
+        faculty: editFaculty || null,
+        program: editProgram || null,
+        document_type: editDocType || null,
+      });
+      toast.success(`"${editingDoc.title}" actualizado`);
+      setEditingDoc(null);
+      await loadDocuments();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error actualizando el documento");
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -451,7 +502,7 @@ export default function DocumentsPage() {
                               {new Date(doc.created_at).toLocaleDateString("es-CO")}
                             </td>
                             <td style={{ padding: "13px 16px", textAlign: "right" }}>
-                              <DocRowActions doc={doc} reindexingId={reindexingId} confirmDeleteId={confirmDeleteId} onReindex={handleReindex} onDelete={handleDeleteClick} />
+                              <DocRowActions doc={doc} reindexingId={reindexingId} confirmDeleteId={confirmDeleteId} onReindex={handleReindex} onDelete={handleDeleteClick} onEdit={handleEditOpen} />
                             </td>
                           </tr>
                         ))}
@@ -478,7 +529,7 @@ export default function DocumentsPage() {
                           <span>{new Date(doc.created_at).toLocaleDateString("es-CO")}</span>
                         </div>
                         <div className="admin-row-card-actions">
-                          <DocRowActions doc={doc} reindexingId={reindexingId} confirmDeleteId={confirmDeleteId} onReindex={handleReindex} onDelete={handleDeleteClick} />
+                          <DocRowActions doc={doc} reindexingId={reindexingId} confirmDeleteId={confirmDeleteId} onReindex={handleReindex} onDelete={handleDeleteClick} onEdit={handleEditOpen} />
                         </div>
                       </div>
                     ))}
@@ -489,6 +540,73 @@ export default function DocumentsPage() {
           </div>
         </div>
       </div>
+
+      {/* Edit metadata modal */}
+      {editingDoc && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}
+          onClick={handleEditClose}
+          onKeyDown={(e) => { if (e.key === "Escape") handleEditClose(); }}
+          role="dialog" aria-modal="true" aria-label="Editar documento"
+        >
+          <div className="card" style={{ maxWidth: 420, width: "100%", padding: 24 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 800, color: "var(--text-1)" }}>Editar documento</div>
+              <button onClick={handleEditClose}
+                style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)" }}>
+                <X size={14} />
+              </button>
+            </div>
+            <p style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 18, lineHeight: 1.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {editingDoc.title}
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Facultad</label>
+                <select value={editFaculty} onChange={(e) => setEditFaculty(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
+                  <option value="">Sin especificar</option>
+                  {faculties.map((f) => <option key={f.id} value={f.name}>{f.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Programa</label>
+                <select value={editProgram} onChange={(e) => setEditProgram(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
+                  <option value="">Sin especificar</option>
+                  {programs.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Tipo</label>
+              <select value={editDocType} onChange={(e) => setEditDocType(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
+                <option value="">General</option>
+                {docTypes.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
+              </select>
+            </div>
+
+            <p style={{ fontSize: 11, color: "var(--text-3)", margin: "-8px 0 14px" }}>
+              ¿Falta una opción? Gestiónalas en <a href="/admin/catalogos" style={{ color: "var(--brand-primary)" }}>Catálogos</a>.
+            </p>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={handleEditClose}
+                style={{ flex: 1, padding: "9px 0", borderRadius: 9, fontSize: 13, fontWeight: 600, border: "1px solid var(--border)", background: "transparent", cursor: "pointer", color: "var(--text-2)" }}>
+                Cancelar
+              </button>
+              <button disabled={savingEdit} onClick={handleEditSave}
+                style={{ flex: 1, padding: "9px 0", borderRadius: 9, fontSize: 13, fontWeight: 700, border: "none", background: savingEdit ? "var(--surface-2)" : "var(--brand-primary)", cursor: savingEdit ? "not-allowed" : "pointer", color: savingEdit ? "var(--text-3)" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, transition: "background 0.15s" }}>
+                {savingEdit ? (
+                  <>{[0, 0.1, 0.2].map((d) => <span key={d} style={{ width: 3, height: 3, borderRadius: "50%", background: "currentColor", display: "inline-block", animation: `pulse-soft 1s ${d}s ease-in-out infinite` }} />)} Guardando...</>
+                ) : (
+                  <><Check size={13} /> Guardar</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

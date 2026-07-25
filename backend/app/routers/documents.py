@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.config import settings
-from app.schemas.document import DocumentUploadResponse, DocumentResponse, ChunkResponse
+from app.schemas.document import (
+    DocumentUploadResponse, DocumentResponse, ChunkResponse, DocumentMetadataUpdate,
+)
 from app.services.document_service import DocumentService
 from app.auth import require_admin
 from app.models.user import User
@@ -97,6 +99,34 @@ async def get_document(
 ):
     service = DocumentService(db)
     doc = await service.get_document(document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return doc
+
+
+@router.patch("/{document_id}", response_model=DocumentResponse)
+async def update_document_metadata(
+    document_id: UUID,
+    body: DocumentMetadataUpdate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    """Edit faculty/program/document_type on an already-uploaded document.
+
+    No reprocessing — unlike /reindex, this only touches taxonomy fields used
+    for retrieval filtering and the program/faculty disambiguation heuristic
+    (ChatService._detect_ambiguity), not the extracted text or embeddings.
+    Only fields actually present in the request body are changed — omitting
+    a field leaves it as-is (see DocumentMetadataUpdate/update_metadata).
+    """
+    service = DocumentService(db)
+    fields = body.model_dump(exclude_unset=True)
+    doc = await service.update_metadata(
+        document_id,
+        faculty=fields.get("faculty", ...),
+        program=fields.get("program", ...),
+        document_type=fields.get("document_type", ...),
+    )
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     return doc
