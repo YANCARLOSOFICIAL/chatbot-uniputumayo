@@ -8,6 +8,11 @@
 
 /* ── Design tokens (light / default) ── */
 :root {
+  /* Tells the browser which palette to use for UI it renders itself —
+     select/option popups, scrollbars, date pickers — so those match the
+     page instead of defaulting to a white native popup over a dark page. */
+  color-scheme: light;
+
   /* Brand */
   --brand-primary:        #1B6E94;
   --brand-primary-dark:   #134E68;
@@ -165,6 +170,8 @@
 
 /* ── Dark mode ── */
 .dark {
+  color-scheme: dark;
+
   --bg:        #0C1520;
   --bg-2:      #121E2B;
   --bg-3:      #1A2B3A;

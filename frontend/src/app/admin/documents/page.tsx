@@ -121,12 +121,14 @@ interface TaxonomyItem {
   name: string;
 }
 
-const DOCS_PER_PAGE = 20;
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
+const DEFAULT_PAGE_SIZE = 20;
 
 export default function DocumentsPage() {
   const [documents, setDocuments]       = useState<DocumentItem[]>([]);
   const [totalDocuments, setTotalDocuments] = useState(0);
   const [page, setPage]                 = useState(1);
+  const [perPage, setPerPage]           = useState(DEFAULT_PAGE_SIZE);
   const [loading, setLoading]           = useState(true);
   const [uploading, setUploading]       = useState(false);
   const [error, setError]               = useState<string | null>(null);
@@ -168,7 +170,7 @@ export default function DocumentsPage() {
   const loadDocuments = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const { data, total } = await apiClient.getDocumentsPage(page, DOCS_PER_PAGE) as unknown as
+      const { data, total } = await apiClient.getDocumentsPage(page, perPage) as unknown as
         { data: DocumentItem[]; total: number };
 
       for (const doc of data) {
@@ -186,7 +188,7 @@ export default function DocumentsPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error cargando documentos");
     } finally { if (!silent) setLoading(false); }
-  }, [page]);
+  }, [page, perPage]);
 
   useEffect(() => { loadDocuments(); }, [loadDocuments]);
 
@@ -316,9 +318,14 @@ export default function DocumentsPage() {
     }
   };
 
-  const totalPages = Math.max(1, Math.ceil(totalDocuments / DOCS_PER_PAGE));
-  const rangeStart = totalDocuments === 0 ? 0 : (page - 1) * DOCS_PER_PAGE + 1;
-  const rangeEnd = Math.min(page * DOCS_PER_PAGE, totalDocuments);
+  const totalPages = Math.max(1, Math.ceil(totalDocuments / perPage));
+  const rangeStart = totalDocuments === 0 ? 0 : (page - 1) * perPage + 1;
+  const rangeEnd = Math.min(page * perPage, totalDocuments);
+
+  const handlePerPageChange = (value: number) => {
+    setPerPage(value);
+    setPage(1);
+  };
 
   const taxonomyFields = (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
@@ -477,12 +484,28 @@ export default function DocumentsPage() {
                 ))}
               </div>
 
-              {/* Pagination footer */}
-              {totalDocuments > DOCS_PER_PAGE && (
+              {/* Pagination footer — always shown alongside the list (not just
+                  when a second page exists) so the "por página" selector stays
+                  reachable; Anterior/Siguiente simply disable themselves when
+                  there's only one page. */}
+              {totalDocuments > 0 && (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 18px", borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 12, color: "var(--text-3)" }}>
-                    Mostrando <strong style={{ color: "var(--text-2)", fontWeight: 600 }}>{rangeStart}–{rangeEnd}</strong> de {totalDocuments}
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 12, color: "var(--text-3)" }}>
+                      Mostrando <strong style={{ color: "var(--text-2)", fontWeight: 600 }}>{rangeStart}–{rangeEnd}</strong> de {totalDocuments}
+                    </span>
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-3)" }}>
+                      Por página
+                      <select
+                        value={perPage}
+                        onChange={(e) => handlePerPageChange(Number(e.target.value))}
+                        className="input"
+                        style={{ width: "auto", padding: "4px 8px", fontSize: 12 }}
+                      >
+                        {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </label>
+                  </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}
                       className="btn btn-secondary btn-sm" style={{ display: "flex", alignItems: "center", gap: 4 }}>
