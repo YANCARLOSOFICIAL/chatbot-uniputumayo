@@ -1,13 +1,23 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Users, AlertCircle, X, Shield, User, RefreshCw } from "lucide-react";
+import { Users, AlertCircle, X, Shield, User, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiClient, type AuthUser } from "@/lib/api/client";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { toast } from "@/components/ui/Toast";
+import { Select } from "@/components/ui/Select";
+
+const ROLE_OPTIONS = [{ value: "user", label: "user" }, { value: "admin", label: "admin" }];
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
+const DEFAULT_PAGE_SIZE = 20;
 
 export default function UsersPage() {
   const [users, setUsers]       = useState<AuthUser[]>([]);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [page, setPage]         = useState(1);
+  const [perPage, setPerPage]   = useState(DEFAULT_PAGE_SIZE);
+  const [stats, setStats]       = useState<{ total: number; admins: number; users: number } | null>(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
@@ -15,20 +25,35 @@ export default function UsersPage() {
   const loadUsers = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await apiClient.getUsers();
+      const [{ data, total }, statsData] = await Promise.all([
+        apiClient.getUsersPage(page, perPage),
+        apiClient.getUserStats(),
+      ]);
       setUsers(data);
+      setTotalUsers(total);
+      setStats(statsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error cargando usuarios");
     } finally { setLoading(false); }
-  }, []);
+  }, [page, perPage]);
 
   useEffect(() => { loadUsers(); }, [loadUsers]);
+
+  const handlePerPageChange = (value: number) => {
+    setPerPage(value);
+    setPage(1);
+  };
 
   const handleRoleChange = async (userId: string, newRole: string) => {
     setUpdating(userId); setError(null);
     try {
       await apiClient.updateUserRole(userId, newRole);
       setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u)));
+      setStats((prev) => prev && {
+        ...prev,
+        admins: prev.admins + (newRole === "admin" ? 1 : -1),
+        users: prev.users + (newRole === "admin" ? -1 : 1),
+      });
       toast.success("Rol actualizado");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error actualizando rol";
@@ -36,15 +61,17 @@ export default function UsersPage() {
     } finally { setUpdating(null); }
   };
 
-  const adminCount = users.filter((u) => u.role === "admin").length;
+  const totalPages = Math.max(1, Math.ceil(totalUsers / perPage));
+  const rangeStart = totalUsers === 0 ? 0 : (page - 1) * perPage + 1;
+  const rangeEnd = Math.min(page * perPage, totalUsers);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
       <AdminHeader
         title="Usuarios"
-        subtitle={loading ? "Cargando..." : `${users.length} usuario${users.length !== 1 ? "s" : ""} registrados`}
+        subtitle={loading ? "Cargando..." : `${totalUsers} usuario${totalUsers !== 1 ? "s" : ""} registrados`}
         action={
-          <button onClick={loadUsers} disabled={loading} className="btn btn-secondary btn-sm"
+          <button onClick={() => loadUsers()} disabled={loading} className="btn btn-secondary btn-sm"
             style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Actualizar
           </button>
@@ -63,9 +90,9 @@ export default function UsersPage() {
         {/* Editorial stats strip — NOT 3 equal cards */}
         <div style={{ display: "flex", borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface)", marginBottom: 24 }}>
           {[
-            { label: "Total",         value: loading ? "..." : users.length,                color: "var(--brand-primary)" },
-            { label: "Admins",        value: loading ? "..." : adminCount,                  color: "#8B5CF6" },
-            { label: "Estudiantes",   value: loading ? "..." : users.length - adminCount,   color: "var(--success)" },
+            { label: "Total",         value: !stats ? "..." : stats.total,   color: "var(--brand-primary)" },
+            { label: "Admins",        value: !stats ? "..." : stats.admins,  color: "#8B5CF6" },
+            { label: "Estudiantes",   value: !stats ? "..." : stats.users,   color: "var(--success)" },
           ].map((s, i, arr) => (
             <div key={s.label} style={{ flex: 1, padding: "22px 24px", borderRight: i < arr.length - 1 ? "1px solid var(--border)" : "none", textAlign: "center" }}>
               <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(28px,3vw,38px)", fontWeight: 900, color: s.color, lineHeight: 1, letterSpacing: "-0.04em" }}>
@@ -168,18 +195,17 @@ export default function UsersPage() {
                               ))}
                             </div>
                           ) : (
-                            <select
+                            <Select
                               value={user.role}
-                              onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                              style={{
+                              onValueChange={(v) => handleRoleChange(user.id, v)}
+                              options={ROLE_OPTIONS}
+                              triggerClassName=""
+                              triggerStyle={{
                                 fontSize: 11, fontFamily: "var(--font-body)", border: "1px solid var(--border)",
                                 background: "var(--surface-2)", color: "var(--text-2)", borderRadius: 7,
-                                padding: "4px 8px", cursor: "pointer", outline: "none",
+                                padding: "4px 8px",
                               }}
-                            >
-                              <option value="user">user</option>
-                              <option value="admin">admin</option>
-                            </select>
+                            />
                           )}
                         </td>
                       </tr>
@@ -231,23 +257,55 @@ export default function UsersPage() {
                           ))}
                         </div>
                       ) : (
-                        <select
+                        <Select
                           value={user.role}
-                          onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                          style={{
+                          onValueChange={(v) => handleRoleChange(user.id, v)}
+                          options={ROLE_OPTIONS}
+                          triggerClassName=""
+                          triggerStyle={{
                             fontSize: 12, fontFamily: "var(--font-body)", border: "1px solid var(--border)",
                             background: "var(--surface-2)", color: "var(--text-2)", borderRadius: 7,
-                            padding: "6px 10px", cursor: "pointer", outline: "none", width: "100%",
+                            padding: "6px 10px", width: "100%",
                           }}
-                        >
-                          <option value="user">user</option>
-                          <option value="admin">admin</option>
-                        </select>
+                        />
                       )}
                     </div>
                   </div>
                 ))}
               </div>
+
+              {/* Pagination footer — always shown alongside the list so the
+                  "por página" selector stays reachable; Anterior/Siguiente
+                  simply disable themselves when there's only one page. */}
+              {totalUsers > 0 && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 18px", borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 12, color: "var(--text-3)" }}>
+                      Mostrando <strong style={{ color: "var(--text-2)", fontWeight: 600 }}>{rangeStart}–{rangeEnd}</strong> de {totalUsers}
+                    </span>
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-3)" }}>
+                      Por página
+                      <Select
+                        value={String(perPage)}
+                        onValueChange={(v) => handlePerPageChange(Number(v))}
+                        options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
+                        triggerStyle={{ width: "auto", padding: "4px 8px", fontSize: 12 }}
+                      />
+                    </label>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}
+                      className="btn btn-secondary btn-sm" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <ChevronLeft size={13} /> Anterior
+                    </button>
+                    <span style={{ fontSize: 12, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>{page} / {totalPages}</span>
+                    <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+                      className="btn btn-secondary btn-sm" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      Siguiente <ChevronRight size={13} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

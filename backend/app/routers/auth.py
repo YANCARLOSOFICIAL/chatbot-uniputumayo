@@ -1,7 +1,7 @@
 import re
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -154,10 +154,23 @@ async def get_me(user: User = Depends(require_auth)):
 
 @router.get("/users", response_model=list[UserResponse])
 async def list_users(
+    response: Response,
+    page: int = 1,
+    per_page: int = 20,
     user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(User).order_by(User.created_at.desc()))
+    # X-Total-Count (not part of the JSON body) lets the admin UI paginate —
+    # same pattern as GET /documents (see documents.py).
+    total = await db.scalar(select(func.count()).select_from(User))
+    response.headers["X-Total-Count"] = str(total)
+
+    result = await db.execute(
+        select(User)
+        .order_by(User.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+    )
     users = result.scalars().all()
     return [
         UserResponse(
@@ -170,6 +183,22 @@ async def list_users(
         )
         for u in users
     ]
+
+
+@router.get("/users/stats")
+async def get_user_stats(
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    # Separate from the paginated list above so the stats strip reflects
+    # ALL users, not just whatever page happens to be loaded client-side.
+    result = await db.execute(select(User.role, func.count()).group_by(User.role))
+    counts = dict(result.all())
+    return {
+        "total": sum(counts.values()),
+        "admins": counts.get("admin", 0),
+        "users": counts.get("user", 0),
+    }
 
 
 @router.put("/users/{user_id}/role")

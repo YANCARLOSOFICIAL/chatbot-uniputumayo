@@ -5,6 +5,7 @@ import { Upload, FileText, AlertCircle, Trash2, X, ArrowUp, RefreshCw, Pencil, C
 import { apiClient } from "@/lib/api/client";
 import { toast } from "@/components/ui/Toast";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { Select } from "@/components/ui/Select";
 
 interface DocumentItem {
   id: string;
@@ -331,17 +332,21 @@ export default function DocumentsPage() {
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
       <div>
         <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Facultad</label>
-        <select value={faculty} onChange={(e) => setFaculty(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
-          <option value="">Sin especificar</option>
-          {faculties.map((f) => <option key={f.id} value={f.name}>{f.name}</option>)}
-        </select>
+        <Select
+          value={faculty}
+          onValueChange={setFaculty}
+          options={[{ value: "", label: "Sin especificar" }, ...faculties.map((f) => ({ value: f.name, label: f.name }))]}
+          triggerStyle={{ width: "100%", boxSizing: "border-box" }}
+        />
       </div>
       <div>
         <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Programa</label>
-        <select value={program} onChange={(e) => setProgram(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
-          <option value="">Sin especificar</option>
-          {programs.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
-        </select>
+        <Select
+          value={program}
+          onValueChange={setProgram}
+          options={[{ value: "", label: "Sin especificar" }, ...programs.map((p) => ({ value: p.name, label: p.name }))]}
+          triggerStyle={{ width: "100%", boxSizing: "border-box" }}
+        />
       </div>
     </div>
   );
@@ -496,14 +501,12 @@ export default function DocumentsPage() {
                     </span>
                     <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-3)" }}>
                       Por página
-                      <select
-                        value={perPage}
-                        onChange={(e) => handlePerPageChange(Number(e.target.value))}
-                        className="input"
-                        style={{ width: "auto", padding: "4px 8px", fontSize: 12 }}
-                      >
-                        {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
-                      </select>
+                      <Select
+                        value={String(perPage)}
+                        onValueChange={(v) => handlePerPageChange(Number(v))}
+                        options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
+                        triggerStyle={{ width: "auto", padding: "4px 8px", fontSize: 12 }}
+                      />
                     </label>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -607,10 +610,12 @@ export default function DocumentsPage() {
 
               <div style={{ marginBottom: 18 }}>
                 <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Tipo</label>
-                <select value={docType} onChange={(e) => setDocType(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
-                  <option value="">General</option>
-                  {docTypes.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
-                </select>
+                <Select
+                  value={docType}
+                  onValueChange={setDocType}
+                  options={[{ value: "", label: "General" }, ...docTypes.map((t) => ({ value: t.name, label: t.name }))]}
+                  triggerStyle={{ width: "100%", boxSizing: "border-box" }}
+                />
               </div>
 
               <p style={{ fontSize: 11, color: "var(--text-3)", margin: "-8px 0 14px" }}>
@@ -653,26 +658,32 @@ export default function DocumentsPage() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
               <div>
                 <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Facultad</label>
-                <select value={editFaculty} onChange={(e) => setEditFaculty(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
-                  <option value="">Sin especificar</option>
-                  {faculties.map((f) => <option key={f.id} value={f.name}>{f.name}</option>)}
-                </select>
+                <Select
+                  value={editFaculty}
+                  onValueChange={setEditFaculty}
+                  options={[{ value: "", label: "Sin especificar" }, ...faculties.map((f) => ({ value: f.name, label: f.name }))]}
+                  triggerStyle={{ width: "100%", boxSizing: "border-box" }}
+                />
               </div>
               <div>
                 <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Programa</label>
-                <select value={editProgram} onChange={(e) => setEditProgram(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
-                  <option value="">Sin especificar</option>
-                  {programs.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
-                </select>
+                <Select
+                  value={editProgram}
+                  onValueChange={setEditProgram}
+                  options={[{ value: "", label: "Sin especificar" }, ...programs.map((p) => ({ value: p.name, label: p.name }))]}
+                  triggerStyle={{ width: "100%", boxSizing: "border-box" }}
+                />
               </div>
             </div>
 
             <div style={{ marginBottom: 18 }}>
               <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "var(--text-3)", marginBottom: 5, textTransform: "uppercase", letterSpacing: ".07em" }}>Tipo</label>
-              <select value={editDocType} onChange={(e) => setEditDocType(e.target.value)} className="input" style={{ width: "100%", boxSizing: "border-box" }}>
-                <option value="">General</option>
-                {docTypes.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
-              </select>
+              <Select
+                value={editDocType}
+                onValueChange={setEditDocType}
+                options={[{ value: "", label: "General" }, ...docTypes.map((t) => ({ value: t.name, label: t.name }))]}
+                triggerStyle={{ width: "100%", boxSizing: "border-box" }}
+              />
             </div>
 
             <p style={{ fontSize: 11, color: "var(--text-3)", margin: "-8px 0 14px" }}>

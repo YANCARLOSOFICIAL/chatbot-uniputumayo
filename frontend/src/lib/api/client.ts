@@ -100,6 +100,15 @@ export const apiClient = {
   getUsers: () =>
     request<AuthUser[]>("/api/v1/auth/users"),
 
+  // Same endpoint as getUsers, but also surfaces the real total (via the
+  // X-Total-Count response header) so callers can paginate — mirrors
+  // getDocumentsPage.
+  getUsersPage: (page = 1, perPage = 20) =>
+    requestPaginated<AuthUser[]>(`/api/v1/auth/users?page=${page}&per_page=${perPage}`),
+
+  getUserStats: () =>
+    request<{ total: number; admins: number; users: number }>("/api/v1/auth/users/stats"),
+
   updateUserRole: (userId: string, role: string) =>
     request<{ success: boolean }>(`/api/v1/auth/users/${userId}/role`, {
       method: "PUT",

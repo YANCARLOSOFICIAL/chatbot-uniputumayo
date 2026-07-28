@@ -533,6 +533,13 @@ p           { text-wrap: pretty; }
 .input:focus, .input-base:focus { border-color: var(--brand-primary); box-shadow: var(--shadow-ring); }
 .input:disabled, .input-base:disabled { background: var(--surface-1); color: var(--text-3); cursor: not-allowed; }
 
+/* ════════ CUSTOM SELECT (Radix) — replaces native <select> so the open
+   popup is fully themed instead of falling back to the browser's own
+   (always-light-on-Windows) listbox. See components/ui/Select.tsx. ════════ */
+.input[data-state="open"] { border-color: var(--brand-primary); box-shadow: var(--shadow-ring); }
+.select-item[data-highlighted] { background: var(--brand-dim); color: var(--brand-primary); }
+.select-item[data-disabled] { opacity: .5; cursor: not-allowed; }
+
 /* ════════ CARD ════════ */
 .card {
   background: var(--surface);
