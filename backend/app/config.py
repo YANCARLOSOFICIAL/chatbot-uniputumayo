@@ -181,6 +181,13 @@ class Settings(BaseSettings):
     admin_email: str = "admin@iup.edu.co"
     admin_password: str = "admin123"
 
+    # Password recovery (Resend)
+    resend_api_key: Optional[str] = None
+    resend_from_email: str = "Guaca <noreply@resend.dev>"
+    password_reset_expire_minutes: int = 30
+    # Base para construir el link del correo (.../reset-password?token=...)
+    frontend_url: str = "http://localhost:3001"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

@@ -1,9 +1,14 @@
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import get_db
 from app.runtime_config import runtime_config
 from app.auth import require_admin
 from app.models.user import User
 from app.utils.cache import answer_cache
+from app.services.email_service import verify_resend_api_key
+from app.services.email_config_store import persist_runtime_config as persist_email_config
 
 router = APIRouter()
 
@@ -35,3 +40,35 @@ async def invalidate_answer_cache(admin: User = Depends(require_admin)):
     """
     await answer_cache.invalidate_all()
     return {"status": "ok"}
+
+
+# ── Resend (recuperación de contraseña) ──
+
+
+class EmailKeyRequest(BaseModel):
+    api_key: str
+    from_email: str
+
+
+@router.post("/email-key")
+async def set_email_key(
+    data: EmailKeyRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    is_valid = await verify_resend_api_key(data.api_key)
+
+    runtime_config.resend_api_key = data.api_key
+    runtime_config.resend_from_email = data.from_email
+    await persist_email_config(db)
+
+    return {"success": True, "is_valid": is_valid}
+
+
+@router.get("/email-key-status")
+async def get_email_key_status(admin: User = Depends(require_admin)):
+    key = runtime_config.resend_api_key
+    if key:
+        masked = f"{key[:7]}...{key[-4:]}" if len(key) > 11 else "***"
+        return {"has_key": True, "masked_key": masked, "from_email": runtime_config.resend_from_email}
+    return {"has_key": False, "masked_key": None, "from_email": runtime_config.resend_from_email}

@@ -254,6 +254,9 @@ export default function LoginPage() {
                   <label style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.65)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
                     Contrasena
                   </label>
+                  <Link href="/forgot-password" style={{ fontSize: 11.5, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>
+                    ¿Olvidaste tu contrasena?
+                  </Link>
                 </div>
                 <DarkInputField
                   id={`${uid}_pass`} type="password"

@@ -5,6 +5,7 @@ from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.models.retrieval_log import RetrievalLog
 from app.models.llm_configuration import LLMConfiguration
+from app.models.email_configuration import EmailConfiguration
 from app.models.faculty import Faculty
 from app.models.program import Program
 from app.models.document_type import DocumentType
@@ -18,6 +19,7 @@ __all__ = [
     "DocumentChunk",
     "RetrievalLog",
     "LLMConfiguration",
+    "EmailConfiguration",
     "Faculty",
     "Program",
     "DocumentType",

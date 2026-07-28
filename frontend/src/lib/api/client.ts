@@ -95,6 +95,18 @@ export const apiClient = {
       body: JSON.stringify({ email, password, display_name }),
     }),
 
+  forgotPassword: (email: string) =>
+    request<{ message: string }>("/api/v1/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPassword: (token: string, new_password: string) =>
+    request<{ success: boolean }>("/api/v1/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, new_password }),
+    }),
+
   getMe: () => request<AuthUser>("/api/v1/auth/me"),
 
   getUsers: () =>
@@ -408,6 +420,18 @@ export const apiClient = {
 
   getApiKeyStatus: () =>
     request<{ has_key: boolean; masked_key: string | null }>("/api/v1/llm/api-key-status"),
+
+  // ── Resend (recuperación de contraseña) ──
+  setEmailKey: (api_key: string, from_email: string) =>
+    request<{ success: boolean; is_valid: boolean }>("/api/v1/config/email-key", {
+      method: "POST",
+      body: JSON.stringify({ api_key, from_email }),
+    }),
+
+  getEmailKeyStatus: () =>
+    request<{ has_key: boolean; masked_key: string | null; from_email: string }>(
+      "/api/v1/config/email-key-status"
+    ),
 
   invalidateAnswerCache: () =>
     request<{ status: string }>("/api/v1/config/invalidate-answer-cache", {

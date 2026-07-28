@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   CheckCircle2, XCircle, Key, Server, Cloud,
-  Zap, X, AlertCircle, Check, RefreshCw, Trash2
+  Zap, X, AlertCircle, Check, RefreshCw, Trash2, Mail
 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { AdminHeader } from "@/components/admin/AdminHeader";
@@ -47,6 +47,14 @@ export default function ConfigPage() {
 
   const [clearingCache, setClearingCache] = useState(false);
 
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailApiKey, setEmailApiKey]       = useState("");
+  const [emailFromEmail, setEmailFromEmail] = useState("");
+  const [emailKeyStatus, setEmailKeyStatus] = useState<{ has_key: boolean; masked_key: string | null; from_email: string } | null>(null);
+  const [savingEmailKey, setSavingEmailKey] = useState(false);
+  const [emailKeyError, setEmailKeyError]   = useState<string | null>(null);
+  const [emailKeySuccess, setEmailKeySuccess] = useState<string | null>(null);
+
   const activeProvider = providers.find((p) => p.is_default);
 
   const loadProviders = useCallback(async () => {
@@ -65,7 +73,15 @@ export default function ConfigPage() {
     } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => { loadProviders(); loadKeyStatus(); }, [loadProviders, loadKeyStatus]);
+  const loadEmailKeyStatus = useCallback(async () => {
+    try {
+      const status = await apiClient.getEmailKeyStatus();
+      setEmailKeyStatus(status);
+      setEmailFromEmail(status.from_email ?? "");
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => { loadProviders(); loadKeyStatus(); loadEmailKeyStatus(); }, [loadProviders, loadKeyStatus, loadEmailKeyStatus]);
 
   const handleSelectModel = async (providerName: string, model: string) => {
     setSwitching(true); setError(null); setSuccess(null);
@@ -104,6 +120,24 @@ export default function ConfigPage() {
     } catch (err) {
       setKeyError(err instanceof Error ? err.message : "Error guardando API Key");
     } finally { setSavingKey(false); }
+  };
+
+  const handleSaveEmailKey = async () => {
+    if (!emailApiKey.trim() || !emailFromEmail.trim()) return;
+    setSavingEmailKey(true); setEmailKeyError(null); setEmailKeySuccess(null);
+    try {
+      const result = await apiClient.setEmailKey(emailApiKey.trim(), emailFromEmail.trim());
+      if (result.is_valid) {
+        setEmailKeySuccess("API Key guardada y verificada correctamente");
+        setEmailApiKey("");
+        await loadEmailKeyStatus();
+        setTimeout(() => setShowEmailModal(false), 1500);
+      } else {
+        setEmailKeyError("API Key guardada pero no pudo verificarse. Revisa que sea valida.");
+      }
+    } catch (err) {
+      setEmailKeyError(err instanceof Error ? err.message : "Error guardando API Key");
+    } finally { setSavingEmailKey(false); }
   };
 
   return (
@@ -305,6 +339,26 @@ export default function ConfigPage() {
               </div>
             </div>
 
+            {/* Recuperación de contraseña (Resend) */}
+            <div className="card" style={{ padding: 22, marginTop: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 14 }}>
+                <Mail size={14} style={{ color: "var(--brand-primary)" }} />
+                <span style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, color: "var(--text-1)" }}>Recuperación de contraseña (Resend)</span>
+              </div>
+              <p style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 14, lineHeight: 1.6 }}>
+                Envía el correo con el enlace para restablecer contraseña cuando un usuario lo solicita en el login.
+              </p>
+              <div style={{ padding: "10px 14px", borderRadius: 9, background: "var(--surface-2)", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
+                <Key size={12} style={{ color: "var(--text-3)", flexShrink: 0 }} />
+                <span style={{ fontSize: 12, color: "var(--text-2)", fontFamily: "var(--font-mono)", flex: 1 }}>
+                  {emailKeyStatus?.has_key ? `${emailKeyStatus.masked_key} · ${emailKeyStatus.from_email}` : "API Key no configurada"}
+                </span>
+                <button onClick={() => setShowEmailModal(true)} style={{ fontSize: 12, fontWeight: 600, color: "var(--brand-primary)", background: "none", border: "none", cursor: "pointer" }}>
+                  {emailKeyStatus?.has_key ? "Cambiar" : "Configurar"}
+                </button>
+              </div>
+            </div>
+
             {/* Caché de respuestas */}
             <div className="card" style={{ padding: 22, marginTop: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -377,6 +431,75 @@ export default function ConfigPage() {
               <button disabled={!apiKey.trim() || savingKey} onClick={handleSaveApiKey}
                 style={{ flex: 1, padding: "9px 0", borderRadius: 9, fontSize: 13, fontWeight: 700, border: "none", background: !apiKey.trim() || savingKey ? "var(--surface-2)" : "var(--brand-primary)", cursor: !apiKey.trim() || savingKey ? "not-allowed" : "pointer", color: !apiKey.trim() || savingKey ? "var(--text-3)" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, transition: "background 0.15s" }}>
                 {savingKey ? (
+                  <>{[0, 0.1, 0.2].map((d) => <span key={d} style={{ width: 3, height: 3, borderRadius: "50%", background: "currentColor", display: "inline-block", animation: `pulse-soft 1s ${d}s ease-in-out infinite` }} />)} Verificando...</>
+                ) : "Guardar y Verificar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resend API Key Modal */}
+      {showEmailModal && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}
+          onClick={() => { setShowEmailModal(false); setEmailApiKey(""); setEmailKeyError(null); setEmailKeySuccess(null); }}
+          onKeyDown={(e) => { if (e.key === "Escape") { setShowEmailModal(false); setEmailApiKey(""); setEmailKeyError(null); setEmailKeySuccess(null); } }}
+          role="dialog" aria-modal="true" aria-label="Configurar Resend"
+        >
+          <div className="card" style={{ maxWidth: 420, width: "100%", padding: 24 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 800, color: "var(--text-1)" }}>API Key de Resend</div>
+              <button onClick={() => { setShowEmailModal(false); setEmailApiKey(""); setEmailKeyError(null); setEmailKeySuccess(null); }}
+                style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)" }}>
+                <X size={14} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 16, lineHeight: 1.6 }}>
+              Obtén tu API key en{" "}
+              <span style={{ color: "var(--brand-primary)", fontWeight: 600 }}>resend.com/api-keys</span>.
+              El remitente debe pertenecer a un dominio verificado en tu cuenta de Resend.
+            </p>
+
+            {emailKeyError && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, background: "var(--error-dim)", color: "var(--error)", fontSize: 13, border: "1px solid rgba(200,54,44,0.2)", marginBottom: 12 }}>
+                <AlertCircle size={12} /> {emailKeyError}
+              </div>
+            )}
+            {emailKeySuccess && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, background: "var(--brand-dim)", color: "var(--brand-primary)", fontSize: 13, border: "1px solid var(--brand-light)", marginBottom: 12 }}>
+                <Check size={12} /> {emailKeySuccess}
+              </div>
+            )}
+
+            <div style={{ position: "relative", marginBottom: 12 }}>
+              <Key size={13} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-3)", pointerEvents: "none" }} />
+              <input type="password" value={emailApiKey} onChange={(e) => setEmailApiKey(e.target.value)}
+                placeholder="re_..."
+                className="input"
+                style={{ width: "100%", paddingLeft: 36, boxSizing: "border-box" }}
+              />
+            </div>
+
+            <div style={{ position: "relative", marginBottom: 16 }}>
+              <Mail size={13} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-3)", pointerEvents: "none" }} />
+              <input type="text" value={emailFromEmail} onChange={(e) => setEmailFromEmail(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSaveEmailKey()}
+                placeholder="Guaca <noreply@tudominio.com>"
+                className="input"
+                style={{ width: "100%", paddingLeft: 36, boxSizing: "border-box" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => { setShowEmailModal(false); setEmailApiKey(""); setEmailKeyError(null); setEmailKeySuccess(null); }}
+                style={{ flex: 1, padding: "9px 0", borderRadius: 9, fontSize: 13, fontWeight: 600, border: "1px solid var(--border)", background: "transparent", cursor: "pointer", color: "var(--text-2)" }}>
+                Cancelar
+              </button>
+              <button disabled={!emailApiKey.trim() || !emailFromEmail.trim() || savingEmailKey} onClick={handleSaveEmailKey}
+                style={{ flex: 1, padding: "9px 0", borderRadius: 9, fontSize: 13, fontWeight: 700, border: "none", background: !emailApiKey.trim() || !emailFromEmail.trim() || savingEmailKey ? "var(--surface-2)" : "var(--brand-primary)", cursor: !emailApiKey.trim() || !emailFromEmail.trim() || savingEmailKey ? "not-allowed" : "pointer", color: !emailApiKey.trim() || !emailFromEmail.trim() || savingEmailKey ? "var(--text-3)" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, transition: "background 0.15s" }}>
+                {savingEmailKey ? (
                   <>{[0, 0.1, 0.2].map((d) => <span key={d} style={{ width: 3, height: 3, borderRadius: "50%", background: "currentColor", display: "inline-block", animation: `pulse-soft 1s ${d}s ease-in-out infinite` }} />)} Verificando...</>
                 ) : "Guardar y Verificar"}
               </button>

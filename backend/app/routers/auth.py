@@ -1,4 +1,7 @@
+import logging
 import re
+import secrets
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -6,6 +9,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.user import User
 from app.auth import (
@@ -15,9 +19,18 @@ from app.auth import (
     require_auth,
     require_admin,
 )
+from app.services.email_service import send_password_reset_email
 from app.utils.rate_limit import limiter
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+
+def _validate_password_strength(v: str) -> str:
+    if len(v) < 6:
+        raise ValueError("La contraseña debe tener al menos 6 caracteres")
+    return v
 
 
 # ── Schemas ──
@@ -68,6 +81,20 @@ class AuthResponse(BaseModel):
 
 class RoleUpdate(BaseModel):
     role: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        return _validate_password_strength(v)
 
 
 # ── Endpoints ──
@@ -232,3 +259,61 @@ async def update_user_role(
     target_user.role = data.role
     await db.commit()
     return {"success": True, "user_id": str(user_id), "new_role": data.role}
+
+
+# ── Password recovery ──
+
+# Generic response for both branches of forgot-password (user found/not found,
+# email send succeeded/failed) — never reveals whether an email is registered.
+_FORGOT_PASSWORD_GENERIC_MESSAGE = "Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña."
+
+
+@router.post("/forgot-password")
+@limiter.limit("3/hour")
+async def forgot_password(
+    request: Request, data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)
+):
+    email = data.email.strip().lower()
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+
+    if user and user.is_active:
+        token = secrets.token_urlsafe(32)
+        user.password_reset_token = token
+        user.password_reset_expires_at = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.password_reset_expire_minutes
+        )
+        await db.commit()
+
+        reset_link = f"{settings.frontend_url}/reset-password?token={token}"
+        try:
+            await send_password_reset_email(user.email, reset_link)
+        except Exception:
+            logger.exception("Fallo al enviar correo de recuperación de contraseña a %s", user.email)
+
+    return {"message": _FORGOT_PASSWORD_GENERIC_MESSAGE}
+
+
+@router.post("/reset-password")
+@limiter.limit("10/hour")
+async def reset_password(
+    request: Request, data: ResetPasswordRequest, db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(User).where(User.password_reset_token == data.token)
+    )
+    user = result.scalar_one_or_none()
+
+    if (
+        not user
+        or not user.password_reset_expires_at
+        or user.password_reset_expires_at < datetime.now(timezone.utc)
+    ):
+        raise HTTPException(status_code=400, detail="El enlace es inválido o ha expirado")
+
+    user.password_hash = hash_password(data.new_password)
+    user.password_reset_token = None
+    user.password_reset_expires_at = None
+    await db.commit()
+
+    return {"success": True}

@@ -160,6 +160,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:-super-secret-change-me}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@iup.edu.co}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      # Resend (recuperación de contraseña) — la API key y el remitente se
+      # configuran desde /admin/config (persistidos en DB), no aquí.
+      PASSWORD_RESET_EXPIRE_MINUTES: "30"
+      FRONTEND_URL: ${FRONTEND_URL:-https://guaca-bot-uniputumayo.servidoresitp.com}
     ports:
       - "8001:8000"
     volumes:

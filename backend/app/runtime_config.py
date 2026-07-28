@@ -19,6 +19,10 @@ class _RuntimeConfig:
         self.openai_embedding_model: str = settings.openai_embedding_model
         # Proveedor de embeddings fijo — independiente del chat para evitar mismatch de dims
         self.embedding_provider: str = settings.embedding_provider
+        # Resend (recuperación de contraseña) — configurable desde /admin/config,
+        # ver app/services/email_config_store.py
+        self.resend_api_key: str | None = settings.resend_api_key
+        self.resend_from_email: str = settings.resend_from_email
 
     def resolve_model(self, provider_name: str) -> str:
         """Devuelve el modelo activo para el proveedor indicado."""

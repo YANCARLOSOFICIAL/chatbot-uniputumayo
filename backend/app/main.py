@@ -138,8 +138,10 @@ async def lifespan(app: FastAPI):
     try:
         from app.database import async_session
         from app.services.llm_config_store import load_into_runtime_config
+        from app.services.email_config_store import load_into_runtime_config as load_email_config
         async with async_session() as db:
             await load_into_runtime_config(db)
+            await load_email_config(db)
     except Exception as e:
         logger.warning("Could not load persisted LLM config (non-fatal): %s", e)
 
