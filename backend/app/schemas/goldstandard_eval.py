@@ -13,6 +13,7 @@ class RetrievalCaseDetail(BaseModel):
     recall_at_k: float | None
     reciprocal_rank: float | None
     retrieval_ms: int
+    error: str | None = None
 
 
 class RetrievalSummaryDetail(BaseModel):
@@ -23,6 +24,7 @@ class RetrievalSummaryDetail(BaseModel):
     mrr: float
     hit_rate: float
     avg_retrieval_ms: float
+    error_cases: int = 0
     cases: list[RetrievalCaseDetail]
 
 
@@ -35,6 +37,7 @@ class GenerationCaseDetail(BaseModel):
     refusal_ok: bool
     hallucinated: bool | None
     generation_ms: int
+    error: str | None = None
 
 
 class GenerationSummaryDetail(BaseModel):
@@ -45,6 +48,7 @@ class GenerationSummaryDetail(BaseModel):
     safe_rejection_rate: float
     refusal_cases: int
     avg_generation_ms: float
+    error_cases: int = 0
     cases: list[GenerationCaseDetail]
 
 

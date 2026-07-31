@@ -141,6 +141,7 @@ def _render_markdown_report(run: GoldEvalRun) -> str:
         f"| Hit rate | {retrieval.get('hit_rate', 0):.3f} |",
         f"| Casos evaluados (dentro de alcance con documento esperado) | {retrieval.get('scored_cases', 0)} |",
         f"| Tiempo promedio de retrieval (ms) | {retrieval.get('avg_retrieval_ms', 0):.0f} |",
+        f"| Casos con error (búsqueda falló, excluidos de las métricas) | {retrieval.get('error_cases', 0)} |",
         "",
         "## Comparación de generación: Ollama vs OpenAI",
         "",
@@ -153,6 +154,7 @@ def _render_markdown_report(run: GoldEvalRun) -> str:
     lines.append("| Casos juzgados | " + " | ".join(str(g.get("judged_cases", 0)) for g in gens) + " |")
     lines.append("| Tasa de rechazo seguro | " + " | ".join(f"{g.get('safe_rejection_rate', 0):.3f}" for g in gens) + " |")
     lines.append("| Tiempo promedio de generación (ms) | " + " | ".join(f"{g.get('avg_generation_ms', 0):.0f}" for g in gens) + " |")
+    lines.append("| Casos con error (excluidos de las tasas anteriores) | " + " | ".join(str(g.get("error_cases", 0)) for g in gens) + " |")
     return "\n".join(lines) + "\n"
 
 

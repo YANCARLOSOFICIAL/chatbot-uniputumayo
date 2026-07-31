@@ -26,6 +26,7 @@ provider's worth of judge calls on top of the two already being compared.
 from __future__ import annotations
 
 import io
+import logging
 import re
 import time
 from dataclasses import dataclass, field
@@ -44,6 +45,8 @@ from app.providers.provider_factory import ProviderFactory
 from app.runtime_config import runtime_config
 from app.utils.prompts import REFUSAL_MARKER
 from app.utils.text_processing import normalize_for_match
+
+logger = logging.getLogger(__name__)
 
 _EVAL_CONVERSATION_TITLE = "gold-eval"
 
@@ -122,6 +125,7 @@ class RetrievalCaseResult:
     reciprocal_rank: float | None
     retrieval_ms: int
     retrieved_content: str  # concatenated chunk text — reused as judge context, avoids a second search
+    error: str | None = None  # set when the search itself blew up (e.g. embedding timeout) — excluded from metrics, not counted as a miss
 
 
 async def _run_retrieval_case(rag_service: RAGService, q: GoldQuery, k: int) -> RetrievalCaseResult:
@@ -164,12 +168,14 @@ class RetrievalSummary:
     mrr: float
     hit_rate: float  # fraction of scored cases with recall_at_k > 0
     avg_retrieval_ms: float
+    error_cases: int
     cases: list[dict]
 
 
 def _summarize_retrieval(results: list[RetrievalCaseResult], k: int) -> RetrievalSummary:
     scored = [r for r in results if r.precision_at_k is not None]
     n = len(scored) or 1
+    ok = [r for r in results if r.error is None]
     return RetrievalSummary(
         k=k,
         scored_cases=len(scored),
@@ -177,7 +183,8 @@ def _summarize_retrieval(results: list[RetrievalCaseResult], k: int) -> Retrieva
         mean_recall_at_k=sum(r.recall_at_k for r in scored) / n,
         mrr=sum(r.reciprocal_rank for r in scored) / n,
         hit_rate=sum(1 for r in scored if r.recall_at_k > 0) / n,
-        avg_retrieval_ms=sum(r.retrieval_ms for r in results) / len(results) if results else 0.0,
+        avg_retrieval_ms=sum(r.retrieval_ms for r in ok) / len(ok) if ok else 0.0,
+        error_cases=len(results) - len(ok),
         cases=[{
             "id": r.query.id,
             "query": r.query.query,
@@ -188,6 +195,7 @@ def _summarize_retrieval(results: list[RetrievalCaseResult], k: int) -> Retrieva
             "recall_at_k": r.recall_at_k,
             "reciprocal_rank": r.reciprocal_rank,
             "retrieval_ms": r.retrieval_ms,
+            "error": r.error,
         } for r in results],
     )
 
@@ -222,6 +230,7 @@ class GenerationCaseResult:
     refusal_ok: bool
     hallucinated: bool | None  # None when not applicable (refusal, or not "dentro de alcance")
     generation_ms: int
+    error: str | None = None  # set when process_message itself blew up (e.g. Ollama ReadTimeout) — case excluded from every rate, not counted as a failure
 
 
 async def _run_generation_case(
@@ -233,10 +242,24 @@ async def _run_generation_case(
 
     chat_service = ChatService(db)
     t0 = time.time()
-    response = await chat_service.process_message(
-        conversation.id,
-        MessageCreate(content=q.query, input_type="text", llm_provider=provider_name, llm_model=model),
-    )
+    try:
+        response = await chat_service.process_message(
+            conversation.id,
+            MessageCreate(content=q.query, input_type="text", llm_provider=provider_name, llm_model=model),
+        )
+    except Exception as e:
+        # A single slow/failed Ollama call must not abort a run that's already
+        # hours into a 104-query pass — real incident: a ReadTimeout on case
+        # ~50 killed 2h18min of completed work with zero results saved.
+        await db.rollback()
+        generation_ms = int((time.time() - t0) * 1000)
+        logger.warning(
+            "Gold eval generation failed | query=%s | provider=%s | %s", q.id, provider_name, e,
+        )
+        return GenerationCaseResult(
+            query=q, answer="", refused=False, expected_refusal=q.query_type in _REFUSAL_EXPECTED_TYPES,
+            refusal_ok=False, hallucinated=None, generation_ms=generation_ms, error=str(e) or repr(e),
+        )
     generation_ms = int((time.time() - t0) * 1000)
     answer = response.assistant_message.content
     refused = REFUSAL_MARKER in answer
@@ -266,6 +289,7 @@ class GenerationSummary:
     safe_rejection_rate: float
     refusal_cases: int
     avg_generation_ms: float
+    error_cases: int
     cases: list[dict]
 
 
@@ -285,8 +309,9 @@ async def run_generation_eval(
     await db.execute(delete(Conversation).where(Conversation.title == _EVAL_CONVERSATION_TITLE))
     await db.commit()
 
-    judged = [r for r in results if r.hallucinated is not None]
-    refusal_expected = [r for r in results if r.expected_refusal]
+    ok = [r for r in results if r.error is None]
+    judged = [r for r in ok if r.hallucinated is not None]
+    refusal_expected = [r for r in ok if r.expected_refusal]
 
     return GenerationSummary(
         provider=provider_name,
@@ -295,7 +320,8 @@ async def run_generation_eval(
         judged_cases=len(judged),
         safe_rejection_rate=(sum(1 for r in refusal_expected if r.refusal_ok) / len(refusal_expected)) if refusal_expected else 0.0,
         refusal_cases=len(refusal_expected),
-        avg_generation_ms=sum(r.generation_ms for r in results) / len(results) if results else 0.0,
+        avg_generation_ms=sum(r.generation_ms for r in ok) / len(ok) if ok else 0.0,
+        error_cases=len(results) - len(ok),
         cases=[{
             "id": r.query.id,
             "query": r.query.query,
@@ -305,6 +331,7 @@ async def run_generation_eval(
             "refusal_ok": r.refusal_ok,
             "hallucinated": r.hallucinated,
             "generation_ms": r.generation_ms,
+            "error": r.error,
         } for r in results],
     )
 
@@ -327,7 +354,16 @@ async def run_gold_comparison(
     queries = parse_gold_queries(file_bytes)
 
     rag_service = RAGService(db)
-    retrieval_cases = [await _run_retrieval_case(rag_service, q, k) for q in queries]
+    retrieval_cases: list[RetrievalCaseResult] = []
+    for q in queries:
+        try:
+            retrieval_cases.append(await _run_retrieval_case(rag_service, q, k))
+        except Exception as e:
+            logger.warning("Gold eval retrieval failed | query=%s | %s", q.id, e)
+            retrieval_cases.append(RetrievalCaseResult(
+                query=q, retrieved_titles=[], precision_at_k=None, recall_at_k=None,
+                reciprocal_rank=None, retrieval_ms=0, retrieved_content="", error=str(e) or repr(e),
+            ))
     retrieval = _summarize_retrieval(retrieval_cases, k)
 
     generations = []

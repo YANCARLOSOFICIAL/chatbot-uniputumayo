@@ -35,8 +35,12 @@ class OllamaProvider(BaseLLMProvider):
         temperature: float = 0.3,
         max_tokens: int = 1024,
     ) -> dict:
-        # 300s: first load of a model on CPU can take 3-5 min
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        # 600s: matches nginx's SSE proxy_read_timeout (nginx/nginx.conf) — cold
+        # model load + generation on CPU-only prod hardware can take several
+        # minutes; a real gold-eval run hit this at exactly 300s (a generate
+        # call in verification_graph.py's _generate step), so 300s was too
+        # tight even without nginx as the binding constraint.
+        async with httpx.AsyncClient(timeout=600.0) as client:
             response = await client.post(
                 f"{self.base_url}/api/chat",
                 json={
@@ -79,7 +83,8 @@ class OllamaProvider(BaseLLMProvider):
         """Stream tokens, filtering out <think>…</think> reasoning blocks."""
         inside_think = False
 
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        # Kept in sync with generate()'s timeout — see comment there.
+        async with httpx.AsyncClient(timeout=600.0) as client:
             async with client.stream(
                 "POST",
                 f"{self.base_url}/api/chat",

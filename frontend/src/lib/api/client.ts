@@ -548,6 +548,7 @@ export interface GoldRetrievalCase {
   recall_at_k: number | null;
   reciprocal_rank: number | null;
   retrieval_ms: number;
+  error?: string | null;
 }
 
 export interface GoldRetrievalSummary {
@@ -558,6 +559,7 @@ export interface GoldRetrievalSummary {
   mrr: number;
   hit_rate: number;
   avg_retrieval_ms: number;
+  error_cases?: number;
   cases: GoldRetrievalCase[];
 }
 
@@ -570,6 +572,7 @@ export interface GoldGenerationCase {
   refusal_ok: boolean;
   hallucinated: boolean | null;
   generation_ms: number;
+  error?: string | null;
 }
 
 export interface GoldGenerationSummary {
@@ -580,6 +583,7 @@ export interface GoldGenerationSummary {
   safe_rejection_rate: number;
   refusal_cases: number;
   avg_generation_ms: number;
+  error_cases?: number;
   cases: GoldGenerationCase[];
 }
 
