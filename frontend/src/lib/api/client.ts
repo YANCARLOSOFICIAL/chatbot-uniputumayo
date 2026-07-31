@@ -480,6 +480,24 @@ export const apiClient = {
     request<RagEvalRunSummary[]>(`/api/v1/rag-eval?limit=${limit}`),
   getRagEvalRun: (runId: string) =>
     request<RagEvalRunDetail>(`/api/v1/rag-eval/${runId}`),
+
+  // ── GoldStandard Eval (Ollama vs OpenAI comparison) ──
+  startGoldEval: (file: File, k = 5) => {
+    const body = new FormData();
+    body.append("file", file);
+    return request<GoldEvalRunSummary>(`/api/v1/goldstandard-eval/run?k=${k}`, {
+      method: "POST",
+      body,
+    });
+  },
+  getGoldEvalRuns: (limit = 20) =>
+    request<GoldEvalRunSummary[]>(`/api/v1/goldstandard-eval?limit=${limit}`),
+  getGoldEvalRun: (runId: string) =>
+    request<GoldEvalRunDetail>(`/api/v1/goldstandard-eval/${runId}`),
+  downloadGoldEvalReport: async (runId: string): Promise<string> => {
+    const response = await rawRequest(`/api/v1/goldstandard-eval/${runId}/download`);
+    return response.text();
+  },
 };
 
 export interface RagEvalRunSummary {
@@ -508,5 +526,67 @@ export interface RagEvalCaseResult {
 
 export interface RagEvalRunDetail extends RagEvalRunSummary {
   results: RagEvalCaseResult[] | null;
+  error_message: string | null;
+}
+
+export interface GoldEvalRunSummary {
+  id: string;
+  status: "running" | "completed" | "failed";
+  k: number;
+  total_queries: number;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface GoldRetrievalCase {
+  id: string;
+  query: string;
+  query_type: string;
+  expected_documents: string[];
+  retrieved_titles: string[];
+  precision_at_k: number | null;
+  recall_at_k: number | null;
+  reciprocal_rank: number | null;
+  retrieval_ms: number;
+}
+
+export interface GoldRetrievalSummary {
+  k: number;
+  scored_cases: number;
+  mean_precision_at_k: number;
+  mean_recall_at_k: number;
+  mrr: number;
+  hit_rate: number;
+  avg_retrieval_ms: number;
+  cases: GoldRetrievalCase[];
+}
+
+export interface GoldGenerationCase {
+  id: string;
+  query: string;
+  answer: string;
+  refused: boolean;
+  expected_refusal: boolean;
+  refusal_ok: boolean;
+  hallucinated: boolean | null;
+  generation_ms: number;
+}
+
+export interface GoldGenerationSummary {
+  provider: string;
+  model: string;
+  hallucination_rate: number;
+  judged_cases: number;
+  safe_rejection_rate: number;
+  refusal_cases: number;
+  avg_generation_ms: number;
+  cases: GoldGenerationCase[];
+}
+
+export interface GoldEvalRunDetail extends GoldEvalRunSummary {
+  results: {
+    retrieval: GoldRetrievalSummary;
+    generations: GoldGenerationSummary[];
+  } | null;
   error_message: string | null;
 }

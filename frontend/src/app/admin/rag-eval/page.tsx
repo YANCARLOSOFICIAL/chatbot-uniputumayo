@@ -6,6 +6,7 @@ import { apiClient } from "@/lib/api/client";
 import type { RagEvalRunSummary, RagEvalRunDetail } from "@/lib/api/client";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { toast } from "@/components/ui/Toast";
+import GoldEvalPanel from "./GoldEvalPanel";
 
 function fmtMs(ms: number | null): string {
   if (ms == null) return "—";
@@ -18,7 +19,7 @@ function fmtDate(iso: string): string {
   });
 }
 
-export default function RagEvalPage() {
+function SmokeTestPanel() {
   const [runs, setRuns] = useState<RagEvalRunSummary[]>([]);
   const [selectedRun, setSelectedRun] = useState<RagEvalRunDetail | null>(null);
   const [loadingRuns, setLoadingRuns] = useState(true);
@@ -90,11 +91,11 @@ export default function RagEvalPage() {
   const passRate = selectedRun?.total ? Math.round(((selectedRun.passed ?? 0) / selectedRun.total) * 100) : null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
-      <AdminHeader
-        title="Evaluación RAG"
-        subtitle="Precisión y recall medidos contra un set fijo de preguntas — no anecdótico."
-        action={
+    <div className="rag-eval-layout" style={{ padding: "28px 32px 48px", flex: 1 }}>
+
+      {/* Main column */}
+      <div>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 18 }}>
           <button
             onClick={handleStart}
             disabled={starting || selectedRun?.status === "running"}
@@ -104,14 +105,8 @@ export default function RagEvalPage() {
             <Play size={12} className={starting || selectedRun?.status === "running" ? "animate-pulse" : ""} />
             {selectedRun?.status === "running" ? "Corriendo…" : "Ejecutar evaluación"}
           </button>
-        }
-      />
-
-      <div className="rag-eval-layout" style={{ padding: "28px 32px 48px", flex: 1 }}>
-
-        {/* Main column */}
-        <div>
-          {!selectedRun ? (
+        </div>
+        {!selectedRun ? (
             <div className="card" style={{ padding: 48, textAlign: "center", color: "var(--text-3)" }}>
               <FlaskConical size={28} style={{ marginBottom: 10, opacity: 0.5 }} />
               <div style={{ fontSize: 14 }}>
@@ -311,6 +306,37 @@ export default function RagEvalPage() {
           </div>
         </div>
       </div>
+  );
+}
+
+export default function RagEvalPage() {
+  const [tab, setTab] = useState<"smoke" | "gold">("smoke");
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
+      <AdminHeader
+        title="Evaluación RAG"
+        subtitle="Precisión y recall medidos contra un set fijo de preguntas — no anecdótico."
+        action={
+          <div style={{ display: "flex", gap: 4, background: "var(--surface-2)", padding: 3, borderRadius: 9 }}>
+            <button
+              onClick={() => setTab("smoke")}
+              className={`btn btn-sm ${tab === "smoke" ? "btn-primary" : ""}`}
+              style={{ background: tab === "smoke" ? undefined : "transparent", border: "none" }}
+            >
+              Smoke test
+            </button>
+            <button
+              onClick={() => setTab("gold")}
+              className={`btn btn-sm ${tab === "gold" ? "btn-primary" : ""}`}
+              style={{ background: tab === "gold" ? undefined : "transparent", border: "none" }}
+            >
+              GoldStandard
+            </button>
+          </div>
+        }
+      />
+      {tab === "smoke" ? <SmokeTestPanel /> : <GoldEvalPanel />}
     </div>
   );
 }

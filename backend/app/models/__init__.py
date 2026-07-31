@@ -10,6 +10,7 @@ from app.models.faculty import Faculty
 from app.models.program import Program
 from app.models.document_type import DocumentType
 from app.models.rag_eval_run import RagEvalRun
+from app.models.gold_eval_run import GoldEvalRun
 
 __all__ = [
     "User",
@@ -24,4 +25,5 @@ __all__ = [
     "Program",
     "DocumentType",
     "RagEvalRun",
+    "GoldEvalRun",
 ]

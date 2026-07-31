@@ -294,6 +294,45 @@ class TestAnswerCacheFindSimilar:
         assert result is None
 
 
+class TestAnswerCacheEnableDisable:
+    @pytest.mark.asyncio
+    async def test_disable_makes_find_similar_return_none(self):
+        cache = AsyncAnswerCache(similarity_threshold=0.9)
+        await cache.store(
+            embedding=[1.0, 0.0], question="q", answer="a", sources=[],
+            llm_provider="ollama", llm_model="qwen3:8b",
+        )
+        cache.disable()
+        assert await cache.find_similar([1.0, 0.0], query_text="q") is None
+
+    @pytest.mark.asyncio
+    async def test_disable_makes_store_a_no_op(self):
+        cache = AsyncAnswerCache(similarity_threshold=0.9)
+        cache.disable()
+        await cache.store(
+            embedding=[1.0, 0.0], question="q", answer="a", sources=[],
+            llm_provider="ollama", llm_model="qwen3:8b",
+        )
+        cache.enable()
+        assert await cache.find_similar([1.0, 0.0], query_text="q") is None
+
+    @pytest.mark.asyncio
+    async def test_enable_restores_normal_behavior(self):
+        # Regression guard for the gold-eval use case: disable() for the
+        # duration of a comparison run, enable() in a finally — entries
+        # stored before the disable window must still be readable after.
+        cache = AsyncAnswerCache(similarity_threshold=0.9)
+        await cache.store(
+            embedding=[1.0, 0.0], question="q", answer="a", sources=[],
+            llm_provider="ollama", llm_model="qwen3:8b",
+        )
+        cache.disable()
+        cache.enable()
+        result = await cache.find_similar([1.0, 0.0], query_text="q")
+        assert result is not None
+        assert result["answer"] == "a"
+
+
 class TestAnswerCacheInvalidate:
     @pytest.mark.asyncio
     async def test_invalidate_all_does_not_log_success_when_redis_fails(self, caplog):

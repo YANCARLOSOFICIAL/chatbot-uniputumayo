@@ -245,6 +245,7 @@ class AsyncAnswerCache:
         self._threshold = similarity_threshold
         self._store: list[dict] = []  # in-memory fallback, most-recent-first
         self._redis = None
+        self._enabled = True
 
     # ── Setup ─────────────────────────────────────────────────────────────────
 
@@ -369,10 +370,24 @@ class AsyncAnswerCache:
         cached_sem = _semester_reference(entry.get("question", ""))
         return query_sem is None or cached_sem is None or query_sem == cached_sem
 
+    def disable(self) -> None:
+        """Bypass reads AND writes without touching stored entries — used to
+        keep the GoldStandard eval's Ollama-vs-OpenAI comparison from reading
+        or polluting the real answer cache while it runs, without wiping
+        cache entries that production traffic is relying on. See enable()."""
+        self._enabled = False
+        logger.info("Answer cache disabled")
+
+    def enable(self) -> None:
+        self._enabled = True
+        logger.info("Answer cache enabled")
+
     async def find_similar(self, embedding: list[float], query_text: str = "") -> dict | None:
         """Return the best-matching cached entry if similarity clears the
         threshold AND it passes the entity/semester guards, else None. Entry
         dict has: question, answer, sources, llm_provider, llm_model."""
+        if not self._enabled:
+            return None
         entries = await self._load_entries()
         now = time.time()
         best: dict | None = None
@@ -422,6 +437,8 @@ class AsyncAnswerCache:
         llm_provider: str,
         llm_model: str,
     ) -> None:
+        if not self._enabled:
+            return
         entry = {
             "embedding": embedding,
             "question": question,

@@ -29,6 +29,17 @@ logger = logging.getLogger(__name__)
 # model / curriculum-enrichment LLM (see _extract_pdf_with_vision, _enrich_curriculum_text).
 _SEMESTER_LINE_RE = re.compile(r"^(SEMESTRE\s+\d+)\s*:\s*(.+)$", re.IGNORECASE)
 
+
+def _looks_like_semester_summary(text: str) -> bool:
+    """A bare `"SEMESTRE" in text` check also passes on a confused model just
+    talking ABOUT semesters (e.g. a refusal like "...extraer las materias por
+    semestre según tus instrucciones" when given empty/near-empty source
+    text) — that prose then gets stored verbatim as if it were the official
+    curriculum summary. Require at least one properly formatted
+    "SEMESTRE N: ..." line instead.
+    """
+    return any(_SEMESTER_LINE_RE.match(line.strip()) for line in text.splitlines())
+
 # xlsx/xls/csv/pptx extractors produce row/slide-oriented text ("=== HOJA: X
 # ===" / "=== DIAPOSITIVA N ===" sections) — chunk_tabular_text keeps rows
 # intact and repeats that header on every resulting chunk. docx is excluded:
@@ -102,7 +113,7 @@ class DocumentService:
                 return ""
 
             result = response.json().get("message", {}).get("content", "").strip()
-            if "SEMESTRE" not in result.upper():
+            if not _looks_like_semester_summary(result):
                 logger.warning("Vision model did not return expected curriculum format")
                 return ""
 
@@ -140,7 +151,7 @@ class DocumentService:
                 max_tokens=800,
             )
             summary = result.get("content", "").strip()
-            if not summary or "NO_ES_CURRICULUM" in summary or "SEMESTRE" not in summary.upper():
+            if not summary or "NO_ES_CURRICULUM" in summary or not _looks_like_semester_summary(summary):
                 return ""
             logger.info("Curriculum enrichment generated successfully")
             return summary
