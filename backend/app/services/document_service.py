@@ -92,8 +92,18 @@ class DocumentService:
                 "- Responde ÚNICAMENTE con las líneas 'SEMESTRE N: ...' sin texto adicional."
             )
 
-            # Ollama multimodal API: images are embedded in the message
-            async with httpx.AsyncClient(timeout=180.0) as client:
+            # Ollama multimodal API: images are embedded in the message. Unlike
+            # ollama_provider.py's chat calls, this hits Ollama directly (needs
+            # the multimodal `images` field the shared provider abstraction
+            # doesn't support) and was missing the same `think: false` fix
+            # applied there — confirmed live: without it, gemma4:e4b burns its
+            # entire token budget on hidden reasoning that never reaches
+            # `message.content` (1200 tokens generated, content empty), vs. a
+            # correct answer in ~110 tokens with thinking off. 180s -> 400s
+            # because even with thinking off, model load (~130s cold) + image
+            # prompt-eval (~115s) on this CPU-only hardware eat most of the
+            # budget before generation (fast, ~9 tok/s) even starts.
+            async with httpx.AsyncClient(timeout=400.0) as client:
                 response = await client.post(
                     f"{settings.ollama_base_url}/api/chat",
                     json={
@@ -104,6 +114,7 @@ class DocumentService:
                             "images": images_b64,
                         }],
                         "stream": False,
+                        "think": False,
                         "options": {"temperature": 0.0, "num_predict": 1200},
                     },
                 )
