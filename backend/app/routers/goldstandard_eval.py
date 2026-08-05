@@ -155,6 +155,41 @@ def _render_markdown_report(run: GoldEvalRun) -> str:
     lines.append("| Tasa de rechazo seguro | " + " | ".join(f"{g.get('safe_rejection_rate', 0):.3f}" for g in gens) + " |")
     lines.append("| Tiempo promedio de generación (ms) | " + " | ".join(f"{g.get('avg_generation_ms', 0):.0f}" for g in gens) + " |")
     lines.append("| Casos con error (excluidos de las tasas anteriores) | " + " | ".join(str(g.get("error_cases", 0)) for g in gens) + " |")
+
+    lines += ["", "## Casos no juzgados (huecos en la tasa de alucinación)", ""]
+    lines.append(
+        "Un caso \"dentro de alcance\" queda sin juzgar por dos motivos distintos, "
+        "ninguno de los cuales cuenta como error arriba: el chatbot rechazó responder "
+        "aunque debía hacerlo, o la llamada al juez LLM falló en silencio."
+    )
+    for g in gens:
+        cases = g.get("cases", [])
+        ungraded = [
+            c for c in cases
+            if not c.get("expected_refusal") and c.get("error") is None and c.get("hallucinated") is None
+        ]
+        unexpected_refusal = [c for c in ungraded if c.get("refused")]
+        judge_failed = [c for c in ungraded if not c.get("refused")]
+        lines += [
+            "",
+            f"### {g.get('provider', '')} — {len(ungraded)} caso(s) sin juzgar",
+            "",
+            f"- Rechazo inesperado (el chatbot dijo \"no sé\" en una pregunta que debía responder): {len(unexpected_refusal)}",
+            f"- Fallo silencioso del juez LLM (llamada al juez lanzó una excepción): {len(judge_failed)}",
+        ]
+        if judge_failed:
+            lines += ["", "Preguntas afectadas por fallo del juez:", ""]
+            for c in judge_failed[:20]:
+                lines.append(f"- `{c.get('id', '')}`: {c.get('query', '')}")
+            if len(judge_failed) > 20:
+                lines.append(f"- ... y {len(judge_failed) - 20} más")
+        if unexpected_refusal:
+            lines += ["", "Preguntas con rechazo inesperado:", ""]
+            for c in unexpected_refusal[:20]:
+                lines.append(f"- `{c.get('id', '')}`: {c.get('query', '')}")
+            if len(unexpected_refusal) > 20:
+                lines.append(f"- ... y {len(unexpected_refusal) - 20} más")
+
     return "\n".join(lines) + "\n"
 
 
