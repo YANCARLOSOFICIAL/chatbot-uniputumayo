@@ -271,8 +271,11 @@ async def _run_generation_case(
     if q.query_type == _RETRIEVAL_EXPECTED_TYPE and not refused:
         try:
             hallucinated = await _judge_hallucination(provider_name, model, q.query, retrieved_context, answer)
-        except Exception:
+        except Exception as e:
             hallucinated = None  # judge call failed — excluded from the rate, not counted as a hallucination
+            logger.warning(
+                "Gold eval judge call failed | query=%s | provider=%s | %s", q.id, provider_name, e,
+            )
 
     return GenerationCaseResult(
         query=q, answer=answer, refused=refused, expected_refusal=expected_refusal,
