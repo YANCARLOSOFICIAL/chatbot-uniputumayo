@@ -27,7 +27,7 @@ from app.services.verification_graph import generate_verified
 from app.schemas.rag import SearchRequest
 from app.schemas.llm import GenerateRequest, LLMMessage
 from app.utils.prompts import (
-    build_chat_prompt, REFUSAL_MARKER, GREETING_PROMPT,
+    build_chat_prompt, build_no_context_answer, REFUSAL_MARKER, GREETING_PROMPT,
     CLARIFICATION_MARKER, build_clarification_message,
 )
 from app.utils.query_utils import (
@@ -579,6 +579,17 @@ class ChatService:
                 quality = "clarification"
                 sources_payload, source_infos = [], []
                 tokens_used = None
+            elif not greeting and rag_ctx.quality != "good":
+                # RAG found nothing usable — answer with the fixed refusal
+                # directly instead of asking the LLM to reproduce it verbatim.
+                # Skips a slow Ollama call and the risk of a weaker model
+                # paraphrasing instead of copying the exact text (see
+                # build_no_context_answer docstring).
+                content = build_no_context_answer()
+                model_name = runtime_config.resolve_model(provider_name)
+                quality = rag_ctx.quality
+                sources_payload, source_infos = [], []
+                tokens_used = None
             else:
                 messages = self._build_messages(
                     rag_ctx, history, data.content, is_greeting_msg=greeting, provider_name=provider_name,
@@ -602,16 +613,22 @@ class ChatService:
                         temperature=temperature,
                         max_tokens=runtime_config.default_max_tokens,
                     )
-                    content = verified["content"]
                     finish_reason = verified["finish_reason"]
                     tokens_used = verified["tokens_used"]["total"] if verified["tokens_used"] else None
                     verification_attempts = verified["attempts"]
                     verification_approved = verified["approved"]
-                    if not verified["approved"]:
+                    if verified["approved"]:
+                        content = verified["content"]
+                    else:
+                        # The grader itself flagged every attempt as ungrounded —
+                        # serve the fixed refusal instead of a known-hallucinated
+                        # draft (previously this shipped the draft anyway).
                         logger.warning(
-                            "Verification loop exhausted retries without approval | conv=%s | "
-                            "attempts=%d", conversation_id, verified["attempts"],
+                            "Verification loop exhausted retries without approval — serving fixed "
+                            "refusal instead | conv=%s | attempts=%d",
+                            conversation_id, verified["attempts"],
                         )
+                        content = build_no_context_answer()
                 else:
                     llm_service = LLMService()
                     llm_response = await llm_service.generate(
@@ -763,6 +780,18 @@ class ChatService:
 
                     yield f"data: {json.dumps({'type': 'sources', 'sources': []})}\n\n"
                     yield f"data: {json.dumps({'type': 'token', 'content': full_content})}\n\n"
+                elif not greeting and rag_ctx.quality != "good":
+                    # Same rationale as process_message's equivalent branch:
+                    # RAG found nothing usable — send the fixed refusal
+                    # directly instead of asking the LLM to reproduce it.
+                    full_content = build_no_context_answer()
+                    model = runtime_config.resolve_model(provider_name)
+                    quality = rag_ctx.quality
+                    sources_payload = []
+                    rag_count = 0
+
+                    yield f"data: {json.dumps({'type': 'sources', 'sources': []})}\n\n"
+                    yield f"data: {json.dumps({'type': 'token', 'content': full_content})}\n\n"
                 else:
                     messages = self._build_messages(
                         rag_ctx, history, data.content, is_greeting_msg=greeting, provider_name=provider_name,
@@ -796,15 +825,21 @@ class ChatService:
                             temperature=temperature,
                             max_tokens=runtime_config.default_max_tokens,
                         )
-                        full_content = verified["content"]
                         finish_reason = verified["finish_reason"]
                         verification_attempts = verified["attempts"]
                         verification_approved = verified["approved"]
-                        if not verified["approved"]:
+                        if verified["approved"]:
+                            full_content = verified["content"]
+                        else:
+                            # The grader flagged every attempt as ungrounded —
+                            # send the fixed refusal instead of a known-hallucinated
+                            # draft (previously this streamed the draft anyway).
                             logger.warning(
-                                "Verification loop exhausted retries without approval | conv=%s | "
-                                "attempts=%d", conversation_id, verified["attempts"],
+                                "Verification loop exhausted retries without approval — serving fixed "
+                                "refusal instead | conv=%s | attempts=%d",
+                                conversation_id, verified["attempts"],
                             )
+                            full_content = build_no_context_answer()
                         yield f"data: {json.dumps({'type': 'token', 'content': full_content})}\n\n"
                     else:
                         provider = ProviderFactory.get_provider(provider_name)

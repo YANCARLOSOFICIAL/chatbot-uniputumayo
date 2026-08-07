@@ -25,6 +25,7 @@ provider's worth of judge calls on top of the two already being compared.
 """
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 import re
@@ -32,6 +33,7 @@ import time
 from dataclasses import dataclass, field
 from uuid import uuid4
 
+import openai
 import openpyxl
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -209,14 +211,25 @@ _JUDGE_PROMPT = (
 )
 
 
+_JUDGE_RATE_LIMIT_RETRIES = 3
+_JUDGE_RATE_LIMIT_BACKOFF_S = 3.0
+
+
 async def _judge_hallucination(provider_name: str, model: str, query: str, context: str, answer: str) -> bool:
     provider = ProviderFactory.get_provider(provider_name)
-    result = await provider.generate(
-        messages=[{"role": "user", "content": _JUDGE_PROMPT.format(
-            query=query, context=context[:3000], answer=answer,
-        )}],
-        model=model, temperature=0.0, max_tokens=10,
-    )
+    for attempt in range(_JUDGE_RATE_LIMIT_RETRIES + 1):
+        try:
+            result = await provider.generate(
+                messages=[{"role": "user", "content": _JUDGE_PROMPT.format(
+                    query=query, context=context[:3000], answer=answer,
+                )}],
+                model=model, temperature=0.0, max_tokens=10,
+            )
+            break
+        except openai.RateLimitError:
+            if attempt == _JUDGE_RATE_LIMIT_RETRIES:
+                raise
+            await asyncio.sleep(_JUDGE_RATE_LIMIT_BACKOFF_S * (attempt + 1))
     verdict = result.get("content", "").strip().upper()
     return verdict.startswith("SI") or verdict.startswith("SÍ")
 
