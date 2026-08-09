@@ -150,3 +150,96 @@ class TestJudgeHallucinationRateLimitRetry:
 
 async def _noop():
     return None
+
+
+class TestClarificationExcludedFromHallucinationJudging:
+    """The real bug found via the 2026-08-08 prod run: a "which program?"
+    clarification reply (CLARIFICATION_MARKER) isn't a real answer to judge
+    against a single-document context — it lists unrelated program names by
+    design. The old code only skipped judging for REFUSAL_MARKER, so the
+    judge ran on clarification replies too and (confirmed live) marked most
+    of them "SI" (hallucinated), inflating the reported rate: 22/27 of
+    OpenAI's and 17/25 of Ollama's "hallucinated" cases in that run were
+    actually mis-fired clarifications, not real hallucinations."""
+
+    @pytest.mark.asyncio
+    async def test_run_generation_case_skips_judge_for_clarification_reply(self, monkeypatch):
+        from app.services.goldstandard_eval_service import _run_generation_case
+
+        clarification_answer = (
+            "Tu pregunta puede aplicar a varios programas académicos de Uniputumayo. "
+            "¿Sobre cuál programa te gustaría saber específicamente?\n\n- Ing. Sistemas\n- Administración"
+        )
+        fake_response = SimpleNamespace(assistant_message=SimpleNamespace(content=clarification_answer))
+
+        async def fake_process_message(*args, **kwargs):
+            return fake_response
+
+        monkeypatch.setattr(
+            "app.services.goldstandard_eval_service.ChatService.process_message",
+            fake_process_message,
+        )
+
+        called = False
+
+        async def fail_if_called(*args, **kwargs):
+            nonlocal called
+            called = True
+            return True
+
+        monkeypatch.setattr(
+            "app.services.goldstandard_eval_service._judge_hallucination", fail_if_called,
+        )
+
+        fake_db = SimpleNamespace(add=lambda *_: None, flush=_noop)
+        q = GoldQuery(
+            id="GS-007", category="c", query="¿Qué materias tiene X?",
+            query_type="dentro de alcance", expected_documents=["07_x"],
+        )
+
+        result = await _run_generation_case(fake_db, q, "some retrieved context", "openai", "gpt-4.1")
+
+        assert called is False, "the judge must never be called for a clarification reply"
+        assert result.clarification is True
+        assert result.refused is False
+        assert result.hallucinated is None
+
+
+class TestComputeGenerationStatsRecomputesFromCases:
+    """_compute_generation_stats (used by the markdown report) must recompute
+    hallucination_rate/judged_cases from the per-case answer text rather than
+    trusting the stored summary fields — that's what makes the fix retroactive
+    for runs stored before the CLARIFICATION_MARKER exclusion existed (their
+    stored `hallucinated` value for a clarification case is a stale True/False
+    from the old buggy judge call, and they have no `clarification` key at all)."""
+
+    def _case(self, id, answer, hallucinated, refused=False, expected_refusal=False, error=None):
+        return {
+            "id": id, "query": f"query {id}", "answer": answer, "refused": refused,
+            "expected_refusal": expected_refusal, "refusal_ok": refused == expected_refusal,
+            "hallucinated": hallucinated, "generation_ms": 100, "error": error,
+        }
+
+    def test_old_run_without_clarification_field_is_corrected(self):
+        from app.routers.goldstandard_eval import _compute_generation_stats
+
+        gen = {
+            "provider": "openai", "model": "gpt-4.1", "avg_generation_ms": 1000, "error_cases": 0,
+            "cases": [
+                self._case("GS-001", "Real hallucinated answer with fabricated data", hallucinated=True),
+                self._case("GS-002", "Correct grounded answer", hallucinated=False),
+                self._case(
+                    "GS-003",
+                    "Tu pregunta puede aplicar a varios programas académicos de Uniputumayo. "
+                    "¿Sobre cuál programa te gustaría saber específicamente?\n\n- Ing. Sistemas",
+                    hallucinated=True,  # stale verdict from the old buggy judge call
+                ),
+            ],
+        }
+
+        stats = _compute_generation_stats(gen)
+
+        assert stats["judged_cases"] == 2  # GS-003 excluded, not counted as judged at all
+        assert stats["hallucination_rate"] == pytest.approx(0.5)  # 1 real hallucination / 2 judged
+        assert len(stats["clarification_triggered"]) == 1
+        assert stats["clarification_triggered"][0]["id"] == "GS-003"

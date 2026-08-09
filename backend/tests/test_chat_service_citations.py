@@ -10,7 +10,7 @@ from app.utils.prompts import REFUSAL_MARKER, CLARIFICATION_MARKER
 
 def make_rag_ctx(n_sources: int, programs: list[str | None] | None = None,
                   faculties: list[str | None] | None = None,
-                  scores: list[float] | None = None) -> _RAGContext:
+                  scores: list[float] | None = None, quality: str = "good") -> _RAGContext:
     programs = programs or [None] * n_sources
     faculties = faculties or [None] * n_sources
     scores = scores or [0.5] * n_sources
@@ -33,7 +33,7 @@ def make_rag_ctx(n_sources: int, programs: list[str | None] | None = None,
         context_text="context",
         sources_payload=sources_payload,
         source_infos=source_infos,
-        quality="good",
+        quality=quality,
         embed_ms=0,
         search_ms=0,
     )
@@ -138,6 +138,24 @@ class TestDetectAmbiguity:
     def test_no_ambiguity_when_no_sources(self, service):
         rag_ctx = make_rag_ctx(0)
         result = service._detect_ambiguity("¿Cuáles son las materias?", rag_ctx)
+        assert result is None
+
+    def test_does_not_trigger_when_quality_is_weak(self, service):
+        # Real incident (2026-08-08 GoldStandard eval): a thinly-indexed
+        # program ("Tecnología en Desarrollo de Software") retrieves only
+        # weak/noisy matches spread across several UNRELATED programs —
+        # quality="weak" (top score below rag_score_threshold). Without this
+        # gate, the margin check below still sees ">=2 candidates within
+        # margin of the top score" (everything is equally mediocre) and asks
+        # a nonsensical "which program?" instead of admitting the retrieval
+        # just didn't find anything good.
+        rag_ctx = make_rag_ctx(
+            2,
+            programs=["Ingeniería de Sistemas", "Ingeniería Agroindustrial"],
+            scores=[0.30, 0.28],
+            quality="weak",
+        )
+        result = service._detect_ambiguity("¿Cuáles son las materias del pensum?", rag_ctx)
         assert result is None
 
 

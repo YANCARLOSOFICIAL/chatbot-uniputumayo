@@ -375,22 +375,42 @@ class ChatService:
     ) -> tuple[str, list[str]] | None:
         """Decide whether to ask "which program/faculty?" instead of answering.
 
-        Three conditions, all required (see query_utils.is_varying_topic_query
-        and mentions_entity docstrings for the first two):
+        Four conditions, all required (see query_utils.is_varying_topic_query
+        and mentions_entity docstrings for two of them):
         1. The question is about a topic confirmed to genuinely differ by
            program/faculty (pensum, créditos, misión, ...) — institution-wide
            topics like "requisitos de admisión" never trigger this, no matter
            how many programs' documents retrieval happens to match.
-        2. Among the retrieved sources, >=2 distinct programs appear whose
+        2. Retrieval actually found a confidently good match at all
+           (rag_ctx.quality == "good", i.e. top_score already clears
+           settings.rag_score_threshold). Real incident found via the
+           GoldStandard eval (2026-08-08): for a thinly-indexed program (e.g.
+           "Tecnología en Desarrollo de Software"), retrieval returns only
+           weak/noisy matches across several UNRELATED programs — quality
+           "weak", top_score below threshold. Comparing those against each
+           other with condition 3's margin still finds ">=2 candidates
+           within margin of the top score", because when nothing matches
+           well everything is equally mediocre. That produced a nonsensical
+           "¿sobre cuál programa?" menu (offering e.g. Ing. Sistemas,
+           Administración, Agroindustrial for a question that already named
+           a specific program) instead of the honest "no tengo información"
+           answer quality="weak" should have gotten. Gating on "good" reuses
+           the already-tuned retrieval bar instead of a second guessed
+           number — see [[project_goldstandard_eval_wip]] for the residual
+           risk this doesn't fully close (score compression can still put
+           unrelated matches above threshold).
+        3. Among the retrieved sources, >=2 distinct programs appear whose
            best score is within _AMBIGUITY_SCORE_MARGIN of the top score —
            the margin excludes a program that only shows up via a weak,
            non-competitive match. Checked first at program level (more
            specific); falls back to faculty level only if program-level
            doesn't yield >=2 candidates.
-        3. None of the candidates is already named in the question.
+        4. None of the candidates is already named in the question.
 
         Returns (entity_type, sorted candidate names) or None.
         """
+        if rag_ctx.quality != "good":
+            return None
         if not is_varying_topic_query(query) or not rag_ctx.source_infos:
             return None
 

@@ -16,6 +16,7 @@ from app.services.goldstandard_eval_service import run_gold_comparison
 from app.providers.provider_factory import ProviderFactory
 from app.runtime_config import runtime_config
 from app.utils.cache import answer_cache
+from app.utils.prompts import CLARIFICATION_MARKER
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +124,45 @@ async def get_gold_eval_run(
     return run
 
 
+def _is_clarification_case(c: dict) -> bool:
+    """Recomputed directly from the answer text (not the stored `clarification`
+    field) so reports for runs stored before that field existed are also
+    corrected — a clarification reply ("which program?") isn't a real answer
+    and was previously judged for hallucination against a single-document
+    context it was never meant to match, inflating the hallucination rate."""
+    return CLARIFICATION_MARKER in (c.get("answer") or "")
+
+
+def _compute_generation_stats(g: dict) -> dict:
+    cases = g.get("cases", [])
+    ok_cases = [c for c in cases if c.get("error") is None]
+    in_scope = [c for c in ok_cases if not c.get("expected_refusal")]
+    refusal_expected = [c for c in ok_cases if c.get("expected_refusal")]
+
+    judged = [c for c in in_scope if c.get("hallucinated") is not None and not _is_clarification_case(c)]
+    unexpected_refusal = [c for c in in_scope if c.get("refused")]
+    clarification_triggered = [c for c in in_scope if _is_clarification_case(c)]
+    judge_failed = [
+        c for c in in_scope
+        if not c.get("refused") and not _is_clarification_case(c) and c.get("hallucinated") is None
+    ]
+
+    return {
+        "provider": g.get("provider", ""),
+        "model": g.get("model", ""),
+        "hallucination_rate": (sum(1 for c in judged if c.get("hallucinated")) / len(judged)) if judged else 0.0,
+        "judged_cases": len(judged),
+        "safe_rejection_rate": (
+            sum(1 for c in refusal_expected if c.get("refusal_ok")) / len(refusal_expected)
+        ) if refusal_expected else 0.0,
+        "avg_generation_ms": g.get("avg_generation_ms", 0),
+        "error_cases": g.get("error_cases", 0),
+        "unexpected_refusal": unexpected_refusal,
+        "clarification_triggered": clarification_triggered,
+        "judge_failed": judge_failed,
+    }
+
+
 def _render_markdown_report(run: GoldEvalRun) -> str:
     r = run.results or {}
     retrieval = r.get("retrieval", {})
@@ -148,33 +188,32 @@ def _render_markdown_report(run: GoldEvalRun) -> str:
         "| Métrica | " + " | ".join(g.get("provider", "") for g in r.get("generations", [])) + " |",
         "|---|" + "|".join(["---"] * len(r.get("generations", []))) + "|",
     ]
-    gens = r.get("generations", [])
-    lines.append("| Modelo | " + " | ".join(g.get("model", "") for g in gens) + " |")
-    lines.append("| Tasa de alucinación | " + " | ".join(f"{g.get('hallucination_rate', 0):.3f}" for g in gens) + " |")
-    lines.append("| Casos juzgados | " + " | ".join(str(g.get("judged_cases", 0)) for g in gens) + " |")
-    lines.append("| Tasa de rechazo seguro | " + " | ".join(f"{g.get('safe_rejection_rate', 0):.3f}" for g in gens) + " |")
-    lines.append("| Tiempo promedio de generación (ms) | " + " | ".join(f"{g.get('avg_generation_ms', 0):.0f}" for g in gens) + " |")
-    lines.append("| Casos con error (excluidos de las tasas anteriores) | " + " | ".join(str(g.get("error_cases", 0)) for g in gens) + " |")
+    gens = [_compute_generation_stats(g) for g in r.get("generations", [])]
+    lines.append("| Modelo | " + " | ".join(g["model"] for g in gens) + " |")
+    lines.append("| Tasa de alucinación | " + " | ".join(f"{g['hallucination_rate']:.3f}" for g in gens) + " |")
+    lines.append("| Casos juzgados | " + " | ".join(str(g["judged_cases"]) for g in gens) + " |")
+    lines.append("| Tasa de rechazo seguro | " + " | ".join(f"{g['safe_rejection_rate']:.3f}" for g in gens) + " |")
+    lines.append("| Tiempo promedio de generación (ms) | " + " | ".join(f"{g['avg_generation_ms']:.0f}" for g in gens) + " |")
+    lines.append("| Casos con error (excluidos de las tasas anteriores) | " + " | ".join(str(g["error_cases"]) for g in gens) + " |")
 
     lines += ["", "## Casos no juzgados (huecos en la tasa de alucinación)", ""]
     lines.append(
-        "Un caso \"dentro de alcance\" queda sin juzgar por dos motivos distintos, "
+        "Un caso \"dentro de alcance\" queda sin juzgar por tres motivos distintos, "
         "ninguno de los cuales cuenta como error arriba: el chatbot rechazó responder "
-        "aunque debía hacerlo, o la llamada al juez LLM falló en silencio."
+        "aunque debía hacerlo, disparó una aclaración (\"¿sobre cuál programa?\") en vez "
+        "de responder, o la llamada al juez LLM falló en silencio."
     )
     for g in gens:
-        cases = g.get("cases", [])
-        ungraded = [
-            c for c in cases
-            if not c.get("expected_refusal") and c.get("error") is None and c.get("hallucinated") is None
-        ]
-        unexpected_refusal = [c for c in ungraded if c.get("refused")]
-        judge_failed = [c for c in ungraded if not c.get("refused")]
+        unexpected_refusal = g["unexpected_refusal"]
+        clarification_triggered = g["clarification_triggered"]
+        judge_failed = g["judge_failed"]
+        total_ungraded = len(unexpected_refusal) + len(clarification_triggered) + len(judge_failed)
         lines += [
             "",
-            f"### {g.get('provider', '')} — {len(ungraded)} caso(s) sin juzgar",
+            f"### {g['provider']} — {total_ungraded} caso(s) sin juzgar",
             "",
             f"- Rechazo inesperado (el chatbot dijo \"no sé\" en una pregunta que debía responder): {len(unexpected_refusal)}",
+            f"- Aclaración disparada (\"¿sobre cuál programa/facultad?\" en vez de responder): {len(clarification_triggered)}",
             f"- Fallo silencioso del juez LLM (llamada al juez lanzó una excepción): {len(judge_failed)}",
         ]
         if judge_failed:
@@ -183,6 +222,12 @@ def _render_markdown_report(run: GoldEvalRun) -> str:
                 lines.append(f"- `{c.get('id', '')}`: {c.get('query', '')}")
             if len(judge_failed) > 20:
                 lines.append(f"- ... y {len(judge_failed) - 20} más")
+        if clarification_triggered:
+            lines += ["", "Preguntas donde se disparó una aclaración:", ""]
+            for c in clarification_triggered[:20]:
+                lines.append(f"- `{c.get('id', '')}`: {c.get('query', '')}")
+            if len(clarification_triggered) > 20:
+                lines.append(f"- ... y {len(clarification_triggered) - 20} más")
         if unexpected_refusal:
             lines += ["", "Preguntas con rechazo inesperado:", ""]
             for c in unexpected_refusal[:20]:

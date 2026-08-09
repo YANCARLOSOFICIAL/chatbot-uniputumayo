@@ -45,7 +45,7 @@ from app.services.chat_service import ChatService
 from app.services.rag_service import RAGService
 from app.providers.provider_factory import ProviderFactory
 from app.runtime_config import runtime_config
-from app.utils.prompts import REFUSAL_MARKER
+from app.utils.prompts import CLARIFICATION_MARKER, REFUSAL_MARKER
 from app.utils.text_processing import normalize_for_match
 
 logger = logging.getLogger(__name__)
@@ -239,9 +239,10 @@ class GenerationCaseResult:
     query: GoldQuery
     answer: str
     refused: bool
+    clarification: bool  # "which program/faculty?" reply — not a real answer, never judged (see _detect_ambiguity)
     expected_refusal: bool
     refusal_ok: bool
-    hallucinated: bool | None  # None when not applicable (refusal, or not "dentro de alcance")
+    hallucinated: bool | None  # None when not applicable (refusal, clarification, or not "dentro de alcance")
     generation_ms: int
     error: str | None = None  # set when process_message itself blew up (e.g. Ollama ReadTimeout) — case excluded from every rate, not counted as a failure
 
@@ -270,18 +271,20 @@ async def _run_generation_case(
             "Gold eval generation failed | query=%s | provider=%s | %s", q.id, provider_name, e,
         )
         return GenerationCaseResult(
-            query=q, answer="", refused=False, expected_refusal=q.query_type in _REFUSAL_EXPECTED_TYPES,
+            query=q, answer="", refused=False, clarification=False,
+            expected_refusal=q.query_type in _REFUSAL_EXPECTED_TYPES,
             refusal_ok=False, hallucinated=None, generation_ms=generation_ms, error=str(e) or repr(e),
         )
     generation_ms = int((time.time() - t0) * 1000)
     answer = response.assistant_message.content
     refused = REFUSAL_MARKER in answer
+    clarification = CLARIFICATION_MARKER in answer
 
     expected_refusal = q.query_type in _REFUSAL_EXPECTED_TYPES
     refusal_ok = (refused == expected_refusal)
 
     hallucinated = None
-    if q.query_type == _RETRIEVAL_EXPECTED_TYPE and not refused:
+    if q.query_type == _RETRIEVAL_EXPECTED_TYPE and not refused and not clarification:
         try:
             hallucinated = await _judge_hallucination(provider_name, model, q.query, retrieved_context, answer)
         except Exception as e:
@@ -291,7 +294,7 @@ async def _run_generation_case(
             )
 
     return GenerationCaseResult(
-        query=q, answer=answer, refused=refused, expected_refusal=expected_refusal,
+        query=q, answer=answer, refused=refused, clarification=clarification, expected_refusal=expected_refusal,
         refusal_ok=refusal_ok, hallucinated=hallucinated, generation_ms=generation_ms,
     )
 
@@ -343,6 +346,7 @@ async def run_generation_eval(
             "query": r.query.query,
             "answer": r.answer,
             "refused": r.refused,
+            "clarification": r.clarification,
             "expected_refusal": r.expected_refusal,
             "refusal_ok": r.refusal_ok,
             "hallucinated": r.hallucinated,
