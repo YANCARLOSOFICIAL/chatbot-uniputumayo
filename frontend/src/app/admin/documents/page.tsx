@@ -337,6 +337,7 @@ export default function DocumentsPage() {
           onValueChange={setFaculty}
           options={[{ value: "", label: "Sin especificar" }, ...faculties.map((f) => ({ value: f.name, label: f.name }))]}
           triggerStyle={{ width: "100%", boxSizing: "border-box" }}
+          searchable
         />
       </div>
       <div>
@@ -346,6 +347,7 @@ export default function DocumentsPage() {
           onValueChange={setProgram}
           options={[{ value: "", label: "Sin especificar" }, ...programs.map((p) => ({ value: p.name, label: p.name }))]}
           triggerStyle={{ width: "100%", boxSizing: "border-box" }}
+          searchable
         />
       </div>
     </div>
@@ -615,6 +617,7 @@ export default function DocumentsPage() {
                   onValueChange={setDocType}
                   options={[{ value: "", label: "General" }, ...docTypes.map((t) => ({ value: t.name, label: t.name }))]}
                   triggerStyle={{ width: "100%", boxSizing: "border-box" }}
+                  searchable
                 />
               </div>
 
@@ -663,6 +666,7 @@ export default function DocumentsPage() {
                   onValueChange={setEditFaculty}
                   options={[{ value: "", label: "Sin especificar" }, ...faculties.map((f) => ({ value: f.name, label: f.name }))]}
                   triggerStyle={{ width: "100%", boxSizing: "border-box" }}
+                  searchable
                 />
               </div>
               <div>
@@ -672,6 +676,7 @@ export default function DocumentsPage() {
                   onValueChange={setEditProgram}
                   options={[{ value: "", label: "Sin especificar" }, ...programs.map((p) => ({ value: p.name, label: p.name }))]}
                   triggerStyle={{ width: "100%", boxSizing: "border-box" }}
+                  searchable
                 />
               </div>
             </div>
@@ -683,6 +688,7 @@ export default function DocumentsPage() {
                 onValueChange={setEditDocType}
                 options={[{ value: "", label: "General" }, ...docTypes.map((t) => ({ value: t.name, label: t.name }))]}
                 triggerStyle={{ width: "100%", boxSizing: "border-box" }}
+                searchable
               />
             </div>
 
