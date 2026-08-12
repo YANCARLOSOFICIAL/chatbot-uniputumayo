@@ -105,6 +105,38 @@ async def _periodic_guest_cleanup() -> None:
         await _cleanup_guest_conversations()
 
 
+async def _reconcile_orphaned_eval_runs() -> None:
+    """Both eval harnesses (goldstandard_eval.py, rag_eval.py) track progress
+    as an in-process asyncio.Task with a DB row set to status="running" —
+    there's no separate worker, so if the backend process dies mid-run (crash,
+    power outage, forced restart), the task dies with it but the row is never
+    updated. Nothing can resume that task after a restart, so any row still
+    "running" at startup is guaranteed orphaned — mark it "failed" rather than
+    leaving it stuck forever."""
+    from app.database import async_session
+    from app.models.gold_eval_run import GoldEvalRun
+    from app.models.rag_eval_run import RagEvalRun
+
+    try:
+        async with async_session() as db:
+            now = datetime.now(timezone.utc)
+            for model in (GoldEvalRun, RagEvalRun):
+                result = await db.execute(select(model).where(model.status == "running"))
+                orphaned = result.scalars().all()
+                for run in orphaned:
+                    run.status = "failed"
+                    run.error_message = "Interrumpido: el backend se reinició mientras este run estaba en curso"
+                    run.completed_at = now
+                if orphaned:
+                    logger.warning(
+                        "Marked %d orphaned %s row(s) as failed after restart",
+                        len(orphaned), model.__tablename__,
+                    )
+            await db.commit()
+    except Exception as e:
+        logger.warning("Could not reconcile orphaned eval runs (non-fatal): %s", e)
+
+
 async def _seed_admin():
     """Create default admin user if it doesn't exist."""
     from app.database import async_session
@@ -268,6 +300,9 @@ async def lifespan(app: FastAPI):
         logger.warning(f"No se pudo crear admin seed (DB no disponible?): {e}")
     # Delete orphaned guest conversations from previous sessions
     await _cleanup_guest_conversations()
+    # Mark any eval run left "running" by a previous process as failed —
+    # see _reconcile_orphaned_eval_runs docstring for why this can't be resumed.
+    await _reconcile_orphaned_eval_runs()
     # Repeat cleanup every 2 h in background (store ref so GC doesn't collect it)
     _pull_tasks.add(asyncio.create_task(_periodic_guest_cleanup(), name="guest-cleanup"))
     # Connect RAG + answer caches to Redis if configured
