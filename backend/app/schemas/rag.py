@@ -15,6 +15,15 @@ class SearchRequest(BaseModel):
     top_k: int = settings.rag_top_k
     score_threshold: float = settings.rag_score_threshold
     filters: SearchFilters | None = None
+    # Overrides which provider `RAGService.search()` uses to decide/perform
+    # HyDE, instead of reading the live `runtime_config.default_llm_provider`.
+    # None (default) preserves normal chat behavior (HyDE follows whichever
+    # provider is currently active in /admin/config). Callers that need
+    # retrieval-quality results to stay stable regardless of the live admin
+    # setting (e.g. the GoldStandard eval, which computes retrieval once and
+    # compares it against multiple generation providers) should pass a fixed
+    # value explicitly.
+    hyde_provider_override: str | None = None
 
 
 class SearchResultItem(BaseModel):

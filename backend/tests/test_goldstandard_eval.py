@@ -26,8 +26,10 @@ class FakeRAGService:
 
     def __init__(self, titles: list[str]):
         self._titles = titles
+        self.last_request: SearchRequest | None = None
 
     async def search(self, request: SearchRequest):
+        self.last_request = request
         results = [
             SimpleNamespace(document_title=t, content=f"chunk from {t}")
             for t in self._titles
@@ -100,6 +102,22 @@ class TestRetrievalMatchingIsSubstring:
         assert result.precision_at_k is None
         assert result.recall_at_k is None
         assert result.reciprocal_rank is None
+
+    @pytest.mark.asyncio
+    async def test_pins_hyde_to_openai_regardless_of_live_admin_provider(self):
+        """Retrieval metrics must not depend on whatever provider happens to
+        be active in /admin/config at run time — that dependency (via
+        RAGService.search()'s hyde_active check) is what collapsed a real
+        run's Precision@5/Recall@5/MRR/Hit rate on 2026-08-13 when the live
+        provider was Ollama."""
+        q = GoldQuery(
+            id="5", category="c", query="query",
+            query_type="dentro de alcance",
+            expected_documents=["doc"],
+        )
+        rag = FakeRAGService(["doc"])
+        await _run_retrieval_case(rag, q, k=5)
+        assert rag.last_request.hyde_provider_override == "openai"
 
 
 class FakeRateLimitedProvider:

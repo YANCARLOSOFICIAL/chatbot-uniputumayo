@@ -26,14 +26,14 @@ class RAGService:
 
     # ── HyDE ────────────────────────────────────────────────────────────────
 
-    async def _generate_hyde_doc(self, query: str) -> str:
+    async def _generate_hyde_doc(self, query: str, provider_name: str | None = None) -> str:
         """Generate a hypothetical answer to embed instead of the raw query.
 
         HyDE embeds a plausible response rather than the question itself, reducing
         the semantic distance between the query vector and stored document vectors.
         """
         try:
-            provider_name = runtime_config.default_llm_provider
+            provider_name = provider_name or runtime_config.default_llm_provider
             provider = ProviderFactory.get_provider(provider_name)
             model = runtime_config.resolve_model(provider_name)
 
@@ -251,7 +251,10 @@ class RAGService:
         # full extra generate() call before every non-cached search, which on
         # CPU-only Ollama roughly doubles the time to answer. On OpenAI the extra
         # call is fast/cheap enough that the retrieval-quality gain is worth it.
-        hyde_active = settings.rag_hyde_enabled and runtime_config.default_llm_provider != "ollama"
+        # `hyde_provider_override` lets a caller pin this decision instead of
+        # reading the live admin-panel setting — see SearchRequest for why.
+        hyde_provider = request.hyde_provider_override or runtime_config.default_llm_provider
+        hyde_active = settings.rag_hyde_enabled and hyde_provider != "ollama"
 
         # Cache check (key = query + retrieval params). `hyde_active` (not the
         # static setting) so entries built with/without HyDE never collide.
@@ -272,7 +275,9 @@ class RAGService:
         embed_start = time.time()
         embed_query = request.query
         if hyde_active:
-            embed_query = await self._generate_hyde_doc(request.query)
+            embed_query = await self._generate_hyde_doc(
+                request.query, provider_name=request.hyde_provider_override
+            )
             logger.debug("HyDE doc generated (%d chars)", len(embed_query))
 
         embed_response = await llm_service.embed(EmbedRequest(texts=[embed_query]))

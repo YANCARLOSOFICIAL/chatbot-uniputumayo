@@ -132,7 +132,22 @@ class RetrievalCaseResult:
 
 async def _run_retrieval_case(rag_service: RAGService, q: GoldQuery, k: int) -> RetrievalCaseResult:
     t0 = time.time()
-    search = await rag_service.search(SearchRequest(query=q.query, top_k=k))
+    # Pin HyDE's provider explicitly instead of letting RAGService.search()
+    # read the live runtime_config.default_llm_provider — that global can
+    # differ (or get toggled mid-run) between eval runs regardless of which
+    # generation providers are actually being compared below, which silently
+    # broke the "retrieval is independent of the answering LLM" invariant
+    # this module's docstring promises (confirmed 2026-08-13: a run where the
+    # admin panel's active provider happened to be "ollama" saw HyDE turn
+    # off for the whole retrieval pass, collapsing every retrieval metric —
+    # P@5 32.7%->23.6%, R@5 74.0%->48.7%, MRR 0.669->0.409, Hit rate
+    # 76.6%->49.4% — vs. every prior run). OpenAI is always one of the two
+    # `providers` this eval compares (see run_gold_comparison's caller), so
+    # it's always available here; pinning to it keeps retrieval numbers
+    # reproducible across runs regardless of live admin state.
+    search = await rag_service.search(
+        SearchRequest(query=q.query, top_k=k, hyde_provider_override="openai")
+    )
     retrieval_ms = int((time.time() - t0) * 1000)
     retrieved_titles = [_normalize_doc_ref(r.document_title or "") for r in search.results]
     retrieved_content = "\n\n".join(r.content for r in search.results)
