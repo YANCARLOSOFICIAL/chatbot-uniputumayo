@@ -408,6 +408,22 @@ class ChatService:
         4. None of the candidates is already named in the question.
 
         Returns (entity_type, sorted candidate names) or None.
+
+        Before the faculty-level check specifically: if the query already
+        names any program present anywhere in rag_ctx.source_infos (not just
+        the margin-qualified faculty candidates), skip straight to no
+        ambiguity. Real incident found via the GoldStandard eval
+        (2026-08-15): "¿Qué asignaturas incluye la Tecnología en Gestión
+        Pública?" already names its program exactly (program-level check
+        correctly recognizes it and returns None) — but a same-margin,
+        unrelated-faculty chunk (e.g. Ingeniería de Sistemas, scoring within
+        0.15 of the top match purely from the known score-compression
+        behavior of this embedding model) still passed the OLD faculty-level
+        check, since that check only looked at mentions_entity against the
+        2 faculty names themselves, and nobody phrases a question naming a
+        faculty ("¿ciencias administrativas y económicas?"). A user who
+        already named an exact program has nothing left to clarify,
+        regardless of what else scored nearby — see [[project_goldstandard_eval_wip]].
         """
         if rag_ctx.quality != "good":
             return None
@@ -415,8 +431,13 @@ class ChatService:
             return None
 
         top_score = max(s.score for s in rag_ctx.source_infos)
+        all_programs = {s.program for s in rag_ctx.source_infos if s.program}
+        query_already_names_a_program = any(mentions_entity(query, p) for p in all_programs)
 
         for attr, entity_type in (("program", "program"), ("faculty", "faculty")):
+            if entity_type == "faculty" and query_already_names_a_program:
+                continue
+
             best_by_name: dict[str, float] = {}
             for s in rag_ctx.source_infos:
                 name = getattr(s, attr)

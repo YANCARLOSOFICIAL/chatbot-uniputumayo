@@ -140,6 +140,41 @@ class TestDetectAmbiguity:
         result = service._detect_ambiguity("¿Cuáles son las materias?", rag_ctx)
         assert result is None
 
+    def test_named_program_suppresses_faculty_ambiguity_from_unrelated_top_score(self, service):
+        # Real incident (2026-08-15 GoldStandard eval, GS-025): the query
+        # already names its program exactly ("Gestión Pública") and the
+        # program-level check correctly finds no ambiguity — but an
+        # unrelated program from a different faculty (Ingeniería de
+        # Sistemas) still scored within the margin of the top match, purely
+        # from this embedding model's known score-compression behavior.
+        # Nobody phrases a question naming a faculty, so the old
+        # faculty-level check fired anyway. A query that already named an
+        # exact program has nothing left to clarify.
+        rag_ctx = make_rag_ctx(
+            2,
+            programs=["Gestión Pública", "Ingeniería de Sistemas"],
+            faculties=["Ciencias Administrativas y Económicas", "Ingeniería"],
+            scores=[0.711, 0.663],
+        )
+        result = service._detect_ambiguity(
+            "¿Qué asignaturas incluye la Tecnología en Gestión Pública?", rag_ctx
+        )
+        assert result is None
+
+    def test_faculty_ambiguity_still_fires_when_no_program_named(self, service):
+        # Same shape as test_falls_back_to_faculty_when_no_program_ambiguity
+        # (same program on both sources, so the program-level check never
+        # fires) but the query doesn't name that program either — the
+        # faculty-level fallback should still work for its genuine use case.
+        rag_ctx = make_rag_ctx(
+            2,
+            programs=["Gestión Pública", "Gestión Pública"],
+            faculties=["Ciencias Administrativas y Económicas", "Ingeniería"],
+            scores=[0.711, 0.663],
+        )
+        result = service._detect_ambiguity("¿Qué asignaturas hay disponibles?", rag_ctx)
+        assert result == ("faculty", ["Ciencias Administrativas y Económicas", "Ingeniería"])
+
     def test_does_not_trigger_when_quality_is_weak(self, service):
         # Real incident (2026-08-08 GoldStandard eval): a thinly-indexed
         # program ("Tecnología en Desarrollo de Software") retrieves only
