@@ -506,3 +506,10 @@ suggestion_cache = TTLCache(ttl_seconds=600, max_size=4)
 # suggestion_cache for the same reason (new documents should show up within
 # a few minutes, not require a restart).
 program_list_cache = TTLCache(ttl_seconds=600, max_size=1)
+
+# Program-alias cache (see ChatService._get_program_aliases): maps a
+# program's "ciclo tecnológico" name (e.g. "Tecnología en Desarrollo de
+# Software") to its canonical `documents.program` value (e.g. "ingenieria
+# de sistemas"), parsed from each document's own intro text. Same caching
+# rationale as program_list_cache.
+program_alias_cache = TTLCache(ttl_seconds=600, max_size=1)

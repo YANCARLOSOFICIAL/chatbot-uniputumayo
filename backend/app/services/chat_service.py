@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.document import Document
+from app.models.document_chunk import DocumentChunk
 from app.schemas.chat import (
     ConversationCreate,
     MessageCreate,
@@ -33,7 +34,7 @@ from app.utils.prompts import (
 from app.utils.query_utils import (
     detect_temperature, is_greeting, is_varying_topic_query, mentions_entity,
 )
-from app.utils.cache import answer_cache, suggestion_cache, program_list_cache
+from app.utils.cache import answer_cache, suggestion_cache, program_list_cache, program_alias_cache
 from app.runtime_config import runtime_config
 from app.config import settings
 from app.providers.provider_factory import ProviderFactory
@@ -60,6 +61,18 @@ _SUGGESTION_FALLBACK: list[dict] = [
 
 _SUGGESTION_CACHE_KEY = "suggested_questions"
 _PROGRAM_LIST_CACHE_KEY = "known_programs"
+_PROGRAM_ALIAS_CACHE_KEY = "program_aliases"
+
+# Matches the "Datos generales del programa" intro line every converted
+# curriculum .docx carries for a program articulated by ciclos propedéuticos,
+# e.g. "Primer ciclo de formación: Tecnología en Obras Civiles (Semestres I
+# a VI) — 97 créditos." / "Primer ciclo de formación: Tecnología en
+# Desarrollo de Software — Semestres I a VI — 85 créditos académicos." Both
+# real documents stop the name at the first "—" or "(" — see
+# ChatService._get_program_aliases for why this is parsed at all.
+_CICLO_TECNOLOGICO_RE = re.compile(
+    r"Primer ciclo de formaci[oó]n\s*:\s*([^—(\n]+)", re.IGNORECASE
+)
 
 
 @dataclass
@@ -220,6 +233,50 @@ class ChatService:
         program_list_cache.set(_PROGRAM_LIST_CACHE_KEY, programs)
         return programs
 
+    async def _get_program_aliases(self) -> dict[str, str]:
+        """Map a program's "ciclo tecnológico" name (e.g. "Tecnología en
+        Desarrollo de Software") to its canonical `documents.program` value
+        (e.g. "ingenieria de sistemas") — parsed from each document's own
+        "Primer ciclo de formación: ..." intro line (see _CICLO_TECNOLOGICO_RE),
+        not hardcoded, so it self-updates as documents are added/reindexed
+        instead of needing a manually maintained list.
+
+        Confirmed live (GoldStandard smoke test, 2026-08-17): GS-007/GS-009
+        both phrase their question around the ciclo-tecnológico name, never
+        mentioning "Ingeniería de Sistemas"/"Ingeniería Civil" at all —
+        `mentions_entity` then finds zero word overlap against the canonical
+        `documents.program` value, so neither `_detect_program_filter` nor
+        `_detect_ambiguity` recognize the program as already named, and the
+        chatbot asks "¿sobre cuál programa?" on a question that already
+        named one, just under its other name. Already flagged as a known,
+        unresolved gap on 2026-08-12.
+
+        Only documents whose chunk 0 actually contains this intro line
+        contribute an alias — a program without a ciclo propedéutico split
+        (e.g. Contaduría, Gastronomía) simply contributes nothing here,
+        which is correct: it has no second name to alias.
+        """
+        cached = program_alias_cache.get(_PROGRAM_ALIAS_CACHE_KEY)
+        if cached is not None:
+            return cached
+        result = await self.db.execute(
+            select(Document.program, DocumentChunk.content)
+            .join(DocumentChunk, DocumentChunk.document_id == Document.id)
+            .where(
+                Document.program.isnot(None), Document.program != "",
+                DocumentChunk.chunk_index == 0,
+            )
+        )
+        aliases: dict[str, str] = {}
+        for program, content in result.all():
+            m = _CICLO_TECNOLOGICO_RE.search(content or "")
+            if m:
+                alias = m.group(1).strip()
+                if alias:
+                    aliases[alias] = program
+        program_alias_cache.set(_PROGRAM_ALIAS_CACHE_KEY, aliases)
+        return aliases
+
     async def _detect_program_filter(self, query: str) -> SearchFilters | None:
         """Hard-filter retrieval to a single named program when the query
         unambiguously names one — cuts cross-program noise before it ever
@@ -256,14 +313,26 @@ class ChatService:
         skip asking); this method has to pick exactly one program to filter
         to, so a partial-word match isn't enough — it must name the whole
         entity.
+
+        Also checks each program's "ciclo tecnológico" alias (see
+        `_get_program_aliases`) — a query naming "Tecnología en Desarrollo de
+        Software" shares zero significant words with "ingenieria de
+        sistemas" otherwise, and would silently fall through to unfiltered
+        search (and, downstream, an unwarranted `_detect_ambiguity`
+        clarification) despite unambiguously naming a program.
         """
         if not is_varying_topic_query(query):
             return None
         programs = await self._get_known_programs()
-        matches = [p for p in programs if mentions_entity(query, p, min_overlap=1.0)]
+        aliases = await self._get_program_aliases()
+        matches = {p for p in programs if mentions_entity(query, p, min_overlap=1.0)}
+        matches |= {
+            canonical for alias, canonical in aliases.items()
+            if mentions_entity(query, alias, min_overlap=1.0)
+        }
         if len(matches) != 1:
             return None
-        return SearchFilters(program=matches[0])
+        return SearchFilters(program=next(iter(matches)))
 
     async def _run_rag(self, query: str) -> _RAGContext:
         """Run RAG search and return structured context ready for prompt building."""
