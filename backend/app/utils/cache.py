@@ -498,3 +498,11 @@ embedding_cache = TTLCache(ttl_seconds=21600, max_size=2048)
 # cards don't shuffle mid-session, re-rolled periodically so they stay fresh
 # as new documents get indexed.
 suggestion_cache = TTLCache(ttl_seconds=600, max_size=4)
+
+# Known-programs cache (see ChatService._get_known_programs): the list of
+# distinct `documents.program` values, used to detect an unambiguous program
+# mention before retrieval runs. Read on every RAG-eligible message, so it's
+# worth caching even though the underlying query is cheap — same TTL as
+# suggestion_cache for the same reason (new documents should show up within
+# a few minutes, not require a restart).
+program_list_cache = TTLCache(ttl_seconds=600, max_size=1)

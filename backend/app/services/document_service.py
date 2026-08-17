@@ -29,6 +29,21 @@ logger = logging.getLogger(__name__)
 # model / curriculum-enrichment LLM (see _extract_pdf_with_vision, _enrich_curriculum_text).
 _SEMESTER_LINE_RE = re.compile(r"^(SEMESTRE\s+\d+)\s*:\s*(.+)$", re.IGNORECASE)
 
+# How much of a document's extracted text `_enrich_curriculum_text` shows the
+# LLM when generating the "RESUMEN DE MATERIAS POR SEMESTRE" summary. Was a
+# flat 4000 chars — confirmed live (2026-08-17) on two real 10-semester
+# curricula (Ingeniería Civil, Ingeniería de Sistemas, ~22,000 chars each)
+# that this silently cut the model's INPUT off partway through Semestre 1-2,
+# so every semester after that was never fabricated or forgotten — it simply
+# was never shown to the model at all, producing a resumen that reads as
+# truncated ("SEMESTRE 2: Física Mecánica" and nothing else) even though the
+# source document has the full curriculum. 20,000 chars (~5,000 tokens) plus
+# the ~1,500-token output budget below and the short instruction prompt still
+# leaves comfortable headroom under Ollama's `OLLAMA_NUM_CTX=8192`
+# (settings.ollama_num_ctx), while covering real documents seen so far
+# (up to ~22,000 chars) almost completely.
+_ENRICHMENT_INPUT_CHARS = 20000
+
 
 def _looks_like_semester_summary(text: str) -> bool:
     """A bare `"SEMESTRE" in text` check also passes on a confused model just
@@ -156,10 +171,10 @@ class DocumentService:
                 "Texto a analizar:\n"
             )
             result = await provider.generate(
-                messages=[{"role": "user", "content": extraction_prompt + text[:4000]}],
+                messages=[{"role": "user", "content": extraction_prompt + text[:_ENRICHMENT_INPUT_CHARS]}],
                 model=model,
                 temperature=0.0,
-                max_tokens=800,
+                max_tokens=1500,
             )
             summary = result.get("content", "").strip()
             if not summary or "NO_ES_CURRICULUM" in summary or not _looks_like_semester_summary(summary):

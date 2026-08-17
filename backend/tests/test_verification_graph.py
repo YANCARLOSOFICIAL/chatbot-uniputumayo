@@ -135,6 +135,51 @@ async def test_malformed_grade_response_fails_open(monkeypatch):
     assert result["attempts"] == 1
 
 
+async def test_grading_context_narrowed_to_cited_sources_only(monkeypatch):
+    # Real context_text shape from chat_service._run_rag: "[N] title\ncontent"
+    # blocks joined by "\n\n---\n\n". The draft only cites [1], so the grade
+    # call should drop the uncited [2] block entirely — confirmed by its
+    # unique marker being absent from what the grader actually saw.
+    context_text = (
+        "[1] Malla Ingeniería Civil\nContenido real: 160 créditos"
+        "\n\n---\n\n"
+        "[2] MARCADOR_NO_CITADO_NO_DEBE_APARECER\nContenido de otro programa"
+    )
+    fake = patch_provider(monkeypatch, [
+        make_response("El programa tiene 160 créditos [1]."),
+        make_response("SI"),
+    ])
+    await verification_graph.generate_verified(
+        messages=BASE_MESSAGES, context_text=context_text,
+        provider_name="ollama", model="qwen3:8b", temperature=0.05, max_tokens=2048,
+    )
+    grade_prompt = fake.calls[1][0]["content"]
+    assert "160 créditos" in grade_prompt
+    assert "MARCADOR_NO_CITADO_NO_DEBE_APARECER" not in grade_prompt
+
+
+async def test_grading_falls_back_to_full_context_when_uncited(monkeypatch):
+    # A draft with no "[N]" citation markers at all (e.g. a paraphrased
+    # summary) can't be narrowed — grade against everything, same as before
+    # this optimization existed.
+    context_text = (
+        "[1] Doc A\nContenido A"
+        "\n\n---\n\n"
+        "[2] Doc B\nContenido B"
+    )
+    fake = patch_provider(monkeypatch, [
+        make_response("Respuesta sin marcadores de cita."),
+        make_response("SI"),
+    ])
+    await verification_graph.generate_verified(
+        messages=BASE_MESSAGES, context_text=context_text,
+        provider_name="ollama", model="qwen3:8b", temperature=0.05, max_tokens=2048,
+    )
+    grade_prompt = fake.calls[1][0]["content"]
+    assert "Contenido A" in grade_prompt
+    assert "Contenido B" in grade_prompt
+
+
 async def test_grading_error_fails_open(monkeypatch):
     class BrokenGradeProvider(FakeProvider):
         async def generate(self, messages, model, temperature, max_tokens):

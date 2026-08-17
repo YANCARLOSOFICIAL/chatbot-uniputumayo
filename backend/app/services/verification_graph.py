@@ -13,6 +13,7 @@ is nothing to ground against, and grading them would just burn an extra LLM
 call on every message.
 """
 import logging
+import re
 
 from typing import TypedDict
 
@@ -23,6 +24,45 @@ from app.providers.provider_factory import ProviderFactory
 from app.utils.prompts import REFUSAL_MARKER
 
 logger = logging.getLogger(__name__)
+
+_CITATION_RE = re.compile(r"\[(\d{1,2})\]")
+_CITATION_BLOCK_RE = re.compile(r"^\[(\d{1,2})\]")
+
+
+def _context_for_grading(context_text: str, draft_answer: str, max_chars: int) -> str:
+    """Narrow the grader's context to just the sources the draft actually
+    cites, instead of resending every retrieved chunk.
+
+    `context_text` is assembled in chat_service._run_rag as "[N] title\\n
+    content" blocks joined by "\\n\\n---\\n\\n" — the same numbering the LLM
+    was shown and asked to cite from. The draft answer only ever needs
+    grounding in whichever sources it actually cited (usually 1-3 of the
+    up-to-`rag_top_k` retrieved), so resending the rest is pure waste: on a
+    CPU-only Ollama deployment, prefill time scales with token count, and
+    this grade call was measured live taking as long as the main generation
+    call (both reprocessing the same ~7000-token context) — confirmed via
+    the deployed server's own llama.cpp timing logs. Cutting it to only the
+    cited blocks is also arguably a *stricter* grading signal, not a looser
+    one: it can no longer accidentally pass by matching something in an
+    uncited chunk the draft never actually drew from.
+
+    Falls back to the full (truncated) context when the draft cites nothing
+    parseable — no citations to narrow by, and an uncited-but-non-refusal
+    draft is exactly the shape most worth checking carefully against
+    everything available.
+    """
+    cited = {int(m) for m in _CITATION_RE.findall(draft_answer)}
+    if not cited:
+        return context_text[:max_chars]
+
+    blocks = context_text.split("\n\n---\n\n")
+    kept = [
+        b for b in blocks
+        if (m := _CITATION_BLOCK_RE.match(b)) and int(m.group(1)) in cited
+    ]
+    if not kept:
+        return context_text[:max_chars]
+    return "\n\n---\n\n".join(kept)[:max_chars]
 
 _GRADE_PROMPT = """Eres un revisor estricto de respuestas de un asistente universitario.
 
@@ -97,11 +137,14 @@ async def _grade(state: VerificationState) -> dict:
         # under the 8192-token OLLAMA_NUM_CTX window even at the current
         # top_k.
         max_context_chars = settings.chunk_size * 4 * settings.rag_top_k
+        graded_context = _context_for_grading(
+            state["context_text"], state["draft_answer"], max_context_chars
+        )
         result = await provider.generate(
             messages=[{
                 "role": "user",
                 "content": _GRADE_PROMPT.format(
-                    context=state["context_text"][:max_context_chars],
+                    context=graded_context,
                     answer=state["draft_answer"],
                 ),
             }],
@@ -119,6 +162,10 @@ async def _grade(state: VerificationState) -> dict:
         # already promises for outright errors.
         verdict = result["content"].strip().upper()
         approved = not verdict.startswith("NO")
+        logger.debug(
+            "Verification grade | verdict=%s | draft_preview=%r",
+            verdict, state["draft_answer"][:300],
+        )
     except Exception as e:
         # A broken grader must never block the chat entirely — fail open and
         # let the answer through, same as if the loop were disabled.

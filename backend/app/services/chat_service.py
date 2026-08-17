@@ -24,7 +24,7 @@ from app.schemas.chat import (
 from app.services.rag_service import RAGService
 from app.services.llm_service import LLMService
 from app.services.verification_graph import generate_verified
-from app.schemas.rag import SearchRequest
+from app.schemas.rag import SearchRequest, SearchFilters
 from app.schemas.llm import GenerateRequest, LLMMessage
 from app.utils.prompts import (
     build_chat_prompt, build_no_context_answer, REFUSAL_MARKER, GREETING_PROMPT,
@@ -33,7 +33,7 @@ from app.utils.prompts import (
 from app.utils.query_utils import (
     detect_temperature, is_greeting, is_varying_topic_query, mentions_entity,
 )
-from app.utils.cache import answer_cache, suggestion_cache
+from app.utils.cache import answer_cache, suggestion_cache, program_list_cache
 from app.runtime_config import runtime_config
 from app.config import settings
 from app.providers.provider_factory import ProviderFactory
@@ -59,6 +59,7 @@ _SUGGESTION_FALLBACK: list[dict] = [
 ]
 
 _SUGGESTION_CACHE_KEY = "suggested_questions"
+_PROGRAM_LIST_CACHE_KEY = "known_programs"
 
 
 @dataclass
@@ -198,10 +199,77 @@ class ChatService:
             quality="none", embed_ms=0, search_ms=0,
         )
 
+    async def _get_known_programs(self) -> list[str]:
+        """Distinct `documents.program` values currently indexed, for the
+        query-side program detection in `_detect_program_filter` — needs the
+        full canonical list up front (unlike `_detect_ambiguity`, which only
+        compares against whatever a search already happened to retrieve).
+
+        Cached briefly: this runs on every RAG-eligible message, but the
+        underlying set only changes when documents are uploaded/edited.
+        """
+        cached = program_list_cache.get(_PROGRAM_LIST_CACHE_KEY)
+        if cached is not None:
+            return cached
+        result = await self.db.execute(
+            select(Document.program)
+            .where(Document.program.isnot(None), Document.program != "")
+            .distinct()
+        )
+        programs = [p for (p,) in result.all() if p]
+        program_list_cache.set(_PROGRAM_LIST_CACHE_KEY, programs)
+        return programs
+
+    async def _detect_program_filter(self, query: str) -> SearchFilters | None:
+        """Hard-filter retrieval to a single named program when the query
+        unambiguously names one — cuts cross-program noise before it ever
+        reaches the LLM.
+
+        Confirmed live: a query naming "Ingeniería Civil" explicitly still
+        pulled 7 of 10 retrieved chunks from seven OTHER programs' curriculum
+        summaries, because every program's summary chunk opens with the same
+        boilerplate ("=== RESUMEN DE MATERIAS POR SEMESTRE ==="), which
+        dominates the embedding over the much shorter program-name text. That
+        noise both hurts retrieval precision (measured in the GoldStandard
+        eval) and inflates the prompt fed to generation — a real cost on a
+        CPU-only Ollama deployment, where prompt-processing time scales with
+        token count.
+
+        Gated on `is_varying_topic_query()` first — the same gate
+        `_detect_ambiguity` uses — so an institution-wide question (admisión,
+        sedes, costos) that happens to name a program in passing is never
+        narrowed to just that program's documents; only topics confirmed to
+        actually differ per program are filtered.
+
+        Returns None (today's unfiltered search) unless exactly one known
+        program is named. Zero matches means nothing to filter by; more than
+        one means the question may genuinely span programs (a comparison
+        question) — either way, falls through to unfiltered search and the
+        existing `_detect_ambiguity` clarification flow downstream.
+
+        Uses `min_overlap=1.0` (stricter than `_detect_ambiguity`'s default
+        0.5): confirmed live that 0.5 makes "Ingeniería Civil" also match the
+        entity "ingenieria de sistemas" — they share the single word
+        "ingenieria", which alone clears 50% of that 2-word entity's
+        significant words. `_detect_ambiguity` can tolerate that (it only
+        needs to know *a* program was already named, to decide whether to
+        skip asking); this method has to pick exactly one program to filter
+        to, so a partial-word match isn't enough — it must name the whole
+        entity.
+        """
+        if not is_varying_topic_query(query):
+            return None
+        programs = await self._get_known_programs()
+        matches = [p for p in programs if mentions_entity(query, p, min_overlap=1.0)]
+        if len(matches) != 1:
+            return None
+        return SearchFilters(program=matches[0])
+
     async def _run_rag(self, query: str) -> _RAGContext:
         """Run RAG search and return structured context ready for prompt building."""
         rag_service = RAGService(self.db)
-        search_results = await rag_service.search(SearchRequest(query=query))
+        filters = await self._detect_program_filter(query)
+        search_results = await rag_service.search(SearchRequest(query=query, filters=filters))
         quality = rag_service.evaluate_context_quality(search_results.results)
 
         # Numbered so the LLM can cite which fragment(s) it actually used
@@ -669,7 +737,7 @@ class ChatService:
                             "refusal instead | conv=%s | attempts=%d",
                             conversation_id, verified["attempts"],
                         )
-                        content = build_no_context_answer()
+                        content = build_no_context_answer(verification_exhausted=True)
                 else:
                     llm_service = LLMService()
                     llm_response = await llm_service.generate(
@@ -880,7 +948,7 @@ class ChatService:
                                 "refusal instead | conv=%s | attempts=%d",
                                 conversation_id, verified["attempts"],
                             )
-                            full_content = build_no_context_answer()
+                            full_content = build_no_context_answer(verification_exhausted=True)
                         yield f"data: {json.dumps({'type': 'token', 'content': full_content})}\n\n"
                     else:
                         provider = ProviderFactory.get_provider(provider_name)
