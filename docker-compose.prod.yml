@@ -143,13 +143,20 @@ services:
       RAG_HYDE_ENABLED: "true"
       RAG_DIVERSITY_ENABLED: "true"
       RAG_CANDIDATES_MULTIPLIER: "3"
-      # Habilitado, pero sin reintento (1 intento = genera + revisa, nunca
-      # regenera): un reintento completo duplica el costo de un generate() ya
-      # medido como caro en este CPU sin AVX2 (ver OLLAMA_THINK_ENABLED /
-      # RAG_HYDE_ENABLED arriba, misma razón). Subir a "2" solo después de
-      # confirmar en logs de prod que hay margen real bajo el timeout de 300s.
+      # Subido a "2" el 2026-08-19: el smoke test de GoldStandard confirmó
+      # tiempo de generación de Ollama ya en ~615s/consulta con 1 intento
+      # (generate + grade), sin margen real bajo el timeout de 600s de
+      # ollama_provider.py — un segundo intento (hasta 4 llamadas
+      # secuenciales) puede exceder ese timeout en Ollama, así que un
+      # rechazo por timeout ahí es un riesgo aceptado (ver
+      # OLLAMA_THINK_ENABLED / RAG_HYDE_ENABLED arriba, misma limitante de
+      # hardware CPU sin AVX2 sin GPU). Para OpenAI (~8s/consulta) el
+      # segundo intento no tiene riesgo de timeout — la decisión del
+      # usuario fue priorizar cerrar el gap de rechazo falso en OpenAI y
+      # aceptar la limitante de Ollama tal cual, documentándola en la
+      # tesis en vez de perseguirla más en este hardware.
       VERIFICATION_LOOP_ENABLED: "true"
-      VERIFICATION_MAX_ATTEMPTS: "1"
+      VERIFICATION_MAX_ATTEMPTS: "2"
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_DIMENSIONS: "768"
       CORS_ORIGINS: "*"
