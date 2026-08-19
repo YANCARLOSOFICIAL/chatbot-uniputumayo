@@ -251,10 +251,19 @@ class ChatService:
         named one, just under its other name. Already flagged as a known,
         unresolved gap on 2026-08-12.
 
-        Only documents whose chunk 0 actually contains this intro line
-        contribute an alias — a program without a ciclo propedéutico split
-        (e.g. Contaduría, Gastronomía) simply contributes nothing here,
-        which is correct: it has no second name to alias.
+        Scans every chunk of each program-tagged document, not just chunk 0.
+        A first version restricted this to `chunk_index == 0` and shipped
+        the same session as `_enrich_curriculum_text`'s input budget going
+        4000→20000 chars — that made the generated "RESUMEN DE MATERIAS POR
+        SEMESTRE" summary long enough to itself span 2-3 chunks once
+        prepended to the document (`document_service.py`'s
+        `_build_enriched_text`), pushing the original "Primer ciclo de
+        formación: ..." intro line out of chunk 0 for every reindexed
+        curriculum doc — confirmed via re-run of the 9-query GoldStandard
+        smoke test still failing GS-007/GS-009 after this alias logic had
+        already deployed. A program without a ciclo propedéutico split
+        (e.g. Contaduría, Gastronomía) simply never matches the regex in any
+        chunk, which is correct: it has no second name to alias.
         """
         cached = program_alias_cache.get(_PROGRAM_ALIAS_CACHE_KEY)
         if cached is not None:
@@ -262,10 +271,7 @@ class ChatService:
         result = await self.db.execute(
             select(Document.program, DocumentChunk.content)
             .join(DocumentChunk, DocumentChunk.document_id == Document.id)
-            .where(
-                Document.program.isnot(None), Document.program != "",
-                DocumentChunk.chunk_index == 0,
-            )
+            .where(Document.program.isnot(None), Document.program != "")
         )
         aliases: dict[str, str] = {}
         for program, content in result.all():

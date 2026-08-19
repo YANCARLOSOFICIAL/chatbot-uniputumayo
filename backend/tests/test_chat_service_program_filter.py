@@ -2,6 +2,7 @@ import pytest
 
 from app.schemas.rag import SearchFilters
 from app.services.chat_service import ChatService, _CICLO_TECNOLOGICO_RE
+from app.utils.cache import program_alias_cache
 
 
 @pytest.fixture
@@ -103,6 +104,68 @@ class TestDetectProgramFilterAliases:
             "con Tecnología en Desarrollo de Software?"
         )
         assert result is None
+
+
+class _FakeResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def all(self):
+        return self._rows
+
+
+class _FakeDB:
+    def __init__(self, rows):
+        self._rows = rows
+
+    async def execute(self, query):
+        return _FakeResult(self._rows)
+
+
+class TestGetProgramAliasesQuery:
+    # Real incident (2026-08-17): _get_program_aliases originally restricted
+    # its query to `DocumentChunk.chunk_index == 0`. The same session's
+    # `_enrich_curriculum_text` input-budget fix (4000->20000 chars) made the
+    # generated "RESUMEN DE MATERIAS POR SEMESTRE" summary long enough to
+    # span 2-3 chunks once prepended to the document (see
+    # document_service.py's _build_enriched_text), pushing the "Primer ciclo
+    # de formación" intro line out of chunk 0 for every reindexed curriculum
+    # document. A GoldStandard smoke test re-run kept failing GS-007/GS-009
+    # even after this alias logic had deployed, tracing back to this. The
+    # fix removed the chunk_index filter entirely — these tests guard
+    # against reintroducing any chunk-position assumption.
+
+    def setup_method(self):
+        program_alias_cache.invalidate_all()
+
+    async def test_alias_found_when_intro_line_is_not_in_first_chunk(self):
+        rows = [
+            (
+                "ingenieria de sistemas",
+                "=== RESUMEN DE MATERIAS POR SEMESTRE ===\nSEMESTRE 1: ...",
+            ),
+            (
+                "ingenieria de sistemas",
+                "SEMESTRE 6: ...\n=== FIN DEL RESUMEN ===\n\nDatos generales del programa...",
+            ),
+            (
+                "ingenieria de sistemas",
+                "Primer ciclo de formación: Tecnología en Desarrollo de Software "
+                "— Semestres I a VI — 85 créditos académicos.",
+            ),
+        ]
+        svc = ChatService(db=_FakeDB(rows))
+        aliases = await svc._get_program_aliases()
+        assert aliases == {"Tecnología en Desarrollo de Software": "ingenieria de sistemas"}
+
+    async def test_program_without_ciclo_propedeutico_contributes_no_alias(self):
+        rows = [
+            ("contaduria publica", "=== RESUMEN DE MATERIAS POR SEMESTRE ===\nSEMESTRE 1: ..."),
+            ("contaduria publica", "Programa académico: Contaduría Pública. Total de créditos: 160."),
+        ]
+        svc = ChatService(db=_FakeDB(rows))
+        aliases = await svc._get_program_aliases()
+        assert aliases == {}
 
 
 class TestCicloTecnologicoRegex:
