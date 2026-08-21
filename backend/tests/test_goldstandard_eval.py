@@ -215,12 +215,61 @@ class TestClarificationExcludedFromHallucinationJudging:
             query_type="dentro de alcance", expected_documents=["07_x"],
         )
 
-        result = await _run_generation_case(fake_db, q, "some retrieved context", "openai", "gpt-4.1")
+        result = await _run_generation_case(fake_db, q, "openai", "gpt-4.1")
 
         assert called is False, "the judge must never be called for a clarification reply"
         assert result.clarification is True
         assert result.refused is False
         assert result.hallucinated is None
+
+
+class TestJudgeUsesActualChatContext:
+    """Real bug found live 2026-08-20: the judge was scoring answers against
+    goldstandard_eval_service's own separate retrieval pass (fixed k, HyDE
+    pinned to "openai"), not the context chat_service.process_message()
+    actually fed the LLM (production top_k, HyDE tied to the live admin
+    default provider) — those two can diverge, and manual review of a real
+    run's "hallucinated" cases showed well-grounded answers being misjudged
+    because the judge was reading different context than the model saw.
+    _run_generation_case must judge against ChatService.last_rag_context_text."""
+
+    @pytest.mark.asyncio
+    async def test_judges_against_chat_service_last_rag_context_not_a_separate_pass(self, monkeypatch):
+        from app.services.goldstandard_eval_service import _run_generation_case
+
+        real_answer = "El programa tiene 10 semestres [1]."
+        actual_chat_context = "[1] Malla real\nEl programa tiene 10 semestres."
+
+        async def fake_process_message(self, *args, **kwargs):
+            self.last_rag_context_text = actual_chat_context
+            return SimpleNamespace(assistant_message=SimpleNamespace(content=real_answer))
+
+        monkeypatch.setattr(
+            "app.services.goldstandard_eval_service.ChatService.process_message",
+            fake_process_message,
+        )
+
+        seen_context = None
+
+        async def capture_judge(provider_name, model, query, context, answer):
+            nonlocal seen_context
+            seen_context = context
+            return False
+
+        monkeypatch.setattr(
+            "app.services.goldstandard_eval_service._judge_hallucination", capture_judge,
+        )
+
+        fake_db = SimpleNamespace(add=lambda *_: None, flush=_noop)
+        q = GoldQuery(
+            id="GS-006", category="c", query="¿Cuántos semestres tiene X?",
+            query_type="dentro de alcance", expected_documents=["07_x"],
+        )
+
+        result = await _run_generation_case(fake_db, q, "openai", "gpt-4.1")
+
+        assert seen_context == actual_chat_context
+        assert result.hallucinated is False
 
 
 class TestComputeGenerationStatsRecomputesFromCases:

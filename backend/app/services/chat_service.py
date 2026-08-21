@@ -88,6 +88,12 @@ class _RAGContext:
 class ChatService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        # Exposes the exact RAG context text this instance's last
+        # process_message() call actually fed to the LLM — GoldStandard eval
+        # reads this to judge hallucination against what the model saw,
+        # instead of a separately-computed retrieval pass that can diverge
+        # (different top_k, different HyDE state; see goldstandard_eval_service).
+        self.last_rag_context_text: str | None = None
 
     # ── Conversation CRUD ────────────────────────────────────────────────────
 
@@ -747,6 +753,7 @@ class ChatService:
                 else self._resolve_followup_query(history, data.content)
             )
             rag_ctx = self._empty_rag_ctx() if greeting else await self._run_rag(retrieval_query)
+            self.last_rag_context_text = rag_ctx.context_text
             provider_name = data.llm_provider or runtime_config.default_llm_provider
 
             if not greeting and not is_followup and settings.program_clarification_enabled:

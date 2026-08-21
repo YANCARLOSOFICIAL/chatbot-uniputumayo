@@ -22,6 +22,14 @@ keyword matching — the query bank is real institutional content, not a fixed
 set of expected keywords like scripts/eval_rag.py's smoke-test cases. This is
 weaker than an independent judge model, but avoids requiring a second
 provider's worth of judge calls on top of the two already being compared.
+
+The judge context comes from `ChatService.last_rag_context_text` — the exact
+text that specific generation call fed the LLM — NOT from this module's own
+retrieval pass above. Those two can retrieve different chunks (different
+top_k, and HyDE's on/off state depends on the live admin default provider,
+not on which provider is being evaluated here), so reusing the metrics-pass
+context previously judged real answers against context the model never saw —
+confirmed live 2026-08-20 to misjudge well-grounded answers as hallucinated.
 """
 from __future__ import annotations
 
@@ -126,7 +134,6 @@ class RetrievalCaseResult:
     recall_at_k: float | None
     reciprocal_rank: float | None
     retrieval_ms: int
-    retrieved_content: str  # concatenated chunk text — reused as judge context, avoids a second search
     error: str | None = None  # set when the search itself blew up (e.g. embedding timeout) — excluded from metrics, not counted as a miss
 
 
@@ -150,7 +157,6 @@ async def _run_retrieval_case(rag_service: RAGService, q: GoldQuery, k: int) -> 
     )
     retrieval_ms = int((time.time() - t0) * 1000)
     retrieved_titles = [_normalize_doc_ref(r.document_title or "") for r in search.results]
-    retrieved_content = "\n\n".join(r.content for r in search.results)
 
     precision = recall = rr = None
     if q.query_type == _RETRIEVAL_EXPECTED_TYPE and q.expected_documents:
@@ -172,7 +178,7 @@ async def _run_retrieval_case(rag_service: RAGService, q: GoldQuery, k: int) -> 
     return RetrievalCaseResult(
         query=q, retrieved_titles=retrieved_titles,
         precision_at_k=precision, recall_at_k=recall, reciprocal_rank=rr,
-        retrieval_ms=retrieval_ms, retrieved_content=retrieved_content,
+        retrieval_ms=retrieval_ms,
     )
 
 
@@ -263,7 +269,7 @@ class GenerationCaseResult:
 
 
 async def _run_generation_case(
-    db: AsyncSession, q: GoldQuery, retrieved_context: str, provider_name: str, model: str,
+    db: AsyncSession, q: GoldQuery, provider_name: str, model: str,
 ) -> GenerationCaseResult:
     conversation = Conversation(id=uuid4(), title=_EVAL_CONVERSATION_TITLE)
     db.add(conversation)
@@ -301,7 +307,15 @@ async def _run_generation_case(
     hallucinated = None
     if q.query_type == _RETRIEVAL_EXPECTED_TYPE and not refused and not clarification:
         try:
-            hallucinated = await _judge_hallucination(provider_name, model, q.query, retrieved_context, answer)
+            # Judge against the context this exact call actually fed the LLM
+            # (chat_service's own internal RAG search), not a separately
+            # computed retrieval pass — those can diverge in top_k and HyDE
+            # state (see ChatService.last_rag_context_text docstring) and
+            # were confirmed live to make the judge score well-grounded
+            # answers as hallucinations because it was reading different
+            # context than the model saw.
+            judge_context = chat_service.last_rag_context_text or ""
+            hallucinated = await _judge_hallucination(provider_name, model, q.query, judge_context, answer)
         except Exception as e:
             hallucinated = None  # judge call failed — excluded from the rate, not counted as a hallucination
             logger.warning(
@@ -335,7 +349,7 @@ async def run_generation_eval(
 ) -> GenerationSummary:
     results: list[GenerationCaseResult] = []
     for r in retrieval_results:
-        result = await _run_generation_case(db, r.query, r.retrieved_content, provider_name, model)
+        result = await _run_generation_case(db, r.query, provider_name, model)
         results.append(result)
 
     # process_message() commits real conversation/message rows per case — sweep
@@ -397,7 +411,7 @@ async def run_gold_comparison(
             logger.warning("Gold eval retrieval failed | query=%s | %s", q.id, e)
             retrieval_cases.append(RetrievalCaseResult(
                 query=q, retrieved_titles=[], precision_at_k=None, recall_at_k=None,
-                reciprocal_rank=None, retrieval_ms=0, retrieved_content="", error=str(e) or repr(e),
+                reciprocal_rank=None, retrieval_ms=0, error=str(e) or repr(e),
             ))
     retrieval = _summarize_retrieval(retrieval_cases, k)
 
