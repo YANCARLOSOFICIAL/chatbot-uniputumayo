@@ -16,12 +16,17 @@ Two things are DELIBERATELY split apart:
   answer latency) ARE computed once per provider — those genuinely differ
   between Ollama and OpenAI as the generator.
 
-Hallucination detection uses an LLM-as-judge call (same provider being
-evaluated, judging its own answer against the retrieved context) rather than
-keyword matching — the query bank is real institutional content, not a fixed
-set of expected keywords like scripts/eval_rag.py's smoke-test cases. This is
-weaker than an independent judge model, but avoids requiring a second
-provider's worth of judge calls on top of the two already being compared.
+Hallucination detection uses an LLM-as-judge call rather than keyword
+matching — the query bank is real institutional content, not a fixed set of
+expected keywords like scripts/eval_rag.py's smoke-test cases. The judge is
+NOT the provider being evaluated: `_judge_hallucination` routes through
+`resolve_grader` (verification_graph.py) to a single fixed, independent
+model (OpenAI, when configured) for both providers' passes. Self-judging was
+the original design here, but GoldStandard eval 2026-08-21 showed it's both
+unreliable (a small self-graded model let real hallucinations through in the
+majority of "approved" cases) and biased this specific comparison (Ollama's
+rate judged by a weak model, OpenAI's by a strong one — not apples to
+apples). A shared independent judge fixes both.
 
 The judge context comes from `ChatService.last_rag_context_text` — the exact
 text that specific generation call fed the LLM — NOT from this module's own
@@ -46,11 +51,13 @@ import openpyxl
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.conversation import Conversation
 from app.schemas.chat import MessageCreate
 from app.schemas.rag import SearchRequest
 from app.services.chat_service import ChatService
 from app.services.rag_service import RAGService
+from app.services.verification_graph import resolve_grader
 from app.providers.provider_factory import ProviderFactory
 from app.runtime_config import runtime_config
 from app.utils.prompts import CLARIFICATION_MARKER, REFUSAL_MARKER
@@ -227,8 +234,19 @@ _JUDGE_PROMPT = (
     "Eres un evaluador estricto de un chatbot institucional. Te doy una PREGUNTA, "
     "el CONTEXTO recuperado de documentos oficiales, y la RESPUESTA generada por el asistente.\n"
     "Determina si la RESPUESTA afirma algo que NO está respaldado por el CONTEXTO (alucinación).\n\n"
+    "SÍ cuenta como respaldada (NO es alucinación):\n"
+    "- Reorganizar, resumir o reformular el contexto con otras palabras.\n"
+    "- Combinar varios datos que aparecen por separado en el contexto (ej. una lista de "
+    "materias con sus códigos y créditos, cada uno tomado literalmente del contexto).\n"
+    "- Responder de forma incompleta (falta información no es lo mismo que inventarla).\n\n"
+    "SÍ es alucinación:\n"
+    "- Agregar cualquier cifra, nombre, fecha, requisito o código que no aparezca "
+    "literalmente en el CONTEXTO.\n"
+    "- Afirmar algo con más seguridad de la que el contexto permite.\n\n"
     "PREGUNTA: {query}\n\nCONTEXTO:\n{context}\n\nRESPUESTA:\n{answer}\n\n"
-    "Responde ÚNICAMENTE 'SI' (hay alucinación) o 'NO' (todo está respaldado por el contexto)."
+    "Responde en máximo 2 líneas: una razón breve (menos de 15 palabras) citando el dato "
+    "puntual en disputa (si lo hay) y, en la última línea, únicamente SI (hay alucinación) "
+    "o NO (todo está respaldado)."
 )
 
 
@@ -237,21 +255,43 @@ _JUDGE_RATE_LIMIT_BACKOFF_S = 3.0
 
 
 async def _judge_hallucination(provider_name: str, model: str, query: str, context: str, answer: str) -> bool:
-    provider = ProviderFactory.get_provider(provider_name)
+    """Judge whether `answer` is grounded in `context`.
+
+    Uses `resolve_grader` (see verification_graph.py) instead of always
+    self-judging with `provider_name`/`model` — the same conflict-of-interest
+    concern applies here, and self-judging additionally biased this specific
+    comparison: Ollama's hallucination rate used to be measured by its own
+    weak model, OpenAI's by its own strong model, an apples-to-oranges
+    comparison. One fixed independent judge (OpenAI, when configured) makes
+    the two providers' rates comparable and, per the same GoldStandard
+    evidence, more accurate.
+
+    `context` is truncated at `chunk_size * 4 chars/token * rag_top_k`, not a
+    flat cap — a flat 3000-char cut was measured live (GoldStandard eval
+    2026-08-21, case GS-007) silently dropping the one chunk (of up to
+    rag_top_k=10) an answer was actually grounded in whenever it wasn't among
+    the first ~2, producing a false "hallucinated" verdict for a verbatim-
+    correct answer. Mirrors the identical fix already applied to the
+    verification loop's own grader (see verification_graph.py's `_grade`).
+    """
+    grader_provider_name, grader_model = resolve_grader(provider_name, model)
+    provider = ProviderFactory.get_provider(grader_provider_name)
+    max_context_chars = settings.chunk_size * 4 * settings.rag_top_k
     for attempt in range(_JUDGE_RATE_LIMIT_RETRIES + 1):
         try:
             result = await provider.generate(
                 messages=[{"role": "user", "content": _JUDGE_PROMPT.format(
-                    query=query, context=context[:3000], answer=answer,
+                    query=query, context=context[:max_context_chars], answer=answer,
                 )}],
-                model=model, temperature=0.0, max_tokens=10,
+                model=grader_model, temperature=0.0, max_tokens=80,
             )
             break
         except openai.RateLimitError:
             if attempt == _JUDGE_RATE_LIMIT_RETRIES:
                 raise
             await asyncio.sleep(_JUDGE_RATE_LIMIT_BACKOFF_S * (attempt + 1))
-    verdict = result.get("content", "").strip().upper()
+    lines = [l.strip() for l in result.get("content", "").strip().splitlines() if l.strip()]
+    verdict = lines[-1].upper() if lines else ""
     return verdict.startswith("SI") or verdict.startswith("SÍ")
 
 

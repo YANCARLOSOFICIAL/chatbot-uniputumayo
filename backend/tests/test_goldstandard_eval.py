@@ -129,9 +129,11 @@ class FakeRateLimitedProvider:
         self._remaining_failures = failures_before_success
         self._verdict = verdict
         self.call_count = 0
+        self.calls: list[dict] = []
 
     async def generate(self, **kwargs):
         self.call_count += 1
+        self.calls.append(kwargs)
         if self._remaining_failures > 0:
             self._remaining_failures -= 1
             raise _rate_limit_error()
@@ -168,6 +170,78 @@ class TestJudgeHallucinationRateLimitRetry:
 
 async def _noop():
     return None
+
+
+class TestJudgeHallucinationContextSizing:
+    """Real bug found via GoldStandard eval 2026-08-21 (case GS-007): a flat
+    3000-char cap on the judge's context silently dropped the one chunk (of
+    up to rag_top_k=10) an answer was actually grounded in whenever it
+    wasn't among the first ~2 — verified live: the answer's course codes
+    (TD101, TD102, TD103, TD104, COM01, INST01) all exist verbatim in the
+    real corpus, in a chunk ranked 4th. The cap must scale with
+    chunk_size * rag_top_k, same as verification_graph.py's grader."""
+
+    @pytest.mark.asyncio
+    async def test_context_beyond_old_3000_char_cap_reaches_the_judge(self, monkeypatch):
+        from app.config import settings
+
+        marker = "MARCADOR_DESPUES_DE_3000_CHARS"
+        padding = "x" * 3500
+        context = f"{padding}{marker}"
+        assert len(context) > 3000
+        assert len(context) < settings.chunk_size * 4 * settings.rag_top_k
+
+        provider = FakeRateLimitedProvider(failures_before_success=0, verdict="NO")
+        monkeypatch.setattr(ProviderFactory, "get_provider", lambda name: provider)
+
+        await _judge_hallucination("openai", "gpt-4.1", "query", context, "answer")
+
+        assert provider.calls and marker in provider.calls[0]["messages"][0]["content"]
+
+
+class TestJudgeHallucinationUsesIndependentGrader:
+    """Self-judging was the original design (see module docstring) but proved
+    both unreliable and biased the Ollama-vs-OpenAI comparison — see
+    resolve_grader's docstring in verification_graph.py. When OpenAI is
+    configured, judging must route there regardless of which provider
+    generated the answer being judged."""
+
+    @pytest.mark.asyncio
+    async def test_routes_to_openai_even_when_judging_an_ollama_answer(self, monkeypatch):
+        from app.runtime_config import runtime_config
+
+        monkeypatch.setattr(runtime_config, "openai_api_key", "sk-real-key")
+        monkeypatch.setattr(runtime_config, "openai_default_model", "gpt-5.4-mini")
+
+        requested_names = []
+
+        def get_provider(name):
+            requested_names.append(name)
+            return FakeRateLimitedProvider(failures_before_success=0, verdict="NO")
+
+        monkeypatch.setattr(ProviderFactory, "get_provider", get_provider)
+
+        await _judge_hallucination("ollama", "qwen2.5:7b", "query", "context", "answer")
+
+        assert requested_names == ["openai"]
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_self_when_openai_not_configured(self, monkeypatch):
+        from app.runtime_config import runtime_config
+
+        monkeypatch.setattr(runtime_config, "openai_api_key", None)
+
+        requested_names = []
+
+        def get_provider(name):
+            requested_names.append(name)
+            return FakeRateLimitedProvider(failures_before_success=0, verdict="NO")
+
+        monkeypatch.setattr(ProviderFactory, "get_provider", get_provider)
+
+        await _judge_hallucination("ollama", "qwen2.5:7b", "query", "context", "answer")
+
+        assert requested_names == ["ollama"]
 
 
 class TestClarificationExcludedFromHallucinationJudging:

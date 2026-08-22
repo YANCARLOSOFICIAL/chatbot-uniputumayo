@@ -180,6 +180,71 @@ async def test_grading_falls_back_to_full_context_when_uncited(monkeypatch):
     assert "Contenido B" in grade_prompt
 
 
+async def test_grade_verdict_with_reasoning_prefix_is_parsed(monkeypatch):
+    # The grade prompt now allows a short reason before the verdict (see
+    # resolve_grader's docstring for why a bare one-word answer was dropped)
+    # — the verdict must be read from the LAST line, not the whole response.
+    fake = patch_provider(monkeypatch, [
+        make_response("El programa tiene 160 créditos [1]."),
+        make_response("Coincide exactamente con el contexto citado.\nSI"),
+    ])
+    result = await verification_graph.generate_verified(
+        messages=BASE_MESSAGES, context_text="Contexto: 160 créditos [1]",
+        provider_name="ollama", model="qwen3:8b", temperature=0.05, max_tokens=2048,
+    )
+    assert result["approved"] is True
+    assert result["attempts"] == 1
+
+
+async def test_grader_prefers_openai_when_configured(monkeypatch):
+    # A model grading its own draft is a conflict of interest — when OpenAI
+    # is configured, grading is routed there regardless of which provider
+    # generated the draft (see resolve_grader).
+    monkeypatch.setattr(verification_graph.runtime_config, "openai_api_key", "sk-real-key")
+    monkeypatch.setattr(verification_graph.runtime_config, "openai_default_model", "gpt-5.4-mini")
+
+    calls_by_provider: dict[str, list[dict]] = {"ollama": [], "openai": []}
+
+    class TrackingProvider:
+        def __init__(self, name, responses):
+            self.name = name
+            self._responses = list(responses)
+
+        async def generate(self, messages, model, temperature, max_tokens):
+            calls_by_provider[self.name].append({"messages": messages, "model": model})
+            return self._responses.pop(0)
+
+    ollama_fake = TrackingProvider("ollama", [make_response("El programa tiene 160 créditos [1].")])
+    openai_fake = TrackingProvider("openai", [make_response("Coincide con el contexto.\nSI")])
+    monkeypatch.setattr(
+        verification_graph.ProviderFactory, "get_provider",
+        lambda name: {"ollama": ollama_fake, "openai": openai_fake}[name],
+    )
+
+    result = await verification_graph.generate_verified(
+        messages=BASE_MESSAGES, context_text="Contexto: 160 créditos [1]",
+        provider_name="ollama", model="qwen3:8b", temperature=0.05, max_tokens=2048,
+    )
+    assert result["approved"] is True
+    assert len(calls_by_provider["ollama"]) == 1  # only the generation call
+    assert len(calls_by_provider["openai"]) == 1  # grading routed to openai
+    assert calls_by_provider["openai"][0]["model"] == "gpt-5.4-mini"
+
+
+async def test_grader_falls_back_to_self_when_openai_not_configured(monkeypatch):
+    monkeypatch.setattr(verification_graph.runtime_config, "openai_api_key", None)
+    fake = patch_provider(monkeypatch, [
+        make_response("El programa tiene 160 créditos [1]."),
+        make_response("SI"),
+    ])
+    result = await verification_graph.generate_verified(
+        messages=BASE_MESSAGES, context_text="Contexto: 160 créditos [1]",
+        provider_name="ollama", model="qwen3:8b", temperature=0.05, max_tokens=2048,
+    )
+    assert result["approved"] is True
+    assert len(fake.calls) == 2
+
+
 async def test_grading_error_fails_open(monkeypatch):
     class BrokenGradeProvider(FakeProvider):
         async def generate(self, messages, model, temperature, max_tokens):

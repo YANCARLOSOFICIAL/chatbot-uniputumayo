@@ -21,6 +21,7 @@ from langgraph.graph import StateGraph, START, END
 
 from app.config import settings
 from app.providers.provider_factory import ProviderFactory
+from app.runtime_config import runtime_config
 from app.utils.prompts import REFUSAL_MARKER
 
 logger = logging.getLogger(__name__)
@@ -66,10 +67,19 @@ def _context_for_grading(context_text: str, draft_answer: str, max_chars: int) -
 
 _GRADE_PROMPT = """Eres un revisor estricto de respuestas de un asistente universitario.
 
-Tu única tarea: decidir si la RESPUESTA está completamente respaldada por el CONTEXTO,
-sin inventar ni agregar ningún dato (nombres, cifras, fechas, requisitos, códigos) que
-no aparezca en el contexto. Una respuesta que reorganiza o resume el contexto SÍ cuenta
-como respaldada. Una respuesta que agrega algo que no está ahí, NO.
+Tu tarea: decidir si la RESPUESTA está completamente respaldada por el CONTEXTO, sin
+inventar ni agregar ningún dato (nombres, cifras, fechas, requisitos, códigos) que no
+aparezca en el contexto.
+
+SÍ cuenta como respaldada:
+- Reorganizar, resumir o reformular el contexto con otras palabras.
+- Combinar varios datos que aparecen por separado en el contexto.
+- Responder de forma incompleta (falta información no es lo mismo que inventarla).
+
+NO cuenta como respaldada:
+- Agregar cualquier cifra, nombre, fecha, requisito o código que no esté literalmente
+  en el contexto.
+- Afirmar algo con más seguridad de la que el contexto permite.
 
 CONTEXTO:
 {context}
@@ -77,14 +87,47 @@ CONTEXTO:
 RESPUESTA A REVISAR:
 {answer}
 
-Responde con una sola palabra, sin explicación ni puntuación: SI o NO."""
+Responde en máximo 2 líneas: una razón breve (menos de 15 palabras) y, en la última
+línea, únicamente SI o NO."""
 
 _RETRY_FEEDBACK = (
-    "Tu respuesta anterior incluía información que no está respaldada por el "
-    "contexto proporcionado. Genera una nueva respuesta usando ÚNICAMENTE lo "
-    "que aparece en el contexto. Si el contexto no alcanza para responder con "
-    "certeza, usa la respuesta de 'no tengo esa información disponible'."
+    "Un revisor marcó tu respuesta anterior como no completamente respaldada por el "
+    "contexto. Corrígela: ajusta o elimina solo los datos concretos (cifras, nombres, "
+    "fechas, requisitos, códigos) que no aparezcan literalmente en el contexto, pero "
+    "conserva todo lo que sí esté respaldado — no descartes una respuesta que en su "
+    "mayoría es correcta por una sola imprecisión. Usa la respuesta de 'no tengo esa "
+    "información disponible' únicamente si, después de esta revisión, el contexto no "
+    "contiene ninguna información relevante para responder la pregunta."
 )
+
+
+def resolve_grader(provider_name: str, model: str) -> tuple[str, str]:
+    """Pick which provider/model grades a draft — independent from whichever
+    provider generated it whenever OpenAI is configured.
+
+    A model grading its own answer is a conflict of interest, and it showed:
+    GoldStandard eval 2026-08-21 found Ollama's (qwen2.5:7b) self-graded
+    "approved" answers still hallucinated 57.9% of the time per an independent
+    judge, while its self-graded false negatives — relayed through
+    `_RETRY_FEEDBACK`'s old "if unsure, refuse" wording — accounted for the
+    large majority of that same run's unexpected refusals (confirmed by the
+    ~2x generation-time signature of a grade-reject-then-retry cycle on 31/31
+    flagged cases). Routing grading through a single stronger, independent
+    model fixes both failure modes at once instead of just tuning the prompt
+    for one model's quirks.
+
+    Falls back to self-grading (previous behavior) when OpenAI isn't
+    configured — same as any pure-Ollama deployment gets today.
+
+    Not private (no leading underscore): `goldstandard_eval_service.py`
+    reuses this for the exact same reason — its own hallucination judge had
+    the same self-grading conflict of interest (see that module's
+    `_judge_hallucination`).
+    """
+    key = runtime_config.openai_api_key
+    if key and key != "sk-your-key-here":
+        return "openai", runtime_config.resolve_model("openai")
+    return provider_name, model
 
 
 class VerificationState(TypedDict):
@@ -127,7 +170,8 @@ async def _grade(state: VerificationState) -> dict:
         return {"approved": True}
 
     try:
-        provider = ProviderFactory.get_provider(state["provider_name"])
+        grader_provider_name, grader_model = resolve_grader(state["provider_name"], state["model"])
+        provider = ProviderFactory.get_provider(grader_provider_name)
         # Sized to the actual retrieval budget (chunk_size × 4 chars/token ×
         # rag_top_k), not a fixed guess — a flat 4000-char cap silently fell
         # behind when rag_top_k was raised from 5 to 10 (see rag_service.py),
@@ -148,23 +192,28 @@ async def _grade(state: VerificationState) -> dict:
                     answer=state["draft_answer"],
                 ),
             }],
-            model=state["model"],
+            model=grader_model,
             temperature=0.0,
-            max_tokens=5,
+            max_tokens=60,
         )
-        # Approve unless the grader clearly says "NO" — not the other way
-        # around. `max_tokens=5` leaves little room for a model that doesn't
-        # follow the one-word instruction (e.g. an unclosed reasoning
-        # fragment cut off mid-token): that garbled output isn't an
-        # exception, so it would skip the except-block fail-open below and
-        # silently reject a perfectly good answer instead. Requiring an
-        # explicit "NO" keeps the same fail-open guarantee the comment below
-        # already promises for outright errors.
-        verdict = result["content"].strip().upper()
+        # Approve unless the grader's LAST line clearly says "NO" — not the
+        # other way around. The prompt now allows a short reason before the
+        # verdict (a bare one-word answer under the old max_tokens=5 gave a
+        # small self-grading model no room to reason and was a large source
+        # of noisy verdicts in both directions — see resolve_grader). Taking
+        # the last non-empty line means a model that ignores the "2 lines
+        # max" instruction and rambles doesn't break parsing, and a garbled/
+        # cut-off response (e.g. an unclosed reasoning fragment) just isn't
+        # an exception, so it skips the except-block fail-open below and
+        # would silently reject a perfectly good answer if treated as "NO" —
+        # requiring an explicit "NO" keeps the same fail-open guarantee the
+        # comment below already promises for outright errors.
+        lines = [l.strip() for l in result["content"].strip().splitlines() if l.strip()]
+        verdict = lines[-1].upper() if lines else ""
         approved = not verdict.startswith("NO")
         logger.debug(
-            "Verification grade | verdict=%s | draft_preview=%r",
-            verdict, state["draft_answer"][:300],
+            "Verification grade | grader=%s/%s | verdict=%s | draft_preview=%r",
+            grader_provider_name, grader_model, verdict, state["draft_answer"][:300],
         )
     except Exception as e:
         # A broken grader must never block the chat entirely — fail open and

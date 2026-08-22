@@ -109,6 +109,25 @@ _VARYING_TOPIC_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
+# Administrative/academic PROCEDURES governed by the Estatuto Estudiantil —
+# the same process for every program — even though they routinely mention a
+# curriculum noun ("materia", "asignatura", "semestre") in passing. Checked
+# before _VARYING_TOPIC_PATTERNS so that mention alone doesn't win: "¿qué hago
+# si pierdo una materia?" is asking about the reprobación/repetición
+# procedure, not about which materias a program teaches. Confirmed live
+# (GoldStandard eval 2026-08-21): GS-035/036/083/085/095 all false-triggered
+# a "¿sobre cuál programa?" clarification purely from containing
+# "asignaturas"/"materia"/"semestre", despite each having a single,
+# program-independent answer.
+_PROCEDURAL_TOPIC_PATTERNS = re.compile(
+    r"\b("
+    r"homologaci[oó]n|homologar|convalidaci[oó]n|convalidar|validar|"
+    r"perd[ií]|pierdo|perder|reprobar|reprobaci[oó]n|repetir|repetici[oó]n|"
+    r"aplazamiento|aplazar|cancelaci[oó]n|cancelar|supletorio"
+    r")\b",
+    re.IGNORECASE,
+)
+
 
 def is_varying_topic_query(query: str) -> bool:
     """True if the query is about a topic that genuinely differs by program or
@@ -117,7 +136,13 @@ def is_varying_topic_query(query: str) -> bool:
     treated as ambiguous if it passes this gate; institution-wide topics
     (admisión, costos, sedes, ...) never trigger a clarification regardless of
     how many programs' documents the RAG search happens to retrieve.
+
+    Procedural questions (see _PROCEDURAL_TOPIC_PATTERNS) are excluded first,
+    regardless of what curriculum nouns they happen to contain — they're
+    about an institution-wide process, not program-specific content.
     """
+    if _PROCEDURAL_TOPIC_PATTERNS.search(query):
+        return False
     return bool(_VARYING_TOPIC_PATTERNS.search(query))
 
 

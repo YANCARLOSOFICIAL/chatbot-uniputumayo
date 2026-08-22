@@ -81,6 +81,23 @@ class TestIsVaryingTopicQuery:
     def test_campuses_do_not_vary(self):
         assert is_varying_topic_query("¿Cuáles son las sedes?") is False
 
+    # Procedural questions mention a curriculum noun in passing but ask about
+    # an institution-wide process (Estatuto Estudiantil) — confirmed live via
+    # GoldStandard eval 2026-08-21 (GS-035/036/083/085/095), each false-
+    # triggered a "¿sobre cuál programa?" clarification before this fix.
+    def test_homologacion_does_not_vary_despite_mentioning_asignaturas(self):
+        assert is_varying_topic_query("¿Cómo funciona el proceso de homologación de asignaturas?") is False
+
+    def test_validar_asignaturas_does_not_vary(self):
+        assert is_varying_topic_query("¿Se pueden validar asignaturas? ¿Cómo funciona ese proceso?") is False
+
+    def test_losing_a_subject_does_not_vary_despite_mentioning_materia(self):
+        assert is_varying_topic_query("¿Qué sucede si pierdo una materia? ¿Puedo repetirla?") is False
+        assert is_varying_topic_query("Perdí una materia, ¿qué hago?") is False
+
+    def test_semester_deferral_does_not_vary_despite_mentioning_semestre(self):
+        assert is_varying_topic_query("¿Cómo se solicita el aplazamiento del semestre?") is False
+
 
 class TestMentionsEntity:
     def test_full_name_mentioned(self):
