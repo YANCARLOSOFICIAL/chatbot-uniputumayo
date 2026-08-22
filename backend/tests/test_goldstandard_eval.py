@@ -140,32 +140,14 @@ class FakeRateLimitedProvider:
         return {"content": self._verdict}
 
 
-class TestJudgeHallucinationRateLimitRetry:
-    """The real bug: 5/77 OpenAI judge calls in the 2026-08-05 prod run
-    failed with 429 (org TPM cap) and were silently excluded from the
-    hallucination rate instead of retried — confirmed via prod logs."""
-
-    @pytest.mark.asyncio
-    async def test_retries_and_succeeds_after_transient_rate_limit(self, monkeypatch):
-        monkeypatch.setattr("app.services.goldstandard_eval_service.asyncio.sleep", lambda *_: _noop())
-        provider = FakeRateLimitedProvider(failures_before_success=2, verdict="NO")
-        monkeypatch.setattr(ProviderFactory, "get_provider", lambda name: provider)
-
-        result = await _judge_hallucination("openai", "gpt-4.1", "query", "context", "answer")
-
-        assert result is False
-        assert provider.call_count == 3
-
-    @pytest.mark.asyncio
-    async def test_raises_after_exhausting_retries(self, monkeypatch):
-        monkeypatch.setattr("app.services.goldstandard_eval_service.asyncio.sleep", lambda *_: _noop())
-        provider = FakeRateLimitedProvider(failures_before_success=99)
-        monkeypatch.setattr(ProviderFactory, "get_provider", lambda name: provider)
-
-        with pytest.raises(openai.RateLimitError):
-            await _judge_hallucination("openai", "gpt-4.1", "query", "context", "answer")
-
-        assert provider.call_count == 4  # initial attempt + 3 retries
+# Rate-limit retry-on-429 for OpenAI calls (originally hand-rolled here to
+# fix 5/77 judge calls silently excluded by a 429 in the 2026-08-05 prod
+# run) moved into `OpenAIProvider` itself on 2026-08-22, so every OpenAI
+# call site (this judge, verification grading, chat generation) shares one
+# pacing budget and retry policy instead of three uncoordinated ones — see
+# tests/test_openai_provider.py's `test_generate_retries_once_on_rate_limit_
+# then_succeeds` / `test_generate_raises_after_exhausting_rate_limit_retries`
+# for the equivalent coverage, now at the provider level.
 
 
 async def _noop():

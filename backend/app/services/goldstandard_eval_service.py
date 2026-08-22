@@ -38,7 +38,6 @@ confirmed live 2026-08-20 to misjudge well-grounded answers as hallucinated.
 """
 from __future__ import annotations
 
-import asyncio
 import io
 import logging
 import re
@@ -46,7 +45,6 @@ import time
 from dataclasses import dataclass, field
 from uuid import uuid4
 
-import openai
 import openpyxl
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -250,10 +248,6 @@ _JUDGE_PROMPT = (
 )
 
 
-_JUDGE_RATE_LIMIT_RETRIES = 3
-_JUDGE_RATE_LIMIT_BACKOFF_S = 3.0
-
-
 async def _judge_hallucination(provider_name: str, model: str, query: str, context: str, answer: str) -> bool:
     """Judge whether `answer` is grounded in `context`.
 
@@ -273,23 +267,21 @@ async def _judge_hallucination(provider_name: str, model: str, query: str, conte
     the first ~2, producing a false "hallucinated" verdict for a verbatim-
     correct answer. Mirrors the identical fix already applied to the
     verification loop's own grader (see verification_graph.py's `_grade`).
+
+    Rate-limit retry used to be hand-rolled here — moved into
+    `OpenAIProvider` itself (2026-08-22) so every OpenAI call site (this
+    judge, verification grading, chat generation) shares one pacing budget
+    and one retry policy instead of three independent, uncoordinated ones.
     """
     grader_provider_name, grader_model = resolve_grader(provider_name, model)
     provider = ProviderFactory.get_provider(grader_provider_name)
     max_context_chars = settings.chunk_size * 4 * settings.rag_top_k
-    for attempt in range(_JUDGE_RATE_LIMIT_RETRIES + 1):
-        try:
-            result = await provider.generate(
-                messages=[{"role": "user", "content": _JUDGE_PROMPT.format(
-                    query=query, context=context[:max_context_chars], answer=answer,
-                )}],
-                model=grader_model, temperature=0.0, max_tokens=80,
-            )
-            break
-        except openai.RateLimitError:
-            if attempt == _JUDGE_RATE_LIMIT_RETRIES:
-                raise
-            await asyncio.sleep(_JUDGE_RATE_LIMIT_BACKOFF_S * (attempt + 1))
+    result = await provider.generate(
+        messages=[{"role": "user", "content": _JUDGE_PROMPT.format(
+            query=query, context=context[:max_context_chars], answer=answer,
+        )}],
+        model=grader_model, temperature=0.0, max_tokens=80,
+    )
     lines = [l.strip() for l in result.get("content", "").strip().splitlines() if l.strip()]
     verdict = lines[-1].upper() if lines else ""
     return verdict.startswith("SI") or verdict.startswith("SÍ")
@@ -306,6 +298,7 @@ class GenerationCaseResult:
     hallucinated: bool | None  # None when not applicable (refusal, clarification, or not "dentro de alcance")
     generation_ms: int
     error: str | None = None  # set when process_message itself blew up (e.g. Ollama ReadTimeout) — case excluded from every rate, not counted as a failure
+    verification_reason: str | None = None  # grader's own explanation for its last verdict (see ChatService.last_verification_reason) — most useful on `refused` cases, to see WHY without live tracing
 
 
 async def _run_generation_case(
@@ -340,6 +333,7 @@ async def _run_generation_case(
     answer = response.assistant_message.content
     refused = REFUSAL_MARKER in answer
     clarification = CLARIFICATION_MARKER in answer
+    verification_reason = chat_service.last_verification_reason
 
     expected_refusal = q.query_type in _REFUSAL_EXPECTED_TYPES
     refusal_ok = (refused == expected_refusal)
@@ -365,6 +359,7 @@ async def _run_generation_case(
     return GenerationCaseResult(
         query=q, answer=answer, refused=refused, clarification=clarification, expected_refusal=expected_refusal,
         refusal_ok=refusal_ok, hallucinated=hallucinated, generation_ms=generation_ms,
+        verification_reason=verification_reason,
     )
 
 
@@ -421,6 +416,7 @@ async def run_generation_eval(
             "hallucinated": r.hallucinated,
             "generation_ms": r.generation_ms,
             "error": r.error,
+            "verification_reason": r.verification_reason,
         } for r in results],
     )
 

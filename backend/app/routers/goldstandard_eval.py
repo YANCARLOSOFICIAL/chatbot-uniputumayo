@@ -231,7 +231,9 @@ def _render_markdown_report(run: GoldEvalRun) -> str:
         if unexpected_refusal:
             lines += ["", "Preguntas con rechazo inesperado:", ""]
             for c in unexpected_refusal[:20]:
-                lines.append(f"- `{c.get('id', '')}`: {c.get('query', '')}")
+                reason = c.get("verification_reason")
+                suffix = f" — motivo del grader: «{reason}»" if reason else ""
+                lines.append(f"- `{c.get('id', '')}`: {c.get('query', '')}{suffix}")
             if len(unexpected_refusal) > 20:
                 lines.append(f"- ... y {len(unexpected_refusal) - 20} más")
 

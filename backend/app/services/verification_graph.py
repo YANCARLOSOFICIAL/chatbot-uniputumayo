@@ -90,15 +90,29 @@ RESPUESTA A REVISAR:
 Responde en máximo 2 líneas: una razón breve (menos de 15 palabras) y, en la última
 línea, únicamente SI o NO."""
 
-_RETRY_FEEDBACK = (
+_RETRY_FEEDBACK_TEMPLATE = (
     "Un revisor marcó tu respuesta anterior como no completamente respaldada por el "
-    "contexto. Corrígela: ajusta o elimina solo los datos concretos (cifras, nombres, "
-    "fechas, requisitos, códigos) que no aparezcan literalmente en el contexto, pero "
-    "conserva todo lo que sí esté respaldado — no descartes una respuesta que en su "
-    "mayoría es correcta por una sola imprecisión. Usa la respuesta de 'no tengo esa "
-    "información disponible' únicamente si, después de esta revisión, el contexto no "
-    "contiene ninguna información relevante para responder la pregunta."
+    "contexto{reason_clause}. Corrígela: ajusta o elimina solo los datos concretos "
+    "(cifras, nombres, fechas, requisitos, códigos) que no aparezcan literalmente en el "
+    "contexto, pero conserva todo lo que sí esté respaldado — no descartes una respuesta "
+    "que en su mayoría es correcta por una sola imprecisión. Usa la respuesta de 'no "
+    "tengo esa información disponible' únicamente si, después de esta revisión, el "
+    "contexto no contiene ninguna información relevante para responder la pregunta."
 )
+
+
+def _build_retry_feedback(grade_reason: str | None) -> str:
+    """Generic ('corrígela') feedback alone gave the retry attempt nothing to
+    act on — it didn't know WHICH data point the grader flagged, so a second
+    try was often a near-identical re-roll of the same draft instead of a
+    targeted fix. `_grade` now captures the grader's own reason line (already
+    part of `_GRADE_PROMPT`'s output, previously discarded); folding it in
+    here turns the retry into an actual correction pass. Falls back to the
+    old generic wording when there's no reason to attach (e.g. the grader
+    call itself failed before producing one — see `_grade`'s except branch).
+    """
+    reason_clause = f" — motivo señalado: «{grade_reason}»" if grade_reason else ""
+    return _RETRY_FEEDBACK_TEMPLATE.format(reason_clause=reason_clause)
 
 
 def resolve_grader(provider_name: str, model: str) -> tuple[str, str]:
@@ -142,13 +156,14 @@ class VerificationState(TypedDict):
     tokens_used: dict | None
     attempts: int
     approved: bool
+    grade_reason: str | None
 
 
 async def _generate(state: VerificationState) -> dict:
     provider = ProviderFactory.get_provider(state["provider_name"])
     messages = list(state["messages"])
     if state["attempts"] > 0:
-        messages = messages + [{"role": "user", "content": _RETRY_FEEDBACK}]
+        messages = messages + [{"role": "user", "content": _build_retry_feedback(state.get("grade_reason"))}]
 
     result = await provider.generate(
         messages=messages,
@@ -167,7 +182,7 @@ async def _generate(state: VerificationState) -> dict:
 async def _grade(state: VerificationState) -> dict:
     # A refusal has nothing to hallucinate — approve without spending a call.
     if REFUSAL_MARKER in state["draft_answer"]:
-        return {"approved": True}
+        return {"approved": True, "grade_reason": None}
 
     try:
         grader_provider_name, grader_model = resolve_grader(state["provider_name"], state["model"])
@@ -211,17 +226,23 @@ async def _grade(state: VerificationState) -> dict:
         lines = [l.strip() for l in result["content"].strip().splitlines() if l.strip()]
         verdict = lines[-1].upper() if lines else ""
         approved = not verdict.startswith("NO")
+        # The reason is whatever preceded the verdict line — a bare
+        # one-liner (verdict only, no reasoning) leaves nothing to attach to
+        # the retry feedback, which is fine: `_build_retry_feedback` falls
+        # back to the generic wording in that case.
+        grade_reason = " ".join(lines[:-1]).strip() or None
         logger.debug(
-            "Verification grade | grader=%s/%s | verdict=%s | draft_preview=%r",
-            grader_provider_name, grader_model, verdict, state["draft_answer"][:300],
+            "Verification grade | grader=%s/%s | verdict=%s | reason=%r | draft_preview=%r",
+            grader_provider_name, grader_model, verdict, grade_reason, state["draft_answer"][:300],
         )
     except Exception as e:
         # A broken grader must never block the chat entirely — fail open and
         # let the answer through, same as if the loop were disabled.
         logger.warning("Verification grading failed, approving by default: %s", e)
         approved = True
+        grade_reason = None
 
-    return {"approved": approved}
+    return {"approved": approved, "grade_reason": grade_reason}
 
 
 def _route(state: VerificationState) -> str:
@@ -254,10 +275,14 @@ async def generate_verified(
     """Run generate -> grade (retrying up to verification_max_attempts) and
     return the approved (or last-attempt) answer.
 
-    Returns: {content, finish_reason, tokens_used, attempts, approved}.
-    `approved=False` means every attempt failed grading — the caller still
-    gets the last draft (better than nothing after already spending the
-    calls) but can log it as a flagged case.
+    Returns: {content, finish_reason, tokens_used, attempts, approved,
+    grade_reason}. `approved=False` means every attempt failed grading — the
+    caller still gets the last draft (better than nothing after already
+    spending the calls) but can log it as a flagged case. `grade_reason` is
+    the grader's own short explanation for its last verdict (None if it
+    approved without reasoning, or if the grader call itself failed) —
+    surfaced so callers (chat_service, the GoldStandard eval) can store it
+    instead of the reason being visible only via live DEBUG-level tracing.
     """
     final_state = await _graph.ainvoke({
         "messages": messages,
@@ -271,12 +296,13 @@ async def generate_verified(
         "tokens_used": None,
         "attempts": 0,
         "approved": False,
+        "grade_reason": None,
     })
 
     if final_state["attempts"] > 1:
         logger.info(
-            "Verification loop | attempts=%d | approved=%s",
-            final_state["attempts"], final_state["approved"],
+            "Verification loop | attempts=%d | approved=%s | reason=%r",
+            final_state["attempts"], final_state["approved"], final_state.get("grade_reason"),
         )
 
     return {
@@ -285,4 +311,5 @@ async def generate_verified(
         "tokens_used": final_state["tokens_used"],
         "attempts": final_state["attempts"],
         "approved": final_state["approved"],
+        "grade_reason": final_state.get("grade_reason"),
     }

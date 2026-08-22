@@ -48,7 +48,7 @@ async def test_approved_on_first_try(monkeypatch):
 async def test_retries_once_then_approves(monkeypatch):
     fake = patch_provider(monkeypatch, [
         make_response("El programa tiene 500 créditos."),          # generate #1 (ungrounded)
-        make_response("NO"),                                        # grade #1
+        make_response("NO"),                                        # grade #1 (no reason line)
         make_response("El programa tiene 160 créditos [1]."),       # generate #2 (retry)
         make_response("SI"),                                        # grade #2
     ])
@@ -61,8 +61,45 @@ async def test_retries_once_then_approves(monkeypatch):
     assert result["content"] == "El programa tiene 160 créditos [1]."
     # Retry's generate call carries the corrective feedback as an extra turn
     retry_messages = fake.calls[2]
-    assert retry_messages[-1]["content"] == verification_graph._RETRY_FEEDBACK
+    assert retry_messages[-1]["content"] == verification_graph._build_retry_feedback(None)
     assert retry_messages[:-1] == BASE_MESSAGES
+
+
+async def test_retry_feedback_includes_graders_own_reason(monkeypatch):
+    # The retry attempt used to get a generic "corrígela" nudge with no idea
+    # WHAT was wrong — closing that gap: the grader's own short reason line
+    # (already part of _GRADE_PROMPT's output, previously discarded) now
+    # rides along in the retry's feedback message.
+    fake = patch_provider(monkeypatch, [
+        make_response("El programa tiene 500 créditos."),
+        make_response("El dato de 500 créditos no aparece en el contexto.\nNO"),
+        make_response("El programa tiene 160 créditos [1]."),
+        make_response("SI"),
+    ])
+    result = await verification_graph.generate_verified(
+        messages=BASE_MESSAGES, context_text="Contexto: 160 créditos [1]",
+        provider_name="ollama", model="qwen3:8b", temperature=0.05, max_tokens=2048,
+    )
+    retry_messages = fake.calls[2]
+    assert "500 créditos no aparece en el contexto" in retry_messages[-1]["content"]
+    # Approved on retry, so the final grade_reason belongs to the SECOND
+    # (passing) verdict, which had no reasoning prefix — None, not stale.
+    assert result["grade_reason"] is None
+
+
+async def test_generate_verified_surfaces_final_grade_reason(monkeypatch):
+    fake = patch_provider(monkeypatch, [
+        make_response("Respuesta 1 inventada."),
+        make_response("Falta el código de la asignatura.\nNO"),
+        make_response("Respuesta 2 inventada."),
+        make_response("Sigue sin coincidir el requisito citado.\nNO"),
+    ])
+    result = await verification_graph.generate_verified(
+        messages=BASE_MESSAGES, context_text="Contexto real",
+        provider_name="ollama", model="qwen3:8b", temperature=0.05, max_tokens=2048,
+    )
+    assert result["approved"] is False
+    assert result["grade_reason"] == "Sigue sin coincidir el requisito citado."
 
 
 async def test_exhausts_max_attempts_without_approval(monkeypatch):

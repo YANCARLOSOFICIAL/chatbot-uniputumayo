@@ -94,6 +94,18 @@ class Settings(BaseSettings):
     verification_loop_enabled: bool = True
     verification_max_attempts: int = 2
 
+    # Presupuesto de tokens/minuto que este proceso se autoimpone contra la
+    # API de OpenAI, por debajo del límite real de la organización (30000 TPM
+    # observado, típico de tier bajo). No es un valor inventado: el eval
+    # GoldStandard del 2026-08-22 disparó 10 fallos de generación + varios
+    # "approving by default" en la verificación por 429 de rate-limit —
+    # generación + grading (ver resolve_grader, que enruta AMBOS proveedores
+    # a OpenAI) + el judge del eval comparten el mismo techo. Se paga con
+    # espera proactiva (OpenAIProvider) en vez de reactiva (retry tras 429),
+    # que es más barata y no genera ruido en logs. Margen del 10% por
+    # imprecisión en la estimación de tokens (chars/4, sin tokenizer real).
+    openai_tpm_limit: int = 27000
+
     # Answer cache: sirve respuestas completas ya generadas para preguntas con
     # significado similar (no solo texto exacto), saltándose RAG + LLM por
     # completo en un acierto. Clave en Ollama sin AVX2/GPU, donde la generación

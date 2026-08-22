@@ -94,6 +94,15 @@ class ChatService:
         # instead of a separately-computed retrieval pass that can diverge
         # (different top_k, different HyDE state; see goldstandard_eval_service).
         self.last_rag_context_text: str | None = None
+        # Same idea as last_rag_context_text: exposes the verification
+        # grader's own explanation for its last verdict on this instance's
+        # last message, when the verification loop ran (see
+        # verification_graph.generate_verified). None when the loop didn't
+        # run, approved on the first attempt without reasoning, or the
+        # grader call itself failed. Added so a rejection's actual reason is
+        # inspectable without live DEBUG-level tracing — GoldStandard eval
+        # stores it per case for offline analysis of false refusals.
+        self.last_verification_reason: str | None = None
 
     # ── Conversation CRUD ────────────────────────────────────────────────────
 
@@ -808,6 +817,7 @@ class ChatService:
                     tokens_used = verified["tokens_used"]["total"] if verified["tokens_used"] else None
                     verification_attempts = verified["attempts"]
                     verification_approved = verified["approved"]
+                    self.last_verification_reason = verified.get("grade_reason")
                     if verified["approved"]:
                         content = verified["content"]
                     else:
@@ -1019,6 +1029,7 @@ class ChatService:
                         finish_reason = verified["finish_reason"]
                         verification_attempts = verified["attempts"]
                         verification_approved = verified["approved"]
+                        self.last_verification_reason = verified.get("grade_reason")
                         if verified["approved"]:
                             full_content = verified["content"]
                         else:
