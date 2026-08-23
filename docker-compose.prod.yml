@@ -100,6 +100,13 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_DEFAULT_MODEL: gpt-5.4-mini
       OPENAI_EMBEDDING_MODEL: text-embedding-3-small
+      # Presupuesto propio de tokens/minuto contra OpenAI, por debajo del techo
+      # real de la org (30000 TPM observado) — chat generation + grading de
+      # verificación (AMBOS proveedores, ver resolve_grader) + el judge del
+      # eval GoldStandard comparten este mismo presupuesto. Ver
+      # OpenAIProvider._TokenRateLimiter. Subir solo si se confirma un upgrade
+      # de tier en la cuenta de OpenAI.
+      OPENAI_TPM_LIMIT: "27000"
       DEFAULT_LLM_PROVIDER: ollama
       DEFAULT_TEMPERATURE: "0.05"
       # 768 causaba respuestas cortadas a media palabra en preguntas que

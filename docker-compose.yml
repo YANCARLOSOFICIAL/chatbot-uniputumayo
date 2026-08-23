@@ -80,6 +80,9 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_DEFAULT_MODEL: gpt-5.4-mini
       OPENAI_EMBEDDING_MODEL: text-embedding-3-small
+      # Ver comentario en docker-compose.prod.yml — mismo presupuesto
+      # compartido por chat/verificación/judge del eval GoldStandard.
+      OPENAI_TPM_LIMIT: "27000"
       DEFAULT_LLM_PROVIDER: ollama
       DEFAULT_TEMPERATURE: "0.05"
       DEFAULT_MAX_TOKENS: "2048"
