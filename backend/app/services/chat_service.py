@@ -355,11 +355,26 @@ class ChatService:
             return None
         return SearchFilters(program=next(iter(matches)))
 
-    async def _run_rag(self, query: str) -> _RAGContext:
-        """Run RAG search and return structured context ready for prompt building."""
+    async def _run_rag(self, query: str, hyde_provider_override: str | None = None) -> _RAGContext:
+        """Run RAG search and return structured context ready for prompt building.
+
+        `hyde_provider_override` pins HyDE's provider decision to whichever
+        provider will actually generate the answer (the caller's resolved
+        `provider_name`), instead of letting `RAGService.search()` fall back
+        to reading the live `runtime_config.default_llm_provider` — that
+        global can differ from the per-request provider (e.g. GoldStandard
+        eval's generation leg explicitly requests one provider while the
+        live admin default is set to the other), which was silently
+        retrieving with the wrong HyDE state and no-context-refusing
+        answerable queries. For real chat traffic (no per-request override)
+        this resolves to the same value the global would have anyway, so
+        behavior is unchanged there.
+        """
         rag_service = RAGService(self.db)
         filters = await self._detect_program_filter(query)
-        search_results = await rag_service.search(SearchRequest(query=query, filters=filters))
+        search_results = await rag_service.search(
+            SearchRequest(query=query, filters=filters, hyde_provider_override=hyde_provider_override)
+        )
         quality = rag_service.evaluate_context_quality(search_results.results)
 
         # Numbered so the LLM can cite which fragment(s) it actually used
@@ -761,9 +776,12 @@ class ChatService:
                 (False, data.content) if greeting
                 else self._resolve_followup_query(history, data.content)
             )
-            rag_ctx = self._empty_rag_ctx() if greeting else await self._run_rag(retrieval_query)
-            self.last_rag_context_text = rag_ctx.context_text
             provider_name = data.llm_provider or runtime_config.default_llm_provider
+            rag_ctx = (
+                self._empty_rag_ctx() if greeting
+                else await self._run_rag(retrieval_query, hyde_provider_override=provider_name)
+            )
+            self.last_rag_context_text = rag_ctx.context_text
 
             if not greeting and not is_followup and settings.program_clarification_enabled:
                 ambiguity = self._detect_ambiguity(data.content, rag_ctx)
@@ -961,8 +979,11 @@ class ChatService:
                     (False, data.content) if greeting
                     else self._resolve_followup_query(history, data.content)
                 )
-                rag_ctx = self._empty_rag_ctx() if greeting else await self._run_rag(retrieval_query)
                 provider_name = data.llm_provider or runtime_config.default_llm_provider
+                rag_ctx = (
+                    self._empty_rag_ctx() if greeting
+                    else await self._run_rag(retrieval_query, hyde_provider_override=provider_name)
+                )
 
                 if not greeting and not is_followup and settings.program_clarification_enabled:
                     ambiguity = self._detect_ambiguity(data.content, rag_ctx)
