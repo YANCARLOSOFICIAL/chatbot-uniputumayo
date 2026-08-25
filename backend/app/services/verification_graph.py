@@ -30,9 +30,21 @@ _CITATION_RE = re.compile(r"\[(\d{1,2})\]")
 _CITATION_BLOCK_RE = re.compile(r"^\[(\d{1,2})\]")
 
 
-def _context_for_grading(context_text: str, draft_answer: str, max_chars: int) -> str:
+def context_for_grading(context_text: str, draft_answer: str, max_chars: int) -> str:
     """Narrow the grader's context to just the sources the draft actually
     cites, instead of resending every retrieved chunk.
+
+    Not private (no leading underscore): `goldstandard_eval_service.py`
+    reuses this — same reasoning as `resolve_grader` below. Confirmed live
+    2026-08-24/25: the eval's own hallucination judge grading against the
+    FULL (un-narrowed) context — while this module's own `_grade` narrows —
+    produced disagreeing verdicts on real cases (GS-004, GS-084) where the
+    cited content was genuinely grounded but the full un-narrowed context
+    (up to rag_top_k=10 chunks) exceeded the judge's char budget, risking
+    truncation of the very chunk the answer actually relied on. Grading both
+    against the same narrowed, cited-only context removes that asymmetry and
+    makes the eval's number reflect the same standard production actually
+    enforces.
 
     `context_text` is assembled in chat_service._run_rag as "[N] title\\n
     content" blocks joined by "\\n\\n---\\n\\n" — the same numbering the LLM
@@ -196,7 +208,7 @@ async def _grade(state: VerificationState) -> dict:
         # under the 8192-token OLLAMA_NUM_CTX window even at the current
         # top_k.
         max_context_chars = settings.chunk_size * 4 * settings.rag_top_k
-        graded_context = _context_for_grading(
+        graded_context = context_for_grading(
             state["context_text"], state["draft_answer"], max_context_chars
         )
         result = await provider.generate(

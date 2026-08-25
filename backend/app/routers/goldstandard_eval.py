@@ -147,6 +147,23 @@ def _compute_generation_stats(g: dict) -> dict:
         if not c.get("refused") and not _is_clarification_case(c) and c.get("hallucinated") is None
     ]
 
+    # Split "rechazo inesperado" by rag_quality — two mechanisms look
+    # identical otherwise (refused=True, verification_reason=None):
+    # retrieval itself came back weak/empty (quality != "good", zero LLM
+    # calls) vs. the LLM had good context and self-refused anyway
+    # (verification_graph._grade's REFUSAL_MARKER short-circuit auto-
+    # approves without grading, so verification_reason stays None too).
+    # Confirmed live 2026-08-24 these were conflated into one bucket that
+    # a HyDE/retrieval fix could only ever move half of. `rag_quality` is
+    # None on runs recorded before this field existed — those fall into
+    # "sin diagnóstico" rather than being misclassified either way.
+    refusal_quality_gap = [c for c in unexpected_refusal if c.get("rag_quality") in ("weak", "none")]
+    refusal_self_refused = [c for c in unexpected_refusal if c.get("rag_quality") == "good"]
+    refusal_undiagnosed = [
+        c for c in unexpected_refusal
+        if c.get("rag_quality") not in ("weak", "none", "good")
+    ]
+
     return {
         "provider": g.get("provider", ""),
         "model": g.get("model", ""),
@@ -158,6 +175,9 @@ def _compute_generation_stats(g: dict) -> dict:
         "avg_generation_ms": g.get("avg_generation_ms", 0),
         "error_cases": g.get("error_cases", 0),
         "unexpected_refusal": unexpected_refusal,
+        "refusal_quality_gap": refusal_quality_gap,
+        "refusal_self_refused": refusal_self_refused,
+        "refusal_undiagnosed": refusal_undiagnosed,
         "clarification_triggered": clarification_triggered,
         "judge_failed": judge_failed,
     }
@@ -229,13 +249,47 @@ def _render_markdown_report(run: GoldEvalRun) -> str:
             if len(clarification_triggered) > 20:
                 lines.append(f"- ... y {len(clarification_triggered) - 20} más")
         if unexpected_refusal:
-            lines += ["", "Preguntas con rechazo inesperado:", ""]
-            for c in unexpected_refusal[:20]:
-                reason = c.get("verification_reason")
-                suffix = f" — motivo del grader: «{reason}»" if reason else ""
-                lines.append(f"- `{c.get('id', '')}`: {c.get('query', '')}{suffix}")
-            if len(unexpected_refusal) > 20:
-                lines.append(f"- ... y {len(unexpected_refusal) - 20} más")
+            refusal_quality_gap = g["refusal_quality_gap"]
+            refusal_self_refused = g["refusal_self_refused"]
+            refusal_undiagnosed = g["refusal_undiagnosed"]
+            if refusal_quality_gap:
+                lines += [
+                    "",
+                    f"Rechazo por retrieval débil/vacío ({len(refusal_quality_gap)}) — "
+                    "el RAG no encontró contenido suficiente, ninguna llamada al LLM:",
+                    "",
+                ]
+                for c in refusal_quality_gap[:20]:
+                    lines.append(f"- `{c.get('id', '')}`: {c.get('query', '')}")
+                if len(refusal_quality_gap) > 20:
+                    lines.append(f"- ... y {len(refusal_quality_gap) - 20} más")
+            if refusal_self_refused:
+                lines += [
+                    "",
+                    f"Rechazo del modelo pese a contexto bueno ({len(refusal_self_refused)}) — "
+                    "el RAG sí encontró contenido relevante (quality=good), pero el modelo "
+                    "respondió \"no sé\" de todas formas:",
+                    "",
+                ]
+                for c in refusal_self_refused[:20]:
+                    reason = c.get("verification_reason")
+                    suffix = f" — motivo del grader: «{reason}»" if reason else ""
+                    lines.append(f"- `{c.get('id', '')}`: {c.get('query', '')}{suffix}")
+                if len(refusal_self_refused) > 20:
+                    lines.append(f"- ... y {len(refusal_self_refused) - 20} más")
+            if refusal_undiagnosed:
+                lines += [
+                    "",
+                    f"Rechazo sin diagnóstico ({len(refusal_undiagnosed)}) — corrida anterior "
+                    "al campo rag_quality, no se puede clasificar retroactivamente:",
+                    "",
+                ]
+                for c in refusal_undiagnosed[:20]:
+                    reason = c.get("verification_reason")
+                    suffix = f" — motivo del grader: «{reason}»" if reason else ""
+                    lines.append(f"- `{c.get('id', '')}`: {c.get('query', '')}{suffix}")
+                if len(refusal_undiagnosed) > 20:
+                    lines.append(f"- ... y {len(refusal_undiagnosed) - 20} más")
 
     return "\n".join(lines) + "\n"
 

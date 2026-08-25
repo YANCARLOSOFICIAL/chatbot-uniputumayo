@@ -328,6 +328,94 @@ class TestJudgeUsesActualChatContext:
         assert result.hallucinated is False
 
 
+class TestJudgeContextNarrowedToCitedSources:
+    """Real false positives found live 2026-08-25 (GS-004, GS-084 from the
+    2026-08-23 run): the eval's judge graded against the FULL retrieved
+    context (all chunks, un-narrowed), while verification_graph._grade (the
+    production safety net) narrows to only the draft's cited [N] blocks —
+    manual re-check confirmed the flagged answers WERE grounded in their
+    cited chunk, but the full context (multiple large chunks) risked
+    truncating past it under the judge's char budget. _run_generation_case
+    must narrow the judge's context the same way production's grader does."""
+
+    @pytest.mark.asyncio
+    async def test_judge_receives_only_the_cited_chunk_not_the_full_context(self, monkeypatch):
+        from app.services.goldstandard_eval_service import _run_generation_case
+
+        real_answer = "El programa tiene 10 semestres [2]."
+        full_context = (
+            "[1] Documento irrelevante\nContenido que no tiene nada que ver con la pregunta."
+            "\n\n---\n\n"
+            "[2] Malla real\nEl programa tiene 10 semestres."
+        )
+
+        async def fake_process_message(self, *args, **kwargs):
+            self.last_rag_context_text = full_context
+            return SimpleNamespace(assistant_message=SimpleNamespace(content=real_answer))
+
+        monkeypatch.setattr(
+            "app.services.goldstandard_eval_service.ChatService.process_message",
+            fake_process_message,
+        )
+
+        seen_context = None
+
+        async def capture_judge(provider_name, model, query, context, answer):
+            nonlocal seen_context
+            seen_context = context
+            return False
+
+        monkeypatch.setattr(
+            "app.services.goldstandard_eval_service._judge_hallucination", capture_judge,
+        )
+
+        fake_db = SimpleNamespace(add=lambda *_: None, flush=_noop)
+        q = GoldQuery(
+            id="GS-006", category="c", query="¿Cuántos semestres tiene X?",
+            query_type="dentro de alcance", expected_documents=["07_x"],
+        )
+
+        await _run_generation_case(fake_db, q, "openai", "gpt-4.1")
+
+        assert seen_context == "[2] Malla real\nEl programa tiene 10 semestres."
+        assert "Documento irrelevante" not in seen_context
+
+
+class TestRagQualityPropagatesToGenerationCaseResult:
+    """Real bug found live 2026-08-24: a refused case with no verification_reason
+    could mean two different things — retrieval came back weak/empty (zero LLM
+    calls) or the LLM had good context and self-refused anyway (REFUSAL_MARKER
+    short-circuit in verification_graph._grade approves without ever grading,
+    leaving grade_reason=None too) — and the stored eval data couldn't tell them
+    apart. _run_generation_case must carry ChatService.last_rag_quality through
+    so the report can split the two."""
+
+    @pytest.mark.asyncio
+    async def test_carries_last_rag_quality_into_result(self, monkeypatch):
+        from app.services.goldstandard_eval_service import _run_generation_case
+        from app.utils.prompts import REFUSAL_MARKER
+
+        async def fake_process_message(self, *args, **kwargs):
+            self.last_rag_quality = "good"
+            return SimpleNamespace(assistant_message=SimpleNamespace(content=REFUSAL_MARKER))
+
+        monkeypatch.setattr(
+            "app.services.goldstandard_eval_service.ChatService.process_message",
+            fake_process_message,
+        )
+
+        fake_db = SimpleNamespace(add=lambda *_: None, flush=_noop)
+        q = GoldQuery(
+            id="GS-063", category="c", query="¿Cuál es el perfil profesional del Ingeniero Civil?",
+            query_type="dentro de alcance", expected_documents=["01_x"],
+        )
+
+        result = await _run_generation_case(fake_db, q, "openai", "gpt-4.1")
+
+        assert result.refused is True
+        assert result.rag_quality == "good"
+
+
 class TestComputeGenerationStatsRecomputesFromCases:
     """_compute_generation_stats (used by the markdown report) must recompute
     hallucination_rate/judged_cases from the per-case answer text rather than

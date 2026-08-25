@@ -35,6 +35,18 @@ top_k, and HyDE's on/off state depends on the live admin default provider,
 not on which provider is being evaluated here), so reusing the metrics-pass
 context previously judged real answers against context the model never saw —
 confirmed live 2026-08-20 to misjudge well-grounded answers as hallucinated.
+
+That full context is then narrowed via `verification_graph.context_for_grading`
+to only the answer's cited `[N]` blocks before judging — the same narrowing
+`verification_graph._grade` applies in production. Confirmed live 2026-08-25
+(GS-004, GS-084 from the 2026-08-23 run): grading against the FULL retrieved
+context (up to rag_top_k=10 chunks) disagreed with the internal grader on
+answers that were, on manual re-check against the actual retrieved chunks,
+genuinely grounded — the internal grader's narrowed context stayed under its
+char budget while the full context (much larger) risked truncating the exact
+chunk the answer relied on. Narrowing both the same way removes that
+asymmetry and makes the eval's hallucination rate reflect the same standard
+production already enforces, instead of a stricter, inconsistent one.
 """
 from __future__ import annotations
 
@@ -55,7 +67,7 @@ from app.schemas.chat import MessageCreate
 from app.schemas.rag import SearchRequest
 from app.services.chat_service import ChatService
 from app.services.rag_service import RAGService
-from app.services.verification_graph import resolve_grader
+from app.services.verification_graph import context_for_grading, resolve_grader
 from app.providers.provider_factory import ProviderFactory
 from app.runtime_config import runtime_config
 from app.utils.prompts import CLARIFICATION_MARKER, REFUSAL_MARKER
@@ -299,6 +311,7 @@ class GenerationCaseResult:
     generation_ms: int
     error: str | None = None  # set when process_message itself blew up (e.g. Ollama ReadTimeout) — case excluded from every rate, not counted as a failure
     verification_reason: str | None = None  # grader's own explanation for its last verdict (see ChatService.last_verification_reason) — most useful on `refused` cases, to see WHY without live tracing
+    rag_quality: str | None = None  # ChatService.last_rag_quality ("good"/"weak"/"none") — on a `refused` case, distinguishes "retrieval came back weak/empty" (quality != "good", zero LLM calls) from "LLM had good context but self-refused anyway" (quality == "good", REFUSAL_MARKER short-circuit in verification_graph._grade leaves verification_reason=None too — see goldstandard_eval_wip memory, 2026-08-24)
 
 
 async def _run_generation_case(
@@ -334,6 +347,7 @@ async def _run_generation_case(
     refused = REFUSAL_MARKER in answer
     clarification = CLARIFICATION_MARKER in answer
     verification_reason = chat_service.last_verification_reason
+    rag_quality = chat_service.last_rag_quality
 
     expected_refusal = q.query_type in _REFUSAL_EXPECTED_TYPES
     refusal_ok = (refused == expected_refusal)
@@ -347,8 +361,14 @@ async def _run_generation_case(
             # state (see ChatService.last_rag_context_text docstring) and
             # were confirmed live to make the judge score well-grounded
             # answers as hallucinations because it was reading different
-            # context than the model saw.
-            judge_context = chat_service.last_rag_context_text or ""
+            # context than the model saw. Then narrowed to only the answer's
+            # cited sources (context_for_grading, module docstring) so this
+            # judge grades against the same slice production's own grader
+            # does, instead of the full un-narrowed context risking
+            # truncation of the chunk the answer actually relied on.
+            full_context = chat_service.last_rag_context_text or ""
+            max_context_chars = settings.chunk_size * 4 * settings.rag_top_k
+            judge_context = context_for_grading(full_context, answer, max_context_chars)
             hallucinated = await _judge_hallucination(provider_name, model, q.query, judge_context, answer)
         except Exception as e:
             hallucinated = None  # judge call failed — excluded from the rate, not counted as a hallucination
@@ -359,7 +379,7 @@ async def _run_generation_case(
     return GenerationCaseResult(
         query=q, answer=answer, refused=refused, clarification=clarification, expected_refusal=expected_refusal,
         refusal_ok=refusal_ok, hallucinated=hallucinated, generation_ms=generation_ms,
-        verification_reason=verification_reason,
+        verification_reason=verification_reason, rag_quality=rag_quality,
     )
 
 

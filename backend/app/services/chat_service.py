@@ -103,6 +103,18 @@ class ChatService:
         # inspectable without live DEBUG-level tracing — GoldStandard eval
         # stores it per case for offline analysis of false refusals.
         self.last_verification_reason: str | None = None
+        # Same idea again: exposes rag_ctx.quality ("good"/"weak"/"none") for
+        # this instance's last message. Needed to tell apart, from stored
+        # eval data alone, two refusal mechanisms that otherwise look
+        # identical (refused=True, verification_reason=None): (a) retrieval
+        # itself came back weak/empty (quality != "good" short-circuits
+        # straight to build_no_context_answer(), no LLM call), vs (b) the
+        # LLM had good context and chose to output the refusal script anyway
+        # (verification_graph._grade's REFUSAL_MARKER short-circuit
+        # auto-approves without grading, so grade_reason stays None too).
+        # Confirmed live (GoldStandard eval, 2026-08-24) these two were being
+        # conflated into one "rechazo inesperado" bucket.
+        self.last_rag_quality: str | None = None
 
     # ── Conversation CRUD ────────────────────────────────────────────────────
 
@@ -782,6 +794,7 @@ class ChatService:
                 else await self._run_rag(retrieval_query, hyde_provider_override=provider_name)
             )
             self.last_rag_context_text = rag_ctx.context_text
+            self.last_rag_quality = rag_ctx.quality
 
             if not greeting and not is_followup and settings.program_clarification_enabled:
                 ambiguity = self._detect_ambiguity(data.content, rag_ctx)
