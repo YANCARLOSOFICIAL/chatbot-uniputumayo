@@ -392,7 +392,17 @@ class RAGService:
             search_time_ms=search_time,
         )
 
-        if final_results:
+        # Only cache "good" quality — a "weak"/"none" result can be a transient
+        # miss (HyDE's pseudo-document varies call to call; a poorly-worded one
+        # can score just under settings.rag_score_threshold) rather than a
+        # stable fact about the query. Caching it anyway locks that bad result
+        # in for rag_cache's full TTL (30 min), so every student asking a
+        # similarly-worded question during that window gets the same false
+        # refusal a retry would likely have avoided. Confirmed live 2026-08-25
+        # (GS-039, "examen supletorio"): one weak retrieval got cached, then
+        # a fresh attempt ~30 min later (after the stale entry expired) scored
+        # 0.726 — comfortably "good" — on the identical query.
+        if final_results and quality == "good":
             await rag_cache.set(cache_key, response)
 
         # Write retrieval log — enables analytics on query patterns and RAG quality over time
