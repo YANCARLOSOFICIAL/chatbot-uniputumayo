@@ -388,6 +388,12 @@ class ChatService:
             SearchRequest(query=query, filters=filters, hyde_provider_override=hyde_provider_override)
         )
         quality = rag_service.evaluate_context_quality(search_results.results)
+        logger.info(
+            "RAG quality | query=%r | filters=%s | quality=%s | top_score=%s | n_results=%d",
+            query, filters, quality,
+            search_results.results[0].score if search_results.results else None,
+            len(search_results.results),
+        )
 
         # Numbered so the LLM can cite which fragment(s) it actually used
         # (see _SYSTEM_WITH_CONTEXT) — _filter_cited_sources() below then
