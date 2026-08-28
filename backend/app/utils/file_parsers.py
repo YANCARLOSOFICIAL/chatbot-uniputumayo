@@ -96,26 +96,56 @@ def _extract_pdf(file_path: str) -> str:
 
 # ── DOCX ─────────────────────────────────────────────────────────────────────
 
+def _iter_block_items(document):
+    """Yield each top-level paragraph/table in the order they actually
+    appear in the document body.
+
+    `document.paragraphs` and `document.tables` are two independent flat
+    lists — iterating them separately (the previous approach here) silently
+    discards document order: every table ends up appended after all
+    paragraphs, regardless of where it actually sits. For a document that
+    interleaves narrative text with tables (e.g. a heading followed by its
+    data table, repeated per section), that regroups every table from every
+    section into one undifferentiated block at the end — confirmed live on
+    Posgrados_matriculas_UNIPUTUMAYO.docx: three programs' "Información
+    financiera" tables (each internally correct — 2-column Denominación/
+    Inscripción/Matrícula key-value rows) all landed in a single block
+    detached from their section headings, one save away from a chunk
+    boundary splitting a program's name from its own tuition figures.
+    """
+    from docx.oxml.ns import qn
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
+
+    for child in document.element.body.iterchildren():
+        if child.tag == qn("w:p"):
+            yield Paragraph(child, document)
+        elif child.tag == qn("w:tbl"):
+            yield Table(child, document)
+
+
 def _extract_docx(file_path: str) -> str:
     from docx import Document
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
 
     doc = Document(file_path)
     parts = []
 
-    for paragraph in doc.paragraphs:
-        if paragraph.text.strip():
-            parts.append(paragraph.text)
-
-    for table in doc.tables:
-        for row in table.rows:
-            cells = [cell.text.strip() for cell in row.cells]
-            non_empty = [c for c in cells if c]
-            # >= 1 — a merged/spanning header cell in a docx table has the
-            # same single-populated-cell shape as the xlsx case; see
-            # _extract_xlsx. This one was missed when that fix was applied
-            # everywhere else (xls, csv, pptx already use >= 1).
-            if len(non_empty) >= 1:
-                parts.append(" | ".join(non_empty))
+    for block in _iter_block_items(doc):
+        if isinstance(block, Paragraph):
+            if block.text.strip():
+                parts.append(block.text)
+        elif isinstance(block, Table):
+            for row in block.rows:
+                cells = [cell.text.strip() for cell in row.cells]
+                non_empty = [c for c in cells if c]
+                # >= 1 — a merged/spanning header cell in a docx table has
+                # the same single-populated-cell shape as the xlsx case; see
+                # _extract_xlsx. This one was missed when that fix was
+                # applied everywhere else (xls, csv, pptx already use >= 1).
+                if len(non_empty) >= 1:
+                    parts.append(" | ".join(non_empty))
 
     return "\n\n".join(parts)
 

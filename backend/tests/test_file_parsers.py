@@ -195,6 +195,35 @@ class TestExtractDocx:
         assert "SEMESTRE I" in text
         assert "Fundamentos de seguridad informática" in text
 
+    def test_interleaved_paragraphs_and_tables_preserve_document_order(self, tmp_path):
+        """python-docx exposes doc.paragraphs and doc.tables as two separate
+        flat lists — iterating them independently (the previous
+        implementation) silently drops every table to the end of the
+        document, detached from the heading/section it actually belongs to.
+        Confirmed live on a real document: three programs' tuition tables
+        all landed in one undifferentiated block after all narrative text,
+        one save away from a chunk boundary splitting a program's name from
+        its own price.
+        """
+        path = tmp_path / "programa.docx"
+        doc = Document()
+        doc.add_paragraph("Programa A")
+        table_a = doc.add_table(rows=1, cols=2)
+        table_a.cell(0, 0).text = "Matrícula"
+        table_a.cell(0, 1).text = "$1.000.000"
+        doc.add_paragraph("Programa B")
+        table_b = doc.add_table(rows=1, cols=2)
+        table_b.cell(0, 0).text = "Matrícula"
+        table_b.cell(0, 1).text = "$2.000.000"
+        doc.save(path)
+
+        text = _extract_docx(str(path))
+        # Each program's price must appear right after its own name, not
+        # grouped with the other table at the end of the document.
+        idx_a, idx_price_a = text.find("Programa A"), text.find("$1.000.000")
+        idx_b, idx_price_b = text.find("Programa B"), text.find("$2.000.000")
+        assert idx_a < idx_price_a < idx_b < idx_price_b
+
 
 class TestExtractPptx:
     def test_table_with_merged_style_header_row_is_preserved(self, tmp_path):
