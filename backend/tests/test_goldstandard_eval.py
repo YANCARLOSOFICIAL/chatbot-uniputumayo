@@ -416,6 +416,52 @@ class TestRagQualityPropagatesToGenerationCaseResult:
         assert result.rag_quality == "good"
 
 
+class TestRagQualityPropagatesToStoredCases:
+    """Real bug found live 2026-08-30, via a real full-run report showing 100%
+    of unexpected refusals as "sin diagnóstico" (undiagnosed) on both
+    providers: commit 3af243f added `rag_quality` to GenerationCaseResult
+    (confirmed correct by the test above) and to the report's classification
+    logic, but never added it to run_generation_eval's manual `cases` dict
+    comprehension — the field existed on the dataclass in memory but was
+    silently dropped before ever reaching `run.results`, the JSON actually
+    persisted and later read by the report. The test above only proves the
+    dataclass carries the field; it never exercised the dict that gets
+    stored, so it couldn't catch this. Guards the persisted shape instead."""
+
+    @pytest.mark.asyncio
+    async def test_rag_quality_present_in_stored_case_dict(self, monkeypatch):
+        from app.services.goldstandard_eval_service import (
+            GenerationCaseResult, RetrievalCaseResult, run_generation_eval,
+        )
+
+        q = GoldQuery(
+            id="GS-063", category="c", query="¿Cuál es el perfil profesional del Ingeniero Civil?",
+            query_type="dentro de alcance", expected_documents=["01_x"],
+        )
+        retrieval_results = [RetrievalCaseResult(
+            query=q, retrieved_titles=[], precision_at_k=0.0, recall_at_k=0.0,
+            reciprocal_rank=0.0, retrieval_ms=1,
+        )]
+
+        async def fake_run_generation_case(db, query, provider_name, model):
+            return GenerationCaseResult(
+                query=query, answer="no sé", refused=True, clarification=False,
+                expected_refusal=False, refusal_ok=False, hallucinated=None,
+                generation_ms=1, rag_quality="weak",
+            )
+
+        monkeypatch.setattr(
+            "app.services.goldstandard_eval_service._run_generation_case",
+            fake_run_generation_case,
+        )
+
+        fake_db = SimpleNamespace(execute=lambda *_: _noop(), commit=_noop)
+
+        summary = await run_generation_eval(fake_db, retrieval_results, "ollama", "qwen2.5:7b")
+
+        assert summary.cases[0]["rag_quality"] == "weak"
+
+
 class TestComputeGenerationStatsRecomputesFromCases:
     """_compute_generation_stats (used by the markdown report) must recompute
     hallucination_rate/judged_cases from the per-case answer text rather than

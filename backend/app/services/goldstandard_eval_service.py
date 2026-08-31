@@ -437,6 +437,7 @@ async def run_generation_eval(
             "generation_ms": r.generation_ms,
             "error": r.error,
             "verification_reason": r.verification_reason,
+            "rag_quality": r.rag_quality,
         } for r in results],
     )
 
