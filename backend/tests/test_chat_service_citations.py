@@ -1,7 +1,10 @@
 import uuid
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
+from app.providers.provider_factory import ProviderFactory
 from app.schemas.chat import SourceInfo
 from app.schemas.llm import LLMMessage
 from app.services.chat_service import ChatService, _RAGContext
@@ -195,7 +198,12 @@ class TestDetectAmbiguity:
 
 
 class TestResolveFollowupQuery:
-    def test_detects_reply_to_clarification(self, service):
+    @pytest.fixture
+    def conv_id(self):
+        return uuid.uuid4()
+
+    @pytest.mark.asyncio
+    async def test_detects_reply_to_clarification(self, service, conv_id):
         history = [
             LLMMessage(role="user", content="¿Cuáles son las materias del pensum?"),
             LLMMessage(
@@ -203,20 +211,274 @@ class TestResolveFollowupQuery:
                 content=f"{CLARIFICATION_MARKER} programas académicos de Uniputumayo...",
             ),
         ]
-        is_followup, query = service._resolve_followup_query(history, "Ingeniería de Sistemas")
+        is_followup, query = await service._resolve_followup_query(
+            history, "Ingeniería de Sistemas", "ollama", conv_id
+        )
         assert is_followup is True
         assert query == "¿Cuáles son las materias del pensum? Ingeniería de Sistemas"
 
-    def test_not_a_followup_when_last_turn_is_a_normal_answer(self, service):
+    @pytest.mark.asyncio
+    async def test_not_a_followup_when_last_turn_is_a_normal_answer(self, service, monkeypatch, conv_id):
+        monkeypatch.setattr(service, "_get_known_programs", AsyncMock(return_value=[]))
+        monkeypatch.setattr(service, "_get_program_aliases", AsyncMock(return_value={}))
         history = [
             LLMMessage(role="user", content="hola"),
             LLMMessage(role="assistant", content="¡Hola! ¿En qué puedo ayudarte?"),
         ]
-        is_followup, query = service._resolve_followup_query(history, "materias de sistemas")
+        is_followup, query = await service._resolve_followup_query(
+            history, "materias de sistemas", "ollama", conv_id
+        )
         assert is_followup is False
         assert query == "materias de sistemas"
 
-    def test_not_a_followup_with_empty_history(self, service):
-        is_followup, query = service._resolve_followup_query([], "hola")
+    @pytest.mark.asyncio
+    async def test_not_a_followup_with_empty_history(self, service, conv_id):
+        is_followup, query = await service._resolve_followup_query([], "hola", "ollama", conv_id)
         assert is_followup is False
         assert query == "hola"
+
+    @pytest.mark.asyncio
+    async def test_carries_forward_program_named_in_an_earlier_turn(self, service, monkeypatch, conv_id):
+        # Real bug found live 2026-08-31: "primer semestre de Tecnología en
+        # Desarrollo de Software" then "ahora dime las de tercer semestre" —
+        # the second question alone names no program, so bare retrieval on
+        # "tercer semestre" matched noisily across every program's curriculum
+        # instead of staying on the one the conversation was already about.
+        # provider="ollama" exercises the entity-heuristic fallback directly
+        # (no LLM condensation call to mock).
+        monkeypatch.setattr(service, "_get_known_programs", AsyncMock(return_value=["ingenieria de sistemas"]))
+        monkeypatch.setattr(
+            service, "_get_program_aliases",
+            AsyncMock(return_value={"tecnologia en desarrollo de software": "ingenieria de sistemas"}),
+        )
+        history = [
+            LLMMessage(role="user", content="¿Qué asignaturas se ven en primer semestre de Tecnología en Desarrollo de Software?"),
+            LLMMessage(role="assistant", content="En primer semestre se ven... [1]"),
+        ]
+        is_followup, query = await service._resolve_followup_query(
+            history, "ahora dime las de tercer semestre", "ollama", conv_id
+        )
+        assert is_followup is True
+        assert query.startswith("¿Qué asignaturas se ven en primer semestre de Tecnología en Desarrollo de Software?")
+        assert query.endswith("ahora dime las de tercer semestre")
+
+    @pytest.mark.asyncio
+    async def test_current_message_already_naming_a_program_is_not_a_followup(self, service, monkeypatch, conv_id):
+        monkeypatch.setattr(service, "_get_known_programs", AsyncMock(return_value=["ingenieria civil"]))
+        monkeypatch.setattr(service, "_get_program_aliases", AsyncMock(return_value={}))
+        history = [
+            LLMMessage(role="user", content="¿Qué materias tiene Ingeniería de Sistemas?"),
+            LLMMessage(role="assistant", content="Tiene... [1]"),
+        ]
+        is_followup, query = await service._resolve_followup_query(
+            history, "¿y las materias de Ingeniería Civil?", "ollama", conv_id
+        )
+        assert is_followup is False
+        assert query == "¿y las materias de Ingeniería Civil?"
+
+    @pytest.mark.asyncio
+    async def test_institution_wide_followup_is_not_contaminated_with_a_program_name(
+        self, service, monkeypatch, conv_id,
+    ):
+        # is_varying_topic_query gate: "requisitos de admisión" is
+        # institution-wide, so it must never get a stray program name
+        # prepended even though an earlier turn named one — that could make
+        # _detect_program_filter wrongly hard-filter to a single program.
+        get_programs = AsyncMock(return_value=["ingenieria de sistemas"])
+        monkeypatch.setattr(service, "_get_known_programs", get_programs)
+        monkeypatch.setattr(service, "_get_program_aliases", AsyncMock(return_value={}))
+        history = [
+            LLMMessage(role="user", content="¿Qué materias tiene Ingeniería de Sistemas?"),
+            LLMMessage(role="assistant", content="Tiene... [1]"),
+        ]
+        is_followup, query = await service._resolve_followup_query(
+            history, "¿y los requisitos de admisión?", "ollama", conv_id
+        )
+        assert is_followup is False
+        assert query == "¿y los requisitos de admisión?"
+        get_programs.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_openai_condenses_a_non_program_followup(self, service, monkeypatch, conv_id):
+        # The real gap the entity-heuristic can never close: "¿y los
+        # costos?" names no program, so strategy #3 alone would never carry
+        # context forward for it — only an LLM that actually reads the
+        # history can. provider="openai" routes here instead of the
+        # heuristic, matching the Conversational-Retrieval-Chain pattern.
+        fake_provider = AsyncMock()
+        fake_provider.generate = AsyncMock(return_value={"content": (
+            '{"needs_rewrite": true, "rewritten_query": '
+            '"¿Cuáles son los costos de Ingeniería de Sistemas?", "confidence": "alta"}'
+        )})
+        monkeypatch.setattr(ProviderFactory, "get_provider", lambda name: fake_provider)
+        monkeypatch.setattr(service, "get_conversation", AsyncMock(return_value=None))
+        history = [
+            LLMMessage(role="user", content="¿Qué materias tiene Ingeniería de Sistemas?"),
+            LLMMessage(role="assistant", content="Tiene... [1]"),
+        ]
+        is_followup, query = await service._resolve_followup_query(
+            history, "¿y los costos?", "openai", conv_id
+        )
+        assert is_followup is True
+        assert query == "¿Cuáles son los costos de Ingeniería de Sistemas?"
+
+    @pytest.mark.asyncio
+    async def test_openai_condensation_leaves_a_standalone_question_untouched(self, service, monkeypatch, conv_id):
+        fake_provider = AsyncMock()
+        fake_provider.generate = AsyncMock(return_value={"content": (
+            '{"needs_rewrite": false, "rewritten_query": '
+            '"¿Cuáles son los requisitos de admisión?", "confidence": "alta"}'
+        )})
+        monkeypatch.setattr(ProviderFactory, "get_provider", lambda name: fake_provider)
+        monkeypatch.setattr(service, "get_conversation", AsyncMock(return_value=None))
+        history = [
+            LLMMessage(role="user", content="¿Qué materias tiene Ingeniería de Sistemas?"),
+            LLMMessage(role="assistant", content="Tiene... [1]"),
+        ]
+        is_followup, query = await service._resolve_followup_query(
+            history, "¿Cuáles son los requisitos de admisión?", "openai", conv_id
+        )
+        assert is_followup is False
+        assert query == "¿Cuáles son los requisitos de admisión?"
+
+    @pytest.mark.asyncio
+    async def test_openai_low_confidence_falls_back_to_program_entity_heuristic(
+        self, service, monkeypatch, conv_id,
+    ):
+        fake_provider = AsyncMock()
+        fake_provider.generate = AsyncMock(return_value={"content": (
+            '{"needs_rewrite": true, "rewritten_query": '
+            '"¿algo poco confiable?", "confidence": "baja"}'
+        )})
+        monkeypatch.setattr(ProviderFactory, "get_provider", lambda name: fake_provider)
+        monkeypatch.setattr(service, "get_conversation", AsyncMock(return_value=None))
+        monkeypatch.setattr(
+            service, "_get_program_aliases",
+            AsyncMock(return_value={"tecnologia en desarrollo de software": "ingenieria de sistemas"}),
+        )
+        monkeypatch.setattr(service, "_get_known_programs", AsyncMock(return_value=["ingenieria de sistemas"]))
+        history = [
+            LLMMessage(role="user", content="¿Qué asignaturas se ven en primer semestre de Tecnología en Desarrollo de Software?"),
+            LLMMessage(role="assistant", content="En primer semestre se ven... [1]"),
+        ]
+        is_followup, query = await service._resolve_followup_query(
+            history, "ahora dime las de tercer semestre", "openai", conv_id
+        )
+        assert is_followup is True
+        assert query.endswith("ahora dime las de tercer semestre")
+
+    @pytest.mark.asyncio
+    async def test_openai_condensation_failure_falls_back_to_program_entity_heuristic(
+        self, service, monkeypatch, conv_id,
+    ):
+        fake_provider = AsyncMock()
+        fake_provider.generate = AsyncMock(side_effect=RuntimeError("provider down"))
+        monkeypatch.setattr(ProviderFactory, "get_provider", lambda name: fake_provider)
+        monkeypatch.setattr(service, "get_conversation", AsyncMock(return_value=None))
+        monkeypatch.setattr(
+            service, "_get_program_aliases",
+            AsyncMock(return_value={"tecnologia en desarrollo de software": "ingenieria de sistemas"}),
+        )
+        monkeypatch.setattr(service, "_get_known_programs", AsyncMock(return_value=["ingenieria de sistemas"]))
+        history = [
+            LLMMessage(role="user", content="¿Qué asignaturas se ven en primer semestre de Tecnología en Desarrollo de Software?"),
+            LLMMessage(role="assistant", content="En primer semestre se ven... [1]"),
+        ]
+        is_followup, query = await service._resolve_followup_query(
+            history, "ahora dime las de tercer semestre", "openai", conv_id
+        )
+        assert is_followup is True
+        assert query.endswith("ahora dime las de tercer semestre")
+
+    @pytest.mark.asyncio
+    async def test_openai_condensation_malformed_json_falls_back(self, service, monkeypatch, conv_id):
+        fake_provider = AsyncMock()
+        fake_provider.generate = AsyncMock(return_value={"content": "esto no es JSON"})
+        monkeypatch.setattr(ProviderFactory, "get_provider", lambda name: fake_provider)
+        monkeypatch.setattr(service, "get_conversation", AsyncMock(return_value=None))
+        monkeypatch.setattr(service, "_get_known_programs", AsyncMock(return_value=[]))
+        monkeypatch.setattr(service, "_get_program_aliases", AsyncMock(return_value={}))
+        history = [
+            LLMMessage(role="user", content="hola"),
+            LLMMessage(role="assistant", content="¡Hola!"),
+        ]
+        is_followup, query = await service._resolve_followup_query(
+            history, "¿y los créditos?", "openai", conv_id
+        )
+        assert is_followup is False
+        assert query == "¿y los créditos?"
+
+
+def _fake_db_with_messages(messages):
+    class FakeScalars:
+        def all(self):
+            return messages
+
+    class FakeResult:
+        def scalars(self):
+            return FakeScalars()
+
+    class FakeDB:
+        async def execute(self, *args, **kwargs):
+            return FakeResult()
+
+    return FakeDB()
+
+
+class TestRefreshContextSummary:
+    @pytest.fixture
+    def conv_id(self):
+        return uuid.uuid4()
+
+    def _messages(self, n):
+        return [
+            SimpleNamespace(role="user" if i % 2 == 0 else "assistant", content=f"mensaje {i}")
+            for i in range(n)
+        ]
+
+    @pytest.mark.asyncio
+    async def test_skips_when_nothing_fell_out_of_the_raw_window(self, service, monkeypatch, conv_id):
+        # _MAX_HISTORY_MESSAGES = 10 — with 6 total messages nothing has
+        # fallen out of the raw window yet, so no LLM call should happen.
+        service.db = _fake_db_with_messages(self._messages(6))
+        conv = SimpleNamespace(context_summary=None, summary_covers_messages=0)
+        monkeypatch.setattr(service, "get_conversation", AsyncMock(return_value=conv))
+        generate = AsyncMock()
+        monkeypatch.setattr(ProviderFactory, "get_provider", lambda name: SimpleNamespace(generate=generate))
+        await service._refresh_context_summary(conv_id)
+        generate.assert_not_called()
+        assert conv.context_summary is None
+
+    @pytest.mark.asyncio
+    async def test_folds_messages_that_fell_out_of_the_window(self, service, monkeypatch, conv_id):
+        service.db = _fake_db_with_messages(self._messages(12))
+        conv = SimpleNamespace(context_summary=None, summary_covers_messages=0)
+        monkeypatch.setattr(service, "get_conversation", AsyncMock(return_value=conv))
+        fake_provider = SimpleNamespace(
+            generate=AsyncMock(return_value={"content": "Resumen actualizado."})
+        )
+        monkeypatch.setattr(ProviderFactory, "get_provider", lambda name: fake_provider)
+        await service._refresh_context_summary(conv_id)
+        assert conv.context_summary == "Resumen actualizado."
+        assert conv.summary_covers_messages == 2  # 12 total - 10 raw window kept = 2 folded
+
+    @pytest.mark.asyncio
+    async def test_does_not_resummarize_already_covered_messages(self, service, monkeypatch, conv_id):
+        service.db = _fake_db_with_messages(self._messages(12))
+        conv = SimpleNamespace(context_summary="ya resumido", summary_covers_messages=2)
+        monkeypatch.setattr(service, "get_conversation", AsyncMock(return_value=conv))
+        generate = AsyncMock()
+        monkeypatch.setattr(ProviderFactory, "get_provider", lambda name: SimpleNamespace(generate=generate))
+        await service._refresh_context_summary(conv_id)
+        generate.assert_not_called()
+        assert conv.context_summary == "ya resumido"
+
+    @pytest.mark.asyncio
+    async def test_failure_is_swallowed_not_raised(self, service, monkeypatch, conv_id):
+        monkeypatch.setattr(service, "get_conversation", AsyncMock(side_effect=RuntimeError("db down")))
+        await service._refresh_context_summary(conv_id)  # must not raise
+
+    @pytest.mark.asyncio
+    async def test_no_conversation_found_is_a_noop(self, service, monkeypatch, conv_id):
+        monkeypatch.setattr(service, "get_conversation", AsyncMock(return_value=None))
+        await service._refresh_context_summary(conv_id)  # must not raise

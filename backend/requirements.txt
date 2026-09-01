@@ -47,6 +47,10 @@ redis[asyncio]>=5.0.0     # Optional Redis backend for RAG cache
 edge-tts>=6.1.9
 faster-whisper>=1.0.3
 
+# Reranking — cross-encoder reranker for RAG, ONNX runtime (no torch), same
+# CPU-only rationale as faster-whisper/ctranslate2 above. See rag_service.py.
+fastembed>=0.4,<1.0
+
 # Utilities
 python-dotenv==1.0.1
 

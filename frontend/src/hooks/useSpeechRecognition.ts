@@ -54,6 +54,22 @@ export function useSpeechRecognition(
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionEndedRef = useRef(true); // guards against double onFinal/onCancelled per session
 
+  // Diagnosed live 2026-08-31: Chrome's native SpeechRecognition fires
+  // start/audiostart/soundstart/speechstart normally (mic capture and local
+  // voice-activity detection both work), then NEVER fires result/error/end —
+  // the specific channel it uses to reach Google's own speech backend can
+  // stall with no visible failure, indistinguishable from the user for "it
+  // just does nothing". `nativeSpeechDetectedRef` + `gotAnyResultRef` let
+  // forceFinalize tell that apart from genuine silence: speech was heard but
+  // never came back transcribed. `nativeStalledRef` remembers it happened so
+  // this session (and the rest of this mount) goes straight to the
+  // MediaRecorder+Whisper fallback instead of re-eating the same 6s stall
+  // every subsequent attempt.
+  const nativeSpeechDetectedRef = useRef(false);
+  const gotAnyResultRef = useRef(false);
+  const nativeStalledRef = useRef(false);
+  const startListeningRef = useRef<() => void>(() => {});
+
   // Keep latest callbacks without re-subscribing recognition listeners
   const onFinalRef = useRef(onFinal);
   const onCancelledRef = useRef(onCancelled);
@@ -75,16 +91,37 @@ export function useSpeechRecognition(
   // doesn't guarantee onend fires). Idempotent via sessionEndedRef.
   const forceFinalize = useCallback((reason?: string) => {
     if (sessionEndedRef.current) return;
+
+    const text = finalPartsRef.current.join(" ").trim();
+    finalPartsRef.current = [];
+
+    // The native session ended with nothing to show for it, but it DID hear
+    // speech (see nativeSpeechDetectedRef docstring above) — that's Google's
+    // backend stalling, not the user staying silent. Retry once, silently,
+    // via the local fallback instead of surfacing this as "no funcionó".
+    if (
+      !text &&
+      reason === "no-speech" &&
+      useNativeApi &&
+      !nativeStalledRef.current &&
+      nativeSpeechDetectedRef.current &&
+      !gotAnyResultRef.current
+    ) {
+      nativeStalledRef.current = true;
+      sessionEndedRef.current = true;
+      clearSilenceTimer();
+      setInterimTranscript("");
+      startListeningRef.current();
+      return;
+    }
+
     sessionEndedRef.current = true;
     clearSilenceTimer();
     setMicStatus("idle");
     setInterimTranscript("");
-
-    const text = finalPartsRef.current.join(" ").trim();
-    finalPartsRef.current = [];
     if (text) onFinalRef.current(text);
     else onCancelledRef.current(reason);
-  }, []);
+  }, [useNativeApi]);
 
   // Asks the recognizer to stop and guarantees the session actually ends
   // within a bounded time even if the underlying browser API hangs and never
@@ -127,6 +164,7 @@ export function useSpeechRecognition(
     recognition.interimResults = true;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
+      gotAnyResultRef.current = true;
       let interim = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
@@ -141,6 +179,12 @@ export function useSpeechRecognition(
       // Any new speech resets the "did the user stop talking?" timer.
       clearSilenceTimer();
       silenceTimerRef.current = setTimeout(() => requestStop(), SILENCE_TIMEOUT_MS);
+    };
+
+    // Local voice-activity detection — fires even when the backend never
+    // returns a result (see nativeSpeechDetectedRef docstring above).
+    recognition.onspeechstart = () => {
+      nativeSpeechDetectedRef.current = true;
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -165,8 +209,10 @@ export function useSpeechRecognition(
     setInterimTranscript("");
     finalPartsRef.current = [];
     sessionEndedRef.current = false;
+    nativeSpeechDetectedRef.current = false;
+    gotAnyResultRef.current = false;
 
-    if (useNativeApi && recognitionRef.current) {
+    if (useNativeApi && recognitionRef.current && !nativeStalledRef.current) {
       setMicStatus("recording");
       try {
         recognitionRef.current.start();
@@ -257,10 +303,15 @@ export function useSpeechRecognition(
       }
     }
   }, [useNativeApi, requestStop]);
+  startListeningRef.current = startListening;
 
   const stopListening = useCallback(() => {
     clearSilenceTimer();
-    if (useNativeApi && recognitionRef.current) {
+    // Must mirror startListening's own routing condition (nativeStalledRef
+    // included) — otherwise, once a stall has switched this session to the
+    // MediaRecorder fallback, this would still try to stop the (idle) native
+    // recognizer and leave the actually-active recorder running forever.
+    if (useNativeApi && recognitionRef.current && !nativeStalledRef.current) {
       requestStop();
     } else if (
       mediaRecorderRef.current &&

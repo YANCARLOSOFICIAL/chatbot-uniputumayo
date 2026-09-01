@@ -150,6 +150,14 @@ services:
       RAG_HYDE_ENABLED: "true"
       RAG_DIVERSITY_ENABLED: "true"
       RAG_CANDIDATES_MULTIPLIER: "3"
+      # Cross-encoder reranker (2026-08-31): activo, pero rag_service.py lo
+      # apaga automáticamente cuando el proveedor que va a responder es
+      # Ollama — mismo motivo que RAG_HYDE_ENABLED arriba (CPU sin AVX2 sin
+      # GPU, ~615s/consulta contra un timeout de 600s, cero margen). No
+      # verificado en vivo en este hardware específico todavía — si los
+      # tiempos de OpenAI (que sí lo usa) suben de forma notoria, poner en
+      # "false" aquí lo apaga por completo sin tocar código.
+      RAG_RERANKER_ENABLED: "true"
       # Subido a "2" el 2026-08-19: el smoke test de GoldStandard confirmó
       # tiempo de generación de Ollama ya en ~615s/consulta con 1 intento
       # (generate + grade), sin margen real bajo el timeout de 600s de

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 
@@ -12,12 +13,37 @@ from app.models.retrieval_log import RetrievalLog
 from app.providers.provider_factory import ProviderFactory
 from app.runtime_config import runtime_config
 from app.utils.cache import rag_cache
-from app.utils.query_utils import keyword_score
 
 logger = logging.getLogger(__name__)
 
-_RERANK_WEIGHT_SEMANTIC = 0.80
-_RERANK_WEIGHT_KEYWORD = 0.20
+# Reciprocal Rank Fusion constant (Cormack, Clarke & Buettcher, 2009) — a
+# well-established default across BM25/vector hybrid search implementations,
+# not a retrieval-quality knob worth exposing as a setting.
+_RRF_K = 60
+
+
+def _get_reranker():
+    """Lazy singleton for the cross-encoder reranker model (loaded once, on
+    first search() call that needs it) — mirrors audio.py's
+    _get_whisper_model. fastembed runs the ONNX model on CPU with no torch
+    dependency, the same reasoning that already picked faster-whisper/
+    ctranslate2 over a torch-based STT stack for this hardware.
+
+    Returns None (never raises) on any failure to import or load — a broken
+    or unreachable model download must never take down retrieval, just fall
+    back to the RRF-fused order (see _rerank_cross_encoder).
+    """
+    if not hasattr(_get_reranker, "_model"):
+        try:
+            from fastembed.rerank.cross_encoder import TextCrossEncoder
+
+            logger.info("Cargando reranker cross-encoder '%s'...", settings.rag_reranker_model)
+            _get_reranker._model = TextCrossEncoder(model_name=settings.rag_reranker_model)
+            logger.info("Reranker cross-encoder cargado correctamente")
+        except Exception as e:
+            logger.warning("Cross-encoder reranker no disponible (%s) — se usará orden RRF", e)
+            _get_reranker._model = None
+    return _get_reranker._model
 
 
 class RAGService:
@@ -112,8 +138,12 @@ class RAGService:
         threshold — pure-vector search has no way to recover these. Results
         get a baseline score (the passing threshold) rather than ts_rank_cd
         directly, since that score isn't on the same scale as cosine
-        similarity; `_rerank()` differentiates them afterwards using the same
-        keyword-overlap function applied to vector-sourced candidates.
+        similarity and `evaluate_context_quality`'s "good"/"weak" gate reads
+        this field directly — it must stay a comparable similarity value,
+        not a fused ranking score. The real ts_rank_cd signal isn't lost: it
+        set this list's ORDER (the SQL below sorts by it), and `_fuse_rrf`
+        combines that rank position — not the score magnitude — with the
+        vector search's own ranking.
         """
         params = {k: v for k, v in base_params.items() if k not in ("embedding", "top_k")}
         params["query_text"] = query
@@ -152,34 +182,73 @@ class RAGService:
             ))
         return items
 
-    # ── Re-ranking ───────────────────────────────────────────────────────────
+    # ── Fusion + re-ranking ──────────────────────────────────────────────────
 
-    def _rerank(
-        self,
-        query: str,
-        results: list[SearchResultItem],
+    def _fuse_rrf(
+        self, ranked_lists: list[list[SearchResultItem]],
     ) -> list[SearchResultItem]:
-        """Re-rank results by combining semantic score with keyword overlap.
+        """Merge independently-ranked candidate lists (vector cosine order,
+        Postgres full-text ts_rank_cd order) into one ordered list via
+        Reciprocal Rank Fusion (Cormack et al., 2009):
+        score(d) = sum over lists containing d of 1 / (k + rank_in_that_list).
 
-        Uses a weighted hybrid: 80% semantic (cosine) + 20% keyword overlap.
-        This promotes chunks that both semantically and lexically match the query,
-        reducing false positives from pure-vector retrieval.
+        Replaces the old weighted-score combination (0.8×cosine + 0.2×keyword
+        overlap), which had to work around cosine similarity and ts_rank_cd
+        living on incomparable scales — RRF sidesteps that entirely by fusing
+        on rank POSITION, never raw score magnitude, so the two retrieval
+        methods never need to agree on what a "0.4" means.
         """
-        if not results:
+        scores: dict = {}
+        items_by_id: dict = {}
+        for ranked in ranked_lists:
+            for rank, item in enumerate(ranked, start=1):
+                scores[item.chunk_id] = scores.get(item.chunk_id, 0.0) + 1.0 / (_RRF_K + rank)
+                items_by_id[item.chunk_id] = item
+        return sorted(items_by_id.values(), key=lambda it: scores[it.chunk_id], reverse=True)
+
+    async def _rerank_cross_encoder(
+        self, query: str, results: list[SearchResultItem], provider_name: str,
+    ) -> list[SearchResultItem]:
+        """Refine the RRF-fused order with a real cross-encoder relevance
+        score — query and chunk read together by a small transformer,
+        instead of independently the way both rank-fusion and the old
+        keyword-overlap heuristic did.
+
+        Skipped when `provider_name == "ollama"` — same rationale as HyDE
+        (see search()): this is CPU inference that competes for the same
+        cycles Ollama's own generation is already tight on in production
+        (docker-compose.prod.yml documents ~615s/query against a 600s
+        timeout on prod's no-AVX2, no-GPU CPU, effectively zero margin).
+        OpenAI generation (~8s/query) has no such margin problem, so the
+        reranker stays on there.
+
+        Also falls back to the RRF order untouched if the reranker is
+        disabled outright, unavailable, or errors on this call — same
+        "never hard-fail the search over an optional quality step" posture
+        as HyDE and the full-text search above. Runs off the event loop
+        (asyncio.to_thread) since fastembed's ONNX inference is synchronous
+        CPU work.
+        """
+        if not settings.rag_reranker_enabled or provider_name == "ollama" or len(results) < 2:
             return results
 
-        scored: list[tuple[float, SearchResultItem]] = []
-        for item in results:
-            kw = keyword_score(query, item.content)
-            hybrid = _RERANK_WEIGHT_SEMANTIC * item.score + _RERANK_WEIGHT_KEYWORD * kw
-            scored.append((hybrid, item))
+        reranker = _get_reranker()
+        if reranker is None:
+            return results
 
-        scored.sort(key=lambda x: x[0], reverse=True)
-        reranked = [item for _, item in scored]
+        try:
+            docs = [item.content for item in results]
+            scores = await asyncio.to_thread(lambda: list(reranker.rerank(query, docs)))
+        except Exception as e:
+            logger.warning("Cross-encoder rerank falló (%s) — se usará orden RRF", e)
+            return results
 
-        if len(results) > 1 and reranked[0].chunk_id != results[0].chunk_id:
+        order = sorted(range(len(results)), key=lambda i: scores[i], reverse=True)
+        reranked = [results[i] for i in order]
+
+        if reranked[0].chunk_id != results[0].chunk_id:
             logger.debug(
-                "Re-ranking changed top result: '%s' → '%s'",
+                "Cross-encoder reordenó el top resultado: '%s' → '%s'",
                 results[0].document_title, reranked[0].document_title,
             )
         return reranked
@@ -247,14 +316,17 @@ class RAGService:
     async def search(self, request: SearchRequest) -> SearchResponse:
         t0 = time.time()
 
-        # HyDE — skipped when the active chat provider is Ollama: HyDE issues a
-        # full extra generate() call before every non-cached search, which on
-        # CPU-only Ollama roughly doubles the time to answer. On OpenAI the extra
-        # call is fast/cheap enough that the retrieval-quality gain is worth it.
-        # `hyde_provider_override` lets a caller pin this decision instead of
-        # reading the live admin-panel setting — see SearchRequest for why.
-        hyde_provider = request.hyde_provider_override or runtime_config.default_llm_provider
-        hyde_active = settings.rag_hyde_enabled and hyde_provider != "ollama"
+        # The provider that will actually generate the answer for this
+        # request — gates both HyDE and the cross-encoder reranker below,
+        # since both are optional CPU/LLM work that's cheap on OpenAI but
+        # competes for cycles Ollama can't spare (see each gate's own
+        # docstring for the specific numbers). `hyde_provider_override` lets
+        # a caller pin this instead of reading the live admin-panel setting
+        # — see SearchRequest for why (e.g. the GoldStandard eval, which
+        # computes retrieval once and compares it against multiple
+        # generation providers).
+        answering_provider = request.hyde_provider_override or runtime_config.default_llm_provider
+        hyde_active = settings.rag_hyde_enabled and answering_provider != "ollama"
 
         # Cache check (key = query + retrieval params). `hyde_active` (not the
         # static setting) so entries built with/without HyDE never collide.
@@ -330,11 +402,11 @@ class RAGService:
         search_time = int((time.time() - search_start) * 1000)
 
         # 3. Apply score threshold
-        candidates: list[SearchResultItem] = []
+        vector_candidates: list[SearchResultItem] = []
         seen_chunk_ids: set = set()
         for row in rows:
             if row.score >= request.score_threshold:
-                candidates.append(SearchResultItem(
+                vector_candidates.append(SearchResultItem(
                     chunk_id=row.chunk_id,
                     content=row.content,
                     score=round(row.score, 4),
@@ -348,23 +420,21 @@ class RAGService:
         # 3b. Full-text keyword search — widens recall beyond what cosine
         # similarity found. Pure-vector retrieval can miss chunks that share
         # exact terms (program names, codes) with the query but whose overall
-        # embedding drifts below threshold. Candidates found here get a
-        # baseline score (the passing threshold) so they clear the quality
-        # gate below; `_rerank()` then differentiates them by actual keyword
-        # overlap against the real query, same as vector-sourced candidates.
+        # embedding drifts below threshold.
+        fts_candidates: list[SearchResultItem] = []
         try:
             fts_candidates = await self._keyword_search(
                 request.query, where_clause, params, exclude_ids=seen_chunk_ids,
                 limit=request.top_k,
             )
-            for item in fts_candidates:
-                candidates.append(item)
-                seen_chunk_ids.add(item.chunk_id)
         except Exception as e:
             logger.debug("Full-text keyword search skipped: %s", e)
 
-        # 4. Re-rank with keyword overlap boost
-        candidates = self._rerank(request.query, candidates)
+        # 4. Fuse the two independently-ranked lists (Reciprocal Rank Fusion),
+        # then refine that order with a cross-encoder that reads query+chunk
+        # together — see _fuse_rrf / _rerank_cross_encoder docstrings.
+        candidates = self._fuse_rrf([vector_candidates, fts_candidates])
+        candidates = await self._rerank_cross_encoder(request.query, candidates, answering_provider)
 
         # 5. Deduplicate near-identical chunks
         candidates = self._deduplicate(candidates)

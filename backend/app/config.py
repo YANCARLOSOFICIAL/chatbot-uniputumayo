@@ -48,6 +48,21 @@ class Settings(BaseSettings):
     # gpt-5.4-mini — modelo eficiente más reciente (mayo 2026), 400 K ctx, $0.75/1M tokens input
     openai_default_model: str = "gpt-5.4-mini"
     openai_embedding_model: str = "text-embedding-3-small"
+    # Modelo fijo y barato para la condensación de preguntas de seguimiento
+    # (chat_service.py::_condense_followup_query) y el resumen incremental de
+    # conversación (_refresh_context_summary) — deliberadamente independiente
+    # de runtime_config.resolve_model(), que sigue el modelo principal que el
+    # admin haya configurado (puede ser un modelo grande/caro). Ninguna de
+    # estas dos tareas necesita esa potencia.
+    # NO usar "gpt-5.4-mini" (el default de openai_default_model arriba):
+    # confirmado en vivo 2026-08-31 que esa familia de modelos rechaza el
+    # parámetro `max_tokens` que OpenAIProvider.generate() siempre envía
+    # ("Unsupported parameter: 'max_tokens'... Use 'max_completion_tokens'
+    # instead") — un 400 silencioso que _condense_followup_query traga y cae
+    # al heurístico de programas, así que nunca se notaba antes de este
+    # hallazgo. gpt-4.1-mini es de la misma familia que gpt-4.1 (ya
+    # confirmado funcionando en este proyecto) y sí acepta max_tokens.
+    openai_condensation_model: str = "gpt-4.1-mini"
 
     # LLM Configuration
     default_llm_provider: str = "ollama"
@@ -80,6 +95,13 @@ class Settings(BaseSettings):
     rag_hyde_enabled: bool = True
     # Diversidad: máximo 2 chunks por documento fuente para evitar respuestas repetitivas
     rag_diversity_enabled: bool = True
+    # Cross-encoder reranker: reordena los candidatos fusionados (RRF) por
+    # relevancia real query+chunk leídos juntos, no solo overlap léxico. Corre
+    # 100% local en CPU vía ONNX (fastembed, sin torch) antes de la llamada al
+    # LLM generador, así que no compite por ciclos con Ollama. Ver
+    # rag_service.py::_rerank_cross_encoder.
+    rag_reranker_enabled: bool = True
+    rag_reranker_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
     # NO cambiar embedding_provider sin migrar la dimensión del vector en pgvector
     embedding_provider: str = "ollama"
     # nomic-embed-text=768 | text-embedding-3-small=1536

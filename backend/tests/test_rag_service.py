@@ -2,6 +2,7 @@ import uuid
 
 import pytest
 
+from app.config import settings
 from app.schemas.rag import SearchResultItem
 from app.services.rag_service import RAGService
 
@@ -68,24 +69,102 @@ class TestApplyDiversity:
         assert titles == {"DocA", "DocB", "DocC"}
 
 
-class TestRerank:
-    def test_keyword_overlap_can_promote_lower_semantic_score(self, service):
-        query = "créditos programa medicina"
-        low_semantic_high_keyword = make_item(
-            "el programa de medicina tiene 180 créditos", score=0.40
-        )
-        high_semantic_low_keyword = make_item(
-            "informacion general sin relacion aparente", score=0.55
-        )
-        reranked = service._rerank(query, [high_semantic_low_keyword, low_semantic_high_keyword])
-        assert reranked[0].content.startswith("el programa de medicina")
+class TestFuseRRF:
+    def test_item_ranked_high_in_both_lists_wins(self, service):
+        a = make_item("a", document_title="A")
+        b = make_item("b", document_title="B")
+        c = make_item("c", document_title="C")
+        vector = [a, b, c]      # A first
+        keyword = [c, a, b]     # A second — still the best combined rank
+        result = service._fuse_rrf([vector, keyword])
+        assert result[0].document_title == "A"
 
-    def test_empty_results_returns_empty(self, service):
-        assert service._rerank("query", []) == []
+    def test_item_only_in_one_list_is_still_included(self, service):
+        a = make_item("a", document_title="A")
+        b = make_item("b", document_title="B")
+        result = service._fuse_rrf([[a], [b]])
+        titles = {r.document_title for r in result}
+        assert titles == {"A", "B"}
 
-    def test_single_result_is_unaffected(self, service):
+    def test_single_list_preserves_its_order(self, service):
+        a = make_item("a", document_title="A")
+        b = make_item("b", document_title="B")
+        result = service._fuse_rrf([[a, b]])
+        assert [r.document_title for r in result] == ["A", "B"]
+
+    def test_empty_lists_returns_empty(self, service):
+        assert service._fuse_rrf([[], []]) == []
+
+
+class TestRerankCrossEncoder:
+    @pytest.mark.asyncio
+    async def test_disabled_returns_input_order_unchanged(self, service, monkeypatch):
+        monkeypatch.setattr(settings, "rag_reranker_enabled", False)
+        a = make_item("a", document_title="A")
+        b = make_item("b", document_title="B")
+        result = await service._rerank_cross_encoder("query", [a, b], "openai")
+        assert result == [a, b]
+
+    @pytest.mark.asyncio
+    async def test_ollama_provider_skips_reranking(self, service, monkeypatch):
+        # Same CPU-budget rationale as HyDE — see docstring. The prod host
+        # runs Ollama with ~zero margin under its 600s timeout, so this must
+        # never touch the reranker at all, not even to check availability.
+        called = False
+
+        def fake_get_reranker():
+            nonlocal called
+            called = True
+            return None
+
+        monkeypatch.setattr("app.services.rag_service._get_reranker", fake_get_reranker)
+        a = make_item("a", document_title="A")
+        b = make_item("b", document_title="B")
+        result = await service._rerank_cross_encoder("query", [a, b], "ollama")
+        assert result == [a, b]
+        assert called is False
+
+    @pytest.mark.asyncio
+    async def test_reorders_by_cross_encoder_relevance(self, service, monkeypatch):
+        a = make_item("informacion general sin relacion aparente", document_title="A")
+        b = make_item("el programa de medicina tiene 180 creditos", document_title="B")
+
+        class FakeReranker:
+            def rerank(self, query, docs):
+                return [0.1, 9.5]  # B is the relevant one
+
+        monkeypatch.setattr("app.services.rag_service._get_reranker", lambda: FakeReranker())
+        result = await service._rerank_cross_encoder("créditos programa medicina", [a, b], "openai")
+        assert result[0].document_title == "B"
+
+    @pytest.mark.asyncio
+    async def test_reranker_unavailable_falls_back_to_input_order(self, service, monkeypatch):
+        monkeypatch.setattr("app.services.rag_service._get_reranker", lambda: None)
+        a = make_item("a", document_title="A")
+        b = make_item("b", document_title="B")
+        result = await service._rerank_cross_encoder("query", [a, b], "openai")
+        assert result == [a, b]
+
+    @pytest.mark.asyncio
+    async def test_reranker_call_failing_falls_back_to_input_order(self, service, monkeypatch):
+        class BrokenReranker:
+            def rerank(self, query, docs):
+                raise RuntimeError("model crashed")
+
+        monkeypatch.setattr("app.services.rag_service._get_reranker", lambda: BrokenReranker())
+        a = make_item("a", document_title="A")
+        b = make_item("b", document_title="B")
+        result = await service._rerank_cross_encoder("query", [a, b], "openai")
+        assert result == [a, b]
+
+    @pytest.mark.asyncio
+    async def test_empty_results_returns_empty(self, service):
+        assert await service._rerank_cross_encoder("query", [], "openai") == []
+
+    @pytest.mark.asyncio
+    async def test_single_result_is_unaffected(self, service):
         item = make_item("contenido único", score=0.6)
-        result = service._rerank("query", [item])
+        result = await service._rerank_cross_encoder("query", [item], "openai")
         assert result == [item]
 
 

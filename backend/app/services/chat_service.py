@@ -539,27 +539,273 @@ class ChatService:
 
     _AMBIGUITY_SCORE_MARGIN = 0.15
 
-    @staticmethod
-    def _resolve_followup_query(
-        history: list[LLMMessage], current_content: str
+    # How many recent (user, assistant) exchanges the query-condensation call
+    # sees in raw form — deliberately small: `context_summary` (see
+    # `_refresh_context_summary` / models/conversation.py) already covers
+    # everything older, so this only needs enough raw text to resolve an
+    # immediate reference ("y en tercer semestre?", "y los costos?"), not the
+    # whole conversation. A shorter raw window means a faster call.
+    _CONDENSE_HISTORY_TURNS = 3
+
+    # Few-shot examples (SIGIR 2020, InfoCQR arXiv:2310.09716 — few-shot
+    # measurably improves conversational query rewriting over zero-shot)
+    # covering the three cases that matter: topic continuation, a pronoun
+    # reference, and a question that must NOT be rewritten.
+    _CONDENSE_PROMPT = (
+        "Resumen de la conversación hasta antes del historial reciente (puede "
+        "estar vacío si la conversación es corta):\n{summary}\n\n"
+        "Historial reciente de la conversación:\n{history}\n\n"
+        "Nueva pregunta del usuario: {question}\n\n"
+        "Evalúa si la nueva pregunta depende del resumen o del historial para "
+        "tener sentido por sí sola (usa pronombres, continúa un tema, omite el "
+        "sujeto). Responde SOLO con un objeto JSON, sin texto adicional, con "
+        "exactamente este formato:\n"
+        '{{"needs_rewrite": true o false, "rewritten_query": "...", '
+        '"confidence": "alta", "media" o "baja"}}\n\n'
+        "- needs_rewrite: true si depende del contexto, false si ya es independiente.\n"
+        "- rewritten_query: la pregunta reescrita como independiente y completa, en "
+        "español, incluyendo el sujeto/tema omitido. Si needs_rewrite es false, "
+        "repite la pregunta original sin cambios.\n"
+        "- confidence: qué tan seguro estás de esta decisión.\n\n"
+        "Ejemplos:\n\n"
+        "Resumen: (vacío)\n"
+        "Historial:\nUsuario: Háblame de la materia de Redes\n"
+        "Guaca: Redes es una materia de fundamentos de telecomunicaciones...\n"
+        "Nueva pregunta: ¿Y cuántos créditos tiene?\n"
+        '{{"needs_rewrite": true, "rewritten_query": "¿Cuántos créditos tiene la '
+        'materia de Redes?", "confidence": "alta"}}\n\n'
+        "Resumen: (vacío)\n"
+        "Historial:\nUsuario: ¿Qué materias tiene Ingeniería de Sistemas?\n"
+        "Guaca: Tiene Cálculo, Redes, Bases de Datos...\n"
+        "Nueva pregunta: ¿y esa última qué requisitos tiene?\n"
+        '{{"needs_rewrite": true, "rewritten_query": "¿Qué requisitos tiene la '
+        'materia de Bases de Datos de Ingeniería de Sistemas?", "confidence": "media"}}\n\n'
+        "Resumen: (vacío)\n"
+        "Historial:\nUsuario: ¿Qué programas ofrece la facultad de ingeniería?\n"
+        "Guaca: Ofrece Ingeniería Civil, de Sistemas...\n"
+        "Nueva pregunta: ¿Cuáles son los requisitos de admisión en general?\n"
+        '{{"needs_rewrite": false, "rewritten_query": "¿Cuáles son los requisitos '
+        'de admisión en general?", "confidence": "alta"}}'
+    )
+
+    _SUMMARY_UPDATE_PROMPT = (
+        "Resumen previo de la conversación (puede decir \"(vacío)\" si es la primera vez):\n"
+        "{previous_summary}\n\n"
+        "Mensajes nuevos a incorporar:\n{new_messages}\n\n"
+        "Actualiza el resumen para que incluya la información de los mensajes nuevos, "
+        "en 2 a 4 frases, en español. Menciona los temas, programas o entidades "
+        "concretas discutidas — este resumen se usa para que el asistente recuerde "
+        "de qué se ha hablado en toda la conversación, incluso mucho después de que "
+        "estos mensajes dejen de estar visibles en el historial reciente. Responde "
+        "SOLO con el resumen actualizado, sin explicaciones ni encabezados."
+    )
+
+    async def _resolve_followup_query(
+        self, history: list[LLMMessage], current_content: str,
+        provider_name: str, conversation_id: UUID,
     ) -> tuple[bool, str]:
-        """If the previous assistant turn asked a program/faculty clarification
-        question, treat this message as its reply: combine the original
-        question with this reply for retrieval (a bare "Ingeniería de
-        Sistemas" reply alone often won't retrieve well on its own), and
-        signal the caller to skip asking again — see _detect_ambiguity.
+        """Resolve `current_content` into a standalone retrieval query when it
+        depends on earlier turns, and signal the caller to skip asking for
+        clarification again. Three strategies, tried in order:
+
+        1. Clarification-reply: the previous assistant turn asked "which
+           program/faculty?" — combine the ORIGINAL question with this reply
+           (a bare "Ingeniería de Sistemas" alone often won't retrieve well
+           on its own) — see _detect_ambiguity. Cheap, deterministic, tried
+           for every provider first.
+        2. General condensation (OpenAI): an LLM call rewrites the follow-up
+           into a standalone question using `context_summary` (the whole
+           conversation, folded incrementally — see `_refresh_context_summary`)
+           plus the recent raw history — the standard "Conversational
+           Retrieval Chain" / history-aware-retriever pattern (same idea as
+           LangChain's `create_history_aware_retriever`). Unlike #3 below,
+           this handles ANY kind of contextual reference — pronouns,
+           ellipsis, topic continuation — not just program names, so "¿y los
+           costos?" after a programa-specific answer resolves too, not only
+           "¿y en tercer semestre?". Uses a fixed cheap model
+           (`settings.openai_condensation_model`), never whatever the admin
+           configured as the main chat model — this task doesn't need that
+           much power. Skipped for Ollama: an extra sequential LLM call on
+           top of a production timeout margin already measured at ~zero
+           (see rag_service.py's cross-encoder reranker docstring for the
+           same 615s/600s numbers) isn't worth it there — same reasoning
+           that already gates HyDE and the reranker to OpenAI-only.
+        3. Program-entity heuristic (fallback, incl. all of Ollama's
+           traffic): the message doesn't name any known program on its own
+           (e.g. "ahora dime las de tercer semestre" after an earlier turn
+           about "primer semestre de Tecnología en Desarrollo de Software")
+           — walk history backwards for the most recent user turn that DID
+           name one (same canonical-list + ciclo-tecnológico-alias matching
+           `_detect_program_filter` uses) and carry it forward. Zero extra
+           LLM calls, but only understands program references — confirmed
+           live 2026-08-31 as the fix for a multi-turn conversation that lost
+           track of which program it was about from the second question on.
 
         Reuses `history` as already fetched by `_get_history` (chronological,
-        oldest first) — no extra DB query.
+        oldest first) — no extra DB query for #1 or #3.
         """
-        if len(history) < 2:
+        if len(history) >= 2:
+            prev_assistant, prev_user = history[-1], history[-2]
+            if (
+                prev_assistant.role == "assistant"
+                and CLARIFICATION_MARKER in prev_assistant.content
+                and prev_user.role == "user"
+            ):
+                return True, f"{prev_user.content} {current_content}"
+
+        if not history:
             return False, current_content
-        prev_assistant, prev_user = history[-1], history[-2]
-        if prev_assistant.role != "assistant" or CLARIFICATION_MARKER not in prev_assistant.content:
+
+        if provider_name != "ollama":
+            condensed = await self._condense_followup_query(
+                history, current_content, conversation_id,
+            )
+            if condensed is not None:
+                return True, condensed
+
+        return await self._resolve_followup_by_program_entity(history, current_content)
+
+    _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$")
+
+    async def _condense_followup_query(
+        self, history: list[LLMMessage], current_content: str, conversation_id: UUID,
+    ) -> str | None:
+        """LLM call implementing strategy #2 above. Returns the condensed
+        standalone question, or None if the model judged the question
+        already standalone, reported low confidence, the call failed, or the
+        response was unusable — callers fall back to the program-entity
+        heuristic in every None case.
+
+        Structured JSON output (needs_rewrite/rewritten_query/confidence)
+        instead of free text: gives an explicit, checkable signal for when to
+        trust the rewrite, instead of the old weak proxy of "did the text
+        change at all" (StructuredRAG, arXiv:2408.11061). `confidence ==
+        "baja"` is treated the same as an outright failure — better to fall
+        back to the cheaper, dumber heuristic than retrieve against a rewrite
+        the model itself wasn't sure about.
+        """
+        recent = history[-(self._CONDENSE_HISTORY_TURNS * 2):]
+        history_text = "\n".join(
+            f"{'Usuario' if m.role == 'user' else 'Guaca'}: {m.content}" for m in recent
+        )
+        conversation = await self.get_conversation(conversation_id)
+        summary = (conversation.context_summary if conversation else None) or "(vacío)"
+
+        try:
+            provider = ProviderFactory.get_provider("openai")
+            result = await provider.generate(
+                messages=[{"role": "user", "content": self._CONDENSE_PROMPT.format(
+                    summary=summary, history=history_text, question=current_content,
+                )}],
+                model=settings.openai_condensation_model, temperature=0.0, max_tokens=200,
+            )
+            raw = self._JSON_FENCE_RE.sub("", result.get("content", "").strip())
+            parsed = json.loads(raw)
+            needs_rewrite = bool(parsed.get("needs_rewrite"))
+            rewritten = str(parsed.get("rewritten_query") or "").strip()
+            confidence = str(parsed.get("confidence") or "").strip().lower()
+        except Exception as e:
+            logger.debug("Query condensation failed, falling back: %s", e)
+            return None
+
+        if not needs_rewrite or not rewritten or confidence == "baja":
+            return None
+        return rewritten
+
+    async def _refresh_context_summary(self, conversation_id: UUID) -> None:
+        """Fold whatever messages just fell out of `_get_history`'s raw
+        _MAX_HISTORY_MESSAGES window into `Conversation.context_summary`,
+        incrementally — the "summary buffer memory" pattern (Pinecone/
+        LangChain `ConversationSummaryBufferMemory`; see arXiv:2308.02294 on
+        why a bare fixed-size window loses real references in longer
+        conversations). Only ever summarizes the NEW slice
+        (`summary_covers_messages` to `cutoff`), not the whole conversation
+        each time, so cost per turn stays ~constant regardless of how long
+        the conversation has grown — unlike re-summarizing everything from
+        scratch, which would grow with conversation length.
+
+        Mutates `conversation` in place without committing — same pattern as
+        `_maybe_set_title`, folded into the caller's own commit. Best-effort:
+        this is a memory-quality enhancement, never worth failing the actual
+        response over, so any error here is swallowed.
+
+        Only called for OpenAI turns (see call sites) — `context_summary` is
+        only ever read by `_condense_followup_query`, which is itself
+        OpenAI-only, so computing it for Ollama turns would just be a wasted
+        LLM call the conversation's own memory never uses.
+        """
+        try:
+            conversation = await self.get_conversation(conversation_id)
+            if not conversation:
+                return
+
+            result = await self.db.execute(
+                select(Message)
+                .where(Message.conversation_id == conversation_id)
+                .order_by(Message.created_at)
+            )
+            all_messages = result.scalars().all()
+            cutoff = len(all_messages) - _MAX_HISTORY_MESSAGES
+            if cutoff <= conversation.summary_covers_messages:
+                return  # nothing has fallen out of the raw window since the last refresh
+
+            to_fold = all_messages[conversation.summary_covers_messages:cutoff]
+            if not to_fold:
+                return
+
+            new_messages_text = "\n".join(
+                f"{'Usuario' if m.role == 'user' else 'Guaca'}: {m.content[:_MAX_HISTORY_CHARS]}"
+                for m in to_fold
+            )
+            provider = ProviderFactory.get_provider("openai")
+            result = await provider.generate(
+                messages=[{"role": "user", "content": self._SUMMARY_UPDATE_PROMPT.format(
+                    previous_summary=conversation.context_summary or "(vacío)",
+                    new_messages=new_messages_text,
+                )}],
+                model=settings.openai_condensation_model, temperature=0.0, max_tokens=200,
+            )
+            summary = result.get("content", "").strip()
+            if summary:
+                conversation.context_summary = summary
+                conversation.summary_covers_messages = cutoff
+        except Exception as e:
+            logger.debug("Context summary refresh failed, skipping: %s", e)
+
+    async def _resolve_followup_by_program_entity(
+        self, history: list[LLMMessage], current_content: str
+    ) -> tuple[bool, str]:
+        """Strategy #3 in `_resolve_followup_query` above — see its docstring.
+
+        Gated on `is_varying_topic_query(current_content)` — same gate
+        `_detect_program_filter`/`_detect_ambiguity` use — so an
+        institution-wide follow-up ("¿y los requisitos de admisión?") never
+        gets a stray program name prepended, which could otherwise cause
+        `_detect_program_filter` to wrongly hard-filter a genuinely
+        institution-wide question to just one program's documents.
+        """
+        if not is_varying_topic_query(current_content):
             return False, current_content
-        if prev_user.role != "user":
+
+        programs = await self._get_known_programs()
+        aliases = await self._get_program_aliases()
+        if not programs and not aliases:
             return False, current_content
-        return True, f"{prev_user.content} {current_content}"
+
+        def _names_a_program(text: str) -> bool:
+            return (
+                any(mentions_entity(text, p, min_overlap=1.0) for p in programs)
+                or any(mentions_entity(text, a, min_overlap=1.0) for a in aliases)
+            )
+
+        if _names_a_program(current_content):
+            return False, current_content
+
+        for msg in reversed(history):
+            if msg.role == "user" and _names_a_program(msg.content):
+                return True, f"{msg.content} {current_content}"
+
+        return False, current_content
 
     def _detect_ambiguity(
         self, query: str, rag_ctx: "_RAGContext"
@@ -790,11 +1036,13 @@ class ChatService:
         else:
             greeting = is_greeting(data.content)
             history = await self._get_history(conversation_id, user_message.id)
+            provider_name = data.llm_provider or runtime_config.default_llm_provider
             is_followup, retrieval_query = (
                 (False, data.content) if greeting
-                else self._resolve_followup_query(history, data.content)
+                else await self._resolve_followup_query(
+                    history, data.content, provider_name, conversation_id,
+                )
             )
-            provider_name = data.llm_provider or runtime_config.default_llm_provider
             rag_ctx = (
                 self._empty_rag_ctx() if greeting
                 else await self._run_rag(retrieval_query, hyde_provider_override=provider_name)
@@ -935,6 +1183,8 @@ class ChatService:
             conversation_id, data.content, content, provider_name,
             use_llm_title=(cached is None and ambiguity is None),
         )
+        if provider_name != "ollama":
+            await self._refresh_context_summary(conversation_id)
         await self.db.commit()
         await self.db.refresh(user_message)
         await self.db.refresh(assistant_message)
@@ -994,11 +1244,13 @@ class ChatService:
             else:
                 greeting = is_greeting(data.content)
                 history = await self._get_history(conversation_id, user_message.id)
+                provider_name = data.llm_provider or runtime_config.default_llm_provider
                 is_followup, retrieval_query = (
                     (False, data.content) if greeting
-                    else self._resolve_followup_query(history, data.content)
+                    else await self._resolve_followup_query(
+                    history, data.content, provider_name, conversation_id,
                 )
-                provider_name = data.llm_provider or runtime_config.default_llm_provider
+                )
                 rag_ctx = (
                     self._empty_rag_ctx() if greeting
                     else await self._run_rag(retrieval_query, hyde_provider_override=provider_name)
@@ -1153,6 +1405,8 @@ class ChatService:
                 conversation_id, data.content, full_content, provider_name,
                 use_llm_title=(cached is None and ambiguity is None),
             )
+            if provider_name != "ollama":
+                await self._refresh_context_summary(conversation_id)
             await self.db.commit()
             await self.db.refresh(user_message)
             await self.db.refresh(assistant_message)
