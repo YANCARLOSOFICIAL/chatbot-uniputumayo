@@ -367,7 +367,20 @@ class RAGService:
 
         if request.filters:
             if request.filters.program:
-                filters.append("d.program = :program")
+                # Also let untagged documents through — a document with no
+                # `program` set is a general/institution-wide reference (e.g.
+                # "Pregrados_Perfiles_Titulos_UNIPUTUMAYO", one table row per
+                # program) rather than being scoped to some OTHER program, so
+                # excluding it can only ever hide real content, never leak
+                # cross-program noise (the actual reason this filter exists —
+                # see _detect_program_filter's docstring). Confirmed live
+                # 2026-09-02: "¿Qué título otorga Ingeniería de Sistemas?"
+                # named exactly one known program, filtered retrieval down to
+                # only the malla document (tagged program="ingenieria de
+                # sistemas"), and silently never considered the untagged
+                # titles/profiles document that actually answers it — the
+                # malla itself has no título/perfil content at all.
+                filters.append("(d.program = :program OR d.program IS NULL OR d.program = '')")
                 params["program"] = request.filters.program
             if request.filters.faculty:
                 filters.append("d.faculty = :faculty")
