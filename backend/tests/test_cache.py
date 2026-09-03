@@ -192,6 +192,50 @@ class TestAnswerCacheEntityGuard:
             entry, "que materias hay en quinto semestre de contaduria"
         ) is False
 
+    def test_ciclo_tecnologico_alias_resolves_against_canonical_program(self):
+        # Confirmed live 2026-09-02: a query IDENTICAL to the cached question
+        # itself (cosine similarity=1.000) was still rejected as "entity
+        # mismatch", because "Tecnología en Gestión Empresarial" (the query's
+        # own wording) shares no significant word with the source's
+        # documents.program value "administracion de empresas" (the
+        # canonical/ciclo-profesional name). Without the alias map, this is a
+        # real self-inflicted cache miss on a verbatim repeat.
+        entry = self._entry(
+            [{"program": "administracion de empresas", "faculty": None}],
+            question="¿Qué materias incluye la Tecnología en Gestión Empresarial?",
+        )
+        aliases = {"Tecnología en Gestión Empresarial": "administracion de empresas"}
+        assert AsyncAnswerCache._entity_guard_passes(
+            entry, "¿Qué materias incluye la Tecnología en Gestión Empresarial?", aliases,
+        ) is True
+
+    def test_ciclo_tecnologico_alias_still_blocks_a_real_cross_program_query(self):
+        # The alias expansion must not become a blanket pass — a query naming
+        # a DIFFERENT program's alias must still fail the field check.
+        entry = self._entry(
+            [{"program": "administracion de empresas", "faculty": None}],
+            question="¿Qué materias incluye la Tecnología en Gestión Empresarial?",
+        )
+        aliases = {
+            "Tecnología en Gestión Empresarial": "administracion de empresas",
+            "Tecnología en Desarrollo de Software": "ingenieria de sistemas",
+        }
+        assert AsyncAnswerCache._entity_guard_passes(
+            entry, "¿Qué materias incluye la Tecnología en Desarrollo de Software?", aliases,
+        ) is False
+
+    def test_no_aliases_behaves_exactly_as_before(self):
+        # Backward compatibility: omitting `aliases` (or passing None/{})
+        # must reproduce the old, alias-unaware rejection — every existing
+        # caller that hasn't fetched the alias map keeps working unchanged.
+        entry = self._entry(
+            [{"program": "administracion de empresas", "faculty": None}],
+            question="¿Qué materias incluye la Tecnología en Gestión Empresarial?",
+        )
+        assert AsyncAnswerCache._entity_guard_passes(
+            entry, "¿Qué materias incluye la Tecnología en Gestión Empresarial?",
+        ) is False
+
 
 class TestAnswerCacheSemesterGuard:
     def _entry(self, question):

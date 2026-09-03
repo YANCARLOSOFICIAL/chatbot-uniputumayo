@@ -18,7 +18,7 @@ import logging
 import re
 import time
 
-from app.utils.query_utils import _normalize, _significant_words
+from app.utils.query_utils import _normalize, _significant_words, mentions_entity
 
 logger = logging.getLogger(__name__)
 
@@ -285,9 +285,27 @@ class AsyncAnswerCache:
     # ── Core operations ───────────────────────────────────────────────────────
 
     @staticmethod
-    def _entity_guard_passes(entry: dict, query_text: str) -> bool:
+    def _entity_guard_passes(
+        entry: dict, query_text: str, aliases: dict[str, str] | None = None,
+    ) -> bool:
         """Reject a cosine-similarity match when the cached answer is scoped to
         a specific program/faculty that the new query doesn't name.
+
+        `aliases` (ChatService._get_program_aliases(): ciclo-tecnológico name
+        -> canonical `documents.program` value, e.g. "Tecnología en Gestión
+        Empresarial" -> "administracion de empresas") lets a query phrased
+        with the tecnológico name still pass the program-field check below.
+        Without this, the check is pure literal-word overlap against
+        `documents.program`, which only ever holds the canonical/professional
+        name — confirmed live 2026-09-02: a query IDENTICAL to the cached
+        question itself (similarity=1.000) still got rejected as "entity
+        mismatch", because "empresarial" shares no significant word with
+        "administracion de empresas". Same root cause `_get_program_aliases`
+        was already built to fix for `_detect_program_filter`/
+        `_detect_ambiguity` (see chat_service.py) — this cache guard is a
+        separate matcher that didn't know about it. Optional and additive:
+        None/{} (e.g. any caller that hasn't fetched the alias map) behaves
+        exactly as before.
 
         Cosine similarity on short questions can't reliably tell apart
         "requisitos de admisión para medicina" from "...para enfermería" —
@@ -330,7 +348,25 @@ class AsyncAnswerCache:
         sources = entry.get("sources") or []
         query_words = _significant_words(query_text)
         cached_question_words = _significant_words(entry.get("question", ""))
+        # `question_overlap` deliberately compares the RAW query words, not
+        # the alias-expanded set below — it's a "same question as the one
+        # that filled this cache entry" signal, and alias expansion only
+        # ever adds words, which could accidentally break that subset check
+        # rather than help it.
         question_overlap = bool(query_words) and query_words <= cached_question_words
+
+        # Expand with each named ciclo-tecnológico alias's canonical program
+        # name — a query that only names the alias (e.g. "Tecnología en
+        # Gestión Empresarial") would otherwise share zero significant words
+        # with a `documents.program` value that only ever holds the
+        # canonical name ("administracion de empresas"). `min_overlap=1.0`
+        # (must name the whole alias, matches `_detect_program_filter`'s own
+        # stricter-than-default choice) avoids expanding on a partial/
+        # coincidental word match.
+        field_check_words = set(query_words)
+        for alias, canonical in (aliases or {}).items():
+            if mentions_entity(query_text, alias, min_overlap=1.0):
+                field_check_words |= _significant_words(canonical)
 
         checked_any_field = False
         for field in ("program", "faculty"):
@@ -341,14 +377,14 @@ class AsyncAnswerCache:
             if not entity_words:
                 continue
             checked_any_field = True
-            if not (entity_words & query_words):
+            if not (entity_words & field_check_words):
                 return False
 
         if not checked_any_field and not question_overlap:
             titles = {s.get("document_title") for s in sources if s.get("document_title")}
             if len(titles) == 1:
                 entity_words = _significant_words(next(iter(titles)))
-                if entity_words and not (entity_words & query_words):
+                if entity_words and not (entity_words & field_check_words):
                     return False
 
         return True
@@ -382,10 +418,20 @@ class AsyncAnswerCache:
         self._enabled = True
         logger.info("Answer cache enabled")
 
-    async def find_similar(self, embedding: list[float], query_text: str = "") -> dict | None:
+    async def find_similar(
+        self, embedding: list[float], query_text: str = "",
+        aliases: dict[str, str] | None = None,
+    ) -> dict | None:
         """Return the best-matching cached entry if similarity clears the
         threshold AND it passes the entity/semester guards, else None. Entry
-        dict has: question, answer, sources, llm_provider, llm_model."""
+        dict has: question, answer, sources, llm_provider, llm_model.
+
+        `aliases`: see `_entity_guard_passes` — pass
+        `ChatService._get_program_aliases()`'s result so a ciclo-tecnológico-
+        phrased query isn't wrongly rejected against a canonically-named
+        `documents.program` value. Optional — omit for callers with no
+        alias map available (defaults to the old, alias-unaware behavior).
+        """
         if not self._enabled:
             return None
         entries = await self._load_entries()
@@ -406,7 +452,7 @@ class AsyncAnswerCache:
                     best_score, query_text,
                 )
                 return None
-            if query_text and not self._entity_guard_passes(best, query_text):
+            if query_text and not self._entity_guard_passes(best, query_text, aliases):
                 logger.info(
                     "Answer cache guard rejected hit (similarity=%.3f, entity mismatch): '%.60s…'",
                     best_score, query_text,

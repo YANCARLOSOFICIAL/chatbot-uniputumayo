@@ -534,7 +534,8 @@ class ChatService:
         embedding = await self._embed_query(query)
         if embedding is None:
             return None, None
-        cached = await answer_cache.find_similar(embedding, query_text=query)
+        aliases = await self._get_program_aliases()
+        cached = await answer_cache.find_similar(embedding, query_text=query, aliases=aliases)
         return embedding, cached
 
     _AMBIGUITY_SCORE_MARGIN = 0.15
