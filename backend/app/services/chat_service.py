@@ -1158,6 +1158,21 @@ class ChatService:
                     # (verification_approved=False) get served to every future
                     # semantically-similar question, not just this one-off reply.
                     and verification_approved is not False
+                    # A draft containing REFUSAL_MARKER is auto-approved by
+                    # verification_graph._grade ("nothing to hallucinate" —
+                    # see its own comment) — verification_approved is True
+                    # here even though the model just refused. Without this
+                    # check, a one-off self-refusal (the model judged THIS
+                    # attempt's retrieved context insufficient — HyDE/rerank
+                    # variance means a retry can easily find better context,
+                    # see rag_service.py's HyDE docstring) gets locked in as
+                    # "the" cached answer for up to answer_cache's 7-day TTL.
+                    # Confirmed live 2026-09-02: a self-refusal on "¿Qué
+                    # título otorga Ingeniería de Sistemas?" got cached
+                    # (similarity=1.000 HIT on a verbatim repeat, 54ms), even
+                    # after new source content was uploaded that should have
+                    # let a fresh attempt answer it.
+                    and REFUSAL_MARKER not in content
                 ):
                     await answer_cache.store(
                         query_embedding, data.content, content,
@@ -1381,6 +1396,12 @@ class ChatService:
                         and quality == "good"
                         and full_content.strip()
                         and verification_approved is not False
+                        # See the equivalent check in process_message — a
+                        # REFUSAL_MARKER draft is auto-approved by
+                        # verification_graph._grade, so verification_approved
+                        # alone isn't enough to exclude self-refusals from
+                        # the cache.
+                        and REFUSAL_MARKER not in full_content
                     ):
                         await answer_cache.store(
                             query_embedding, data.content, full_content,
