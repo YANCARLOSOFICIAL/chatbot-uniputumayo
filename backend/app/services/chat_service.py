@@ -32,7 +32,7 @@ from app.utils.prompts import (
     CLARIFICATION_MARKER, build_clarification_message,
 )
 from app.utils.query_utils import (
-    detect_temperature, is_greeting, is_varying_topic_query, mentions_entity,
+    detect_temperature, is_greeting, is_varying_topic_query, is_procedural_query, mentions_entity,
 )
 from app.utils.cache import answer_cache, suggestion_cache, program_list_cache, program_alias_cache
 from app.runtime_config import runtime_config
@@ -398,6 +398,21 @@ class ChatService:
         """
         rag_service = RAGService(self.db)
         filters = await self._detect_program_filter(query)
+        if is_procedural_query(query):
+            # Institution-wide procedures (aplazamiento, homologación,
+            # reingreso...) kept losing to every curriculum document's
+            # identical "=== RESUMEN DE MATERIAS POR SEMESTRE ===" boilerplate
+            # purely for sharing the word "semestre" — confirmed live
+            # 2026-09-05 that ESTATUTO ESTUDIANTIL didn't even reach the
+            # retrieval candidate pool for "¿cómo se solicita el aplazamiento
+            # del semestre?". Reuses the same gate `is_varying_topic_query`
+            # already relies on to suppress an unwarranted "¿sobre cuál
+            # programa?" clarification for these questions — same procedures,
+            # same program-independent answer, so excluding document_type
+            # 'pensum' (curriculum only) can't hide real content here, only
+            # the boilerplate that was drowning it out.
+            filters = filters or SearchFilters()
+            filters.exclude_document_type = "pensum"
         search_results = await rag_service.search(
             SearchRequest(query=query, filters=filters, hyde_provider_override=hyde_provider_override)
         )

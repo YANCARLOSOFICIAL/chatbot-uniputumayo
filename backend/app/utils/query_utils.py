@@ -123,10 +123,33 @@ _PROCEDURAL_TOPIC_PATTERNS = re.compile(
     r"\b("
     r"homologaci[oó]n|homologar|convalidaci[oó]n|convalidar|validar|"
     r"perd[ií]|pierdo|perder|reprobar|reprobaci[oó]n|repetir|repetici[oó]n|"
-    r"aplazamiento|aplazar|cancelaci[oó]n|cancelar|supletorio"
+    r"aplazamiento|aplazar|cancelaci[oó]n|cancelar|supletorio|"
+    # 2026-09-05: p[ée]rdida de la calidad (GS-037) / reingres- (GS-038) —
+    # same institution-wide-procedure class, confirmed to have real content
+    # in ESTATUTO ESTUDIANTIL via a raw content search, just not yet covered
+    # by this pattern. "grado"/"causales" alone deliberately left out: too
+    # overloaded (grado = degree/grade-level; causales appears in unrelated
+    # contexts too) to add without a live false-positive check.
+    r"p[eé]rdida de la calidad|reingres\w*"
     r")\b",
     re.IGNORECASE,
 )
+
+
+def is_procedural_query(query: str) -> bool:
+    """True if the query is about an institution-wide administrative
+    procedure (see _PROCEDURAL_TOPIC_PATTERNS) — exposed standalone (not just
+    as `is_varying_topic_query`'s internal early-exit) so callers can use it
+    as a positive signal too, not only a negative one.
+
+    Added for `ChatService._run_rag`'s `exclude_document_type='pensum'`
+    filter: these questions ("¿cómo se solicita el aplazamiento del
+    semestre?") kept losing to every curriculum document's identical
+    "=== RESUMEN DE MATERIAS POR SEMESTRE ===" boilerplate purely for sharing
+    the word "semestre" — confirmed live 2026-09-05 that the real answer
+    (ESTATUTO ESTUDIANTIL) didn't even make the retrieval candidate pool.
+    """
+    return bool(_PROCEDURAL_TOPIC_PATTERNS.search(query))
 
 
 def is_varying_topic_query(query: str) -> bool:

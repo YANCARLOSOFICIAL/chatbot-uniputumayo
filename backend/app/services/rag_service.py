@@ -404,6 +404,12 @@ class RAGService:
             if request.filters.document_type:
                 filters.append("d.document_type = :doc_type")
                 params["doc_type"] = request.filters.document_type
+            if request.filters.exclude_document_type:
+                # d.document_type IS NULL passes through untouched — this
+                # only pushes out the one *named* type (e.g. 'pensum'), never
+                # narrows to "must be tagged something else".
+                filters.append("(d.document_type IS DISTINCT FROM :exclude_doc_type)")
+                params["exclude_doc_type"] = request.filters.exclude_document_type
 
         where_clause = " AND ".join(filters) if filters else "1=1"
         embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"

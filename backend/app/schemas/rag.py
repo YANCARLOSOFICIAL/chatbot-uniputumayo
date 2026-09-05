@@ -8,6 +8,13 @@ class SearchFilters(BaseModel):
     program: str | None = None
     faculty: str | None = None
     document_type: str | None = None
+    # Opposite of `document_type` (include-only): excludes one document_type
+    # instead of restricting to it. Added for administrative/regulatory
+    # queries ("aplazamiento", "causales de pérdida de calidad...") getting
+    # buried under every curriculum document's "=== RESUMEN DE MATERIAS POR
+    # SEMESTRE ===" boilerplate (all document_type='pensum') just for
+    # sharing the word "semestre" — see ChatService._is_administrative_query.
+    exclude_document_type: str | None = None
 
 
 class SearchRequest(BaseModel):
