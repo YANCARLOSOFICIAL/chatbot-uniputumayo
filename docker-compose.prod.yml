@@ -149,7 +149,17 @@ services:
       # vez de la pregunta literal.
       RAG_HYDE_ENABLED: "true"
       RAG_DIVERSITY_ENABLED: "true"
-      RAG_CANDIDATES_MULTIPLIER: "3"
+      # Subido de 3 a 6 (2026-09-05): medido en vivo contra el corpus real de
+      # prod con el eval de GoldStandard (script de ablación, ver
+      # goldstandard_eval_service.py) — con el reranker cross-encoder ya
+      # confirmado como mejora real (no la causa de la caída de P@5 del
+      # 08-22 al 09-03), ampliar el pool de candidatos vectoriales antes del
+      # rerank subió Precision@5 de 0.382 a 0.400 sin costar nada de recall
+      # (0.822 en ambos). Probado también en 10: ahí ya empieza a perder
+      # recall (0.789) — el reranker se satura con demasiados candidatos —
+      # así que 6 es el punto medido, no una corazonada. No subir sin volver
+      # a medir con el eval harness.
+      RAG_CANDIDATES_MULTIPLIER: "6"
       # Cross-encoder reranker (2026-08-31): activo, pero rag_service.py lo
       # apaga automáticamente cuando el proveedor que va a responder es
       # Ollama — mismo motivo que RAG_HYDE_ENABLED arriba (CPU sin AVX2 sin

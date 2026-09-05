@@ -90,7 +90,9 @@ services:
       CHUNK_OVERLAP: "77"
       RAG_TOP_K: "10"
       RAG_SCORE_THRESHOLD: "0.35"
-      RAG_CANDIDATES_MULTIPLIER: "3"
+      # 3->6 el 2026-09-05: medido contra el corpus real de prod, ver el
+      # comentario homólogo en docker-compose.prod.yml.
+      RAG_CANDIDATES_MULTIPLIER: "6"
       RAG_HYDE_ENABLED: "true"
       RAG_DIVERSITY_ENABLED: "true"
       VERIFICATION_LOOP_ENABLED: "true"
