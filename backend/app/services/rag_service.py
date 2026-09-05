@@ -144,12 +144,27 @@ class RAGService:
         set this list's ORDER (the SQL below sorts by it), and `_fuse_rrf`
         combines that rank position — not the score magnitude — with the
         vector search's own ranking.
+
+        Builds an OR query from plainto_tsquery's lexemes (still using it for
+        Spanish stemming/stopword handling, just swapping its '&' for '|')
+        instead of using plainto_tsquery's AND result directly. Confirmed
+        live (2026-09-05): AND requires every lexeme from the raw question —
+        including interrogatives like "cómo"/"cuáles" that stem to real
+        lexemes ('com', 'cual') and essentially never appear in a formal
+        third-person source document — which made this whole method return
+        zero rows for every natural-language question tested (0/3), silently
+        turning the "keyword search" leg of RRF into a no-op for real
+        traffic. OR lets ts_rank_cd do its job ranking by how many terms
+        match instead of requiring all of them.
         """
         params = {k: v for k, v in base_params.items() if k not in ("embedding", "top_k")}
         params["query_text"] = query
         params["limit"] = limit
 
         sql = text(f"""
+            WITH parsed AS (
+                SELECT to_tsquery('spanish', replace(plainto_tsquery('spanish', :query_text)::text, ' & ', ' | ')) AS q
+            )
             SELECT
                 dc.id          AS chunk_id,
                 dc.content,
@@ -158,11 +173,12 @@ class RAGService:
                 d.faculty,
                 dc.metadata
             FROM document_chunks dc
-            JOIN documents d ON dc.document_id = d.id
+            JOIN documents d ON dc.document_id = d.id, parsed
             WHERE dc.embedding IS NOT NULL
               AND {where_clause}
-              AND to_tsvector('spanish', dc.content) @@ plainto_tsquery('spanish', :query_text)
-            ORDER BY ts_rank_cd(to_tsvector('spanish', dc.content), plainto_tsquery('spanish', :query_text)) DESC
+              AND parsed.q::text != ''
+              AND to_tsvector('spanish', dc.content) @@ parsed.q
+            ORDER BY ts_rank_cd(to_tsvector('spanish', dc.content), parsed.q) DESC
             LIMIT :limit
         """)
         result = await self.db.execute(sql, params)

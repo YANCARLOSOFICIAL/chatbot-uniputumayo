@@ -70,8 +70,22 @@ _PROGRAM_ALIAS_CACHE_KEY = "program_aliases"
 # Desarrollo de Software — Semestres I a VI — 85 créditos académicos." Both
 # real documents stop the name at the first "—" or "(" — see
 # ChatService._get_program_aliases for why this is parsed at all.
+#
+# Optional `(?:\([^)]*\))?` before the colon (2026-09-05): Contaduría
+# Pública's document phrases this as "Primer ciclo de formación (ciclo
+# tecnológico): Tecnología en Gestión Contable — ..." — the parenthetical
+# between "formación" and ":" made the plain `\s*:` never match at all,
+# silently dropping this program's only alias and reproducing the exact
+# GS-007/GS-009 gap (confirmed live via GS-016: "Tecnología en Gestión
+# Contable" triggered an unwarranted "¿sobre cuál programa?" clarification).
+# Confirmed against all 7 documents carrying this intro line that this
+# doesn't change output for the 4 that already matched (Ing. Civil,
+# Sistemas, Forestal, Ambiental). Gastronomía's two documents still don't
+# match either version — they never state the ciclo-tecnológico's name next
+# to the label at all ("Primer ciclo de formación tecnológica: Semestres I a
+# VI...", no "Tecnología en X"), a content-authoring gap no regex can close.
 _CICLO_TECNOLOGICO_RE = re.compile(
-    r"Primer ciclo de formaci[oó]n\s*:\s*([^—(\n]+)", re.IGNORECASE
+    r"Primer ciclo de formaci[oó]n\s*(?:\([^)]*\))?\s*:\s*([^—(\n]+)", re.IGNORECASE
 )
 
 

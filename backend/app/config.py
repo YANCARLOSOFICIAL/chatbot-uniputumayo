@@ -90,11 +90,16 @@ class Settings(BaseSettings):
     # nomic-embed-text en docs español puntúa ~0.4-0.65; 0.35 captura lo relevante
     rag_score_threshold: float = 0.35
     # Candidatos = top_k × multiplier, luego se filtran por diversidad.
-    # 3->6 (2026-09-05): medido en vivo contra el corpus real de prod con el
-    # eval de GoldStandard — subió Precision@5 de 0.382 a 0.400 sin costar
-    # recall (0.822 en ambos). Probado también en 10: ahí el reranker se
-    # satura y pierde recall (0.789) — 6 es el punto medido, no adivinado.
-    rag_candidates_multiplier: int = 6
+    # 2026-09-05: con el bug de _keyword_search arreglado (AND->OR, ver su
+    # docstring — antes devolvía 0 filas para casi cualquier pregunta real),
+    # medido en vivo contra el corpus de prod que 3 (el valor original) da
+    # mejores métricas que 6 o 10: con FTS aportando candidatos reales y
+    # precisos, ensanchar el pool solo mete más ruido genérico de embedding
+    # y diluye el trabajo del reranker (Recall@5 cae de 0.849 en 3 a 0.822
+    # en 6 y 0.776 en 10). Antes del fix de FTS, 6 medía mejor que 3 — ese
+    # resultado quedó obsoleto por el fix; no subir sin volver a medir con
+    # el eval harness.
+    rag_candidates_multiplier: int = 3
     # HyDE: embeder respuesta hipotética en vez de query cruda mejora retrieval
     rag_hyde_enabled: bool = True
     # Diversidad: máximo 2 chunks por documento fuente para evitar respuestas repetitivas

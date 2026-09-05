@@ -149,17 +149,19 @@ services:
       # vez de la pregunta literal.
       RAG_HYDE_ENABLED: "true"
       RAG_DIVERSITY_ENABLED: "true"
-      # Subido de 3 a 6 (2026-09-05): medido en vivo contra el corpus real de
-      # prod con el eval de GoldStandard (script de ablación, ver
-      # goldstandard_eval_service.py) — con el reranker cross-encoder ya
-      # confirmado como mejora real (no la causa de la caída de P@5 del
-      # 08-22 al 09-03), ampliar el pool de candidatos vectoriales antes del
-      # rerank subió Precision@5 de 0.382 a 0.400 sin costar nada de recall
-      # (0.822 en ambos). Probado también en 10: ahí ya empieza a perder
-      # recall (0.789) — el reranker se satura con demasiados candidatos —
-      # así que 6 es el punto medido, no una corazonada. No subir sin volver
-      # a medir con el eval harness.
-      RAG_CANDIDATES_MULTIPLIER: "6"
+      # 2026-09-05: se probó subir esto a 6 (mejoraba P@5 sin costar recall,
+      # medido en vivo), pero eso fue ANTES de arreglar un bug real en
+      # _keyword_search (rag_service.py): plainto_tsquery exigía que TODAS
+      # las palabras de la pregunta aparecieran en el mismo chunk —
+      # incluyendo interrogativos ("cómo", "cuáles") que casi nunca aparecen
+      # en un documento oficial — devolviendo 0 filas para casi cualquier
+      # pregunta real y dejando la búsqueda de texto completo como un no-op.
+      # Con ese fix (AND->OR) ya en el código, se volvió a medir: 3 (el
+      # valor original) da mejores métricas que 6 o 10 — con FTS aportando
+      # candidatos reales y precisos, ensanchar el pool de embedding solo
+      # mete ruido genérico y diluye al reranker. Quedó en 3. No subir sin
+      # volver a medir con el eval harness.
+      RAG_CANDIDATES_MULTIPLIER: "3"
       # Cross-encoder reranker (2026-08-31): activo, pero rag_service.py lo
       # apaga automáticamente cuando el proveedor que va a responder es
       # Ollama — mismo motivo que RAG_HYDE_ENABLED arriba (CPU sin AVX2 sin
