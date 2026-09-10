@@ -49,6 +49,7 @@ class ProviderInfo(BaseModel):
     is_available: bool
     is_default: bool
     default_model: str   # Modelo actualmente seleccionado por defecto para este proveedor
+    protected_models: list[str] = []  # No se pueden quitar desde la UI (visión, embeddings, activo)
 
 
 class ProvidersResponse(BaseModel):

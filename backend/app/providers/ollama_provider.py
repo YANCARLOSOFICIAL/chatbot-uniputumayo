@@ -222,3 +222,14 @@ class OllamaProvider(BaseLLMProvider):
                         raise RuntimeError(data["error"])
                     if on_progress is not None:
                         on_progress(data)
+
+    async def delete_model(self, model: str) -> None:
+        """Remove a model from the Ollama server (frees its disk space).
+        Raises on an Ollama error (e.g. model not found)."""
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.request(
+                "DELETE", f"{self.base_url}/api/delete", json={"name": model},
+            )
+            if response.status_code == 404:
+                raise RuntimeError(f"El modelo '{model}' no está instalado.")
+            response.raise_for_status()

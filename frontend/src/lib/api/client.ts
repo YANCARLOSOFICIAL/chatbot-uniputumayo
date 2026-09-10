@@ -441,6 +441,12 @@ export const apiClient = {
       "/api/v1/llm/ollama/pull/status"
     ),
 
+  deleteOllamaModel: (model: string) =>
+    request<{ success: boolean; detail?: string }>(
+      `/api/v1/llm/ollama/models?model=${encodeURIComponent(model)}`,
+      { method: "DELETE" }
+    ),
+
   // ── API Key ──
   setApiKey: (provider: string, api_key: string) =>
     request<{ success: boolean; is_available: boolean }>("/api/v1/llm/api-key", {

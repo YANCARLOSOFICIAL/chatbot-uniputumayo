@@ -140,6 +140,43 @@ class TestDiscoverOpenAIModels:
         assert res["success"] is False
 
 
+class FakeOllamaProvider:
+    def __init__(self, *, delete_error=None):
+        self._delete_error = delete_error
+        self.deleted: list[str] = []
+
+    async def delete_model(self, model):
+        if self._delete_error:
+            raise self._delete_error
+        self.deleted.append(model)
+
+
+class TestRemoveOllamaModel:
+    async def test_protected_models_are_refused(self, rc, monkeypatch):
+        from app.config import settings
+        fake = FakeOllamaProvider()
+        monkeypatch.setattr(svc.ProviderFactory, "get_provider", lambda name: fake)
+        for m in [rc.ollama_default_model, settings.ollama_vision_model,
+                  settings.ollama_embedding_model, settings.answer_cache_embedding_model]:
+            res = await LLMService().remove_ollama_model(m)
+            assert res["success"] is False
+        assert fake.deleted == []
+
+    async def test_ordinary_model_is_deleted(self, rc, monkeypatch):
+        fake = FakeOllamaProvider()
+        monkeypatch.setattr(svc.ProviderFactory, "get_provider", lambda name: fake)
+        res = await LLMService().remove_ollama_model("qwen2.5:0.5b")
+        assert res["success"] is True
+        assert fake.deleted == ["qwen2.5:0.5b"]
+
+    async def test_ollama_error_is_surfaced(self, rc, monkeypatch):
+        fake = FakeOllamaProvider(delete_error=RuntimeError("model not found"))
+        monkeypatch.setattr(svc.ProviderFactory, "get_provider", lambda name: fake)
+        res = await LLMService().remove_ollama_model("nope:latest")
+        assert res["success"] is False
+        assert "model not found" in res["detail"]
+
+
 class TestRuntimeConfigModelList:
     def test_set_model_appends_active_model_to_the_selectable_list(self):
         c = _RuntimeConfig()

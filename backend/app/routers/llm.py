@@ -137,6 +137,13 @@ async def ollama_pull_status(admin: User = Depends(require_admin)):
     return _pull_state
 
 
+@router.delete("/ollama/models")
+async def ollama_remove_model(model: str, admin: User = Depends(require_admin)):
+    if not _OLLAMA_NAME_RE.match(model.strip()):
+        raise HTTPException(status_code=400, detail="Nombre de modelo inválido.")
+    return await LLMService().remove_ollama_model(model)
+
+
 # ── API Key management ──
 
 

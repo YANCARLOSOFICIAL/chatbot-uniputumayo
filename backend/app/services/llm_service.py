@@ -12,6 +12,7 @@ from app.schemas.llm import (
 )
 from app.providers.provider_factory import ProviderFactory
 from app.runtime_config import runtime_config
+from app.config import settings
 
 # A model id is only ever forwarded to OpenAI and stored in JSONB — keep it to
 # what real ids (incl. fine-tunes like "ft:gpt-4.1:org::abc") actually use.
@@ -116,6 +117,7 @@ class LLMService:
             is_available=is_available,
             is_default=(runtime_config.default_llm_provider == "ollama"),
             default_model=runtime_config.ollama_default_model,
+            protected_models=sorted(self._protected_ollama_models()),
         ))
 
         # --- OpenAI: lista curada de modelos actuales ---
@@ -189,6 +191,32 @@ class LLMService:
         known = set(runtime_config.openai_chat_models)
         found = sorted(m for m in ids if m not in known and _looks_like_chat_model(m))
         return {"success": True, "models": found}
+
+    # ── Ollama model removal (mirror of the × on OpenAI chips) ──
+
+    def _protected_ollama_models(self) -> set[str]:
+        """Models the system depends on — refuse to delete these from the UI."""
+        return {
+            runtime_config.ollama_default_model,
+            settings.ollama_vision_model,
+            settings.ollama_embedding_model,
+            settings.answer_cache_embedding_model,
+        }
+
+    async def remove_ollama_model(self, model: str) -> dict:
+        model = (model or "").strip()
+        if model in self._protected_ollama_models():
+            return {
+                "success": False,
+                "detail": "El sistema usa este modelo (chat activo, visión o embeddings). "
+                          "Cámbialo antes de eliminarlo.",
+            }
+        provider = ProviderFactory.get_provider("ollama")
+        try:
+            await provider.delete_model(model)
+        except Exception as e:
+            return {"success": False, "detail": f"No se pudo eliminar: {e}"}
+        return {"success": True}
 
     async def update_config(self, config: LLMConfigUpdate) -> dict:
         old_provider = runtime_config.default_llm_provider

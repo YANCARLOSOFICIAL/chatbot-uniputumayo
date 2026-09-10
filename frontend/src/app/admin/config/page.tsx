@@ -14,6 +14,7 @@ interface ProviderInfo {
   is_available: boolean;
   is_default: boolean;
   default_model: string;
+  protected_models?: string[];
 }
 
 const PROVIDER_ICONS: Record<string, React.ElementType> = {
@@ -54,11 +55,13 @@ export default function ConfigPage() {
   const [discovered, setDiscovered]         = useState<string[] | null>(null);
   const [discovering, setDiscovering]       = useState(false);
 
-  // Ollama model download
+  // Ollama model download / removal
   const [ollamaPullModel, setOllamaPullModel] = useState("");
   const [pullStatus, setPullStatus] = useState<
     { active: boolean; model: string | null; status: string; percent: number; error: string | null } | null
   >(null);
+  const [ollamaRemoveTarget, setOllamaRemoveTarget] = useState<string | null>(null);
+  const [removingOllama, setRemovingOllama] = useState(false);
 
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailApiKey, setEmailApiKey]       = useState("");
@@ -167,6 +170,23 @@ export default function ConfigPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error iniciando la descarga");
     }
+  };
+
+  const handleRemoveOllamaModel = async () => {
+    if (!ollamaRemoveTarget) return;
+    setRemovingOllama(true); setError(null); setSuccess(null);
+    try {
+      const res = await apiClient.deleteOllamaModel(ollamaRemoveTarget);
+      if (res.success) {
+        setSuccess(`Modelo eliminado del servidor: ${ollamaRemoveTarget}`);
+        setOllamaRemoveTarget(null);
+        await loadProviders();
+      } else {
+        setError(res.detail ?? "No se pudo eliminar el modelo");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error eliminando el modelo");
+    } finally { setRemovingOllama(false); }
   };
 
   const handleSelectModel = async (providerName: string, model: string) => {
@@ -362,7 +382,10 @@ export default function ConfigPage() {
                           {provider.models.map((model) => {
                             const isActiveModel = isActive && provider.default_model === model;
                             const canSelect = provider.is_available && !switching;
-                            const canRemove = provider.name === "openai" && !isActiveModel && !switching && !addingModel;
+                            const isProtected = (provider.protected_models ?? []).includes(model);
+                            const canRemove =
+                              !isActiveModel && !switching && !addingModel && !isProtected &&
+                              (provider.name === "openai" || provider.name === "ollama");
                             return (
                               <span key={model} style={{ display: "inline-flex", alignItems: "stretch" }}>
                                 <button disabled={!canSelect || isActiveModel}
@@ -388,7 +411,9 @@ export default function ConfigPage() {
                                   {model}
                                 </button>
                                 {canRemove && (
-                                  <button onClick={() => handleRemoveModel(model)} title="Quitar de la lista"
+                                  <button
+                                    onClick={() => provider.name === "openai" ? handleRemoveModel(model) : setOllamaRemoveTarget(model)}
+                                    title={provider.name === "openai" ? "Quitar de la lista" : "Eliminar del servidor"}
                                     style={{
                                       display: "inline-flex", alignItems: "center", justifyContent: "center",
                                       padding: "0 7px", borderRadius: "0 8px 8px 0",
@@ -512,6 +537,31 @@ export default function ConfigPage() {
                                     ? `${pullStatus.model} descargado. Clic en Actualizar para verlo.`
                                     : `${pullStatus.model}: ${pullStatus.status}${pullStatus.percent ? ` · ${pullStatus.percent}%` : ""}`}
                               </p>
+                            </div>
+                          )}
+
+                          {ollamaRemoveTarget && (
+                            <div style={{
+                              display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                              marginTop: 10, padding: "10px 12px", borderRadius: 9,
+                              background: "var(--error-dim)", border: "1px solid rgba(200,54,44,0.2)",
+                            }}>
+                              <span style={{ fontSize: 12, color: "var(--text-1)" }}>
+                                ¿Eliminar <code style={{ fontFamily: "var(--font-mono)" }}>{ollamaRemoveTarget}</code> del servidor?
+                                Libera espacio en disco; puedes volver a descargarlo.
+                              </span>
+                              <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
+                                <button className="btn btn-secondary btn-sm" disabled={removingOllama}
+                                  onClick={() => setOllamaRemoveTarget(null)}>Cancelar</button>
+                                <button disabled={removingOllama} onClick={handleRemoveOllamaModel}
+                                  style={{
+                                    padding: "5px 12px", borderRadius: 8, fontSize: 12, fontWeight: 700,
+                                    border: "none", background: "var(--error)", color: "#fff",
+                                    cursor: removingOllama ? "not-allowed" : "pointer",
+                                  }}>
+                                  {removingOllama ? "Eliminando…" : "Eliminar"}
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>
