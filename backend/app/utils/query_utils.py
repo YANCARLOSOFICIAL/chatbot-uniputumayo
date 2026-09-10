@@ -136,6 +136,30 @@ _PROCEDURAL_TOPIC_PATTERNS = re.compile(
 )
 
 
+# Questions that ask for the WHOLE enumeration of a per-program topic, not
+# one program's value — "¿qué título se obtiene al terminar cada ciclo
+# propedéutico?", "¿qué títulos ofrece la institución?", "¿cuánto dura cada
+# programa?". The topic still varies by program (so _VARYING_TOPIC_PATTERNS
+# matches), but the RIGHT answer spans every program — asking "¿sobre cuál
+# programa?" is wrong, the user already said "todos". Also keeps
+# _detect_program_filter from narrowing to one program. Confirmed live
+# (GoldStandard GS-055): "cada ciclo propedéutico" was triggering a
+# "¿Gastronomía / ingeniería civil / ingeniería de sistemas?" clarification
+# on a question whose answer is the general two-title pattern.
+_COLLECTIVE_ENUMERATION_PATTERNS = re.compile(
+    r"\b("
+    r"cada\s+(?:ciclo|programa|carrera|facultad|nivel|modalidad|especializaci[oó]n|tecnolog[ií]a|uno)|"
+    r"cada\s+uno\s+de\s+(?:los|las)|"
+    r"todos?\s+los\s+(?:ciclos?|programas?|niveles?|posgrados?|pregrados?)|"
+    r"todas?\s+las\s+(?:carreras?|facultades?|modalidades?|especializaciones?|tecnolog[ií]as?)|"
+    r"(?:qu[eé]|cu[aá]les)\s+(?:t[ií]tulos|programas|carreras|posgrados|pregrados|especializaciones)\b|"
+    r"por\s+(?:cada\s+)?programa|"
+    r"ciclos\s+proped[eé]uticos"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
 def is_procedural_query(query: str) -> bool:
     """True if the query is about an institution-wide administrative
     procedure (see _PROCEDURAL_TOPIC_PATTERNS) — exposed standalone (not just
@@ -160,11 +184,16 @@ def is_varying_topic_query(query: str) -> bool:
     (admisión, costos, sedes, ...) never trigger a clarification regardless of
     how many programs' documents the RAG search happens to retrieve.
 
-    Procedural questions (see _PROCEDURAL_TOPIC_PATTERNS) are excluded first,
-    regardless of what curriculum nouns they happen to contain — they're
-    about an institution-wide process, not program-specific content.
+    Procedural questions (see _PROCEDURAL_TOPIC_PATTERNS) and collective
+    "enumerate every program" questions (see _COLLECTIVE_ENUMERATION_PATTERNS)
+    are excluded first, regardless of what curriculum nouns they contain —
+    the former is an institution-wide process, the latter already asks for
+    all programs at once, so neither should trigger a "which program?"
+    clarification or a single-program retrieval filter.
     """
     if _PROCEDURAL_TOPIC_PATTERNS.search(query):
+        return False
+    if _COLLECTIVE_ENUMERATION_PATTERNS.search(query):
         return False
     return bool(_VARYING_TOPIC_PATTERNS.search(query))
 

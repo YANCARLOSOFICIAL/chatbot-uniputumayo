@@ -98,6 +98,23 @@ class TestIsVaryingTopicQuery:
     def test_semester_deferral_does_not_vary_despite_mentioning_semestre(self):
         assert is_varying_topic_query("¿Cómo se solicita el aplazamiento del semestre?") is False
 
+    # Collective "enumerate every program" questions: the topic varies by
+    # program, but the answer is meant to span all of them — asking "¿sobre
+    # cuál programa?" is wrong. Confirmed live (GoldStandard GS-055).
+    def test_title_per_propedeutic_cycle_is_collective_not_ambiguous(self):
+        assert is_varying_topic_query("¿Qué título se obtiene al terminar cada ciclo propedéutico?") is False
+
+    def test_which_titles_does_the_institution_offer_is_collective(self):
+        assert is_varying_topic_query("¿Qué títulos ofrece la institución?") is False
+
+    def test_duration_of_every_program_is_collective(self):
+        assert is_varying_topic_query("¿Cuánto dura cada programa?") is False
+
+    def test_still_ambiguous_when_asking_about_one_unnamed_program(self):
+        # No collective quantifier — this one SHOULD still gate as varying.
+        assert is_varying_topic_query("¿Qué título otorga el programa?") is True
+        assert is_varying_topic_query("¿Cuáles son las materias del pensum?") is True
+
 
 class TestMentionsEntity:
     def test_full_name_mentioned(self):
