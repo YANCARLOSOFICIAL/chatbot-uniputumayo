@@ -22,7 +22,7 @@ from langgraph.graph import StateGraph, START, END
 from app.config import settings
 from app.providers.provider_factory import ProviderFactory
 from app.runtime_config import runtime_config
-from app.utils.prompts import REFUSAL_MARKER
+from app.utils.prompts import REFUSAL_MARKER, strip_unsolicited_contact_block
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +87,12 @@ SÍ cuenta como respaldada:
 - Reorganizar, resumir o reformular el contexto con otras palabras.
 - Combinar varios datos que aparecen por separado en el contexto.
 - Responder de forma incompleta (falta información no es lo mismo que inventarla).
+- Usar una malla que cubre a la vez un "ciclo tecnológico" (la Tecnología) y un
+  "ciclo profesional" (la Ingeniería/Administración que continúa después) para
+  responder sobre CUALQUIERA de los dos programas. Los primeros semestres
+  pertenecen al ciclo tecnológico aunque el encabezado o el nombre del documento
+  mencione solo el programa profesional. Una respuesta sobre "Tecnología en X" está
+  respaldada por ese documento aunque el documento se titule "Ingeniería en X".
 
 NO cuenta como respaldada:
 - Agregar cualquier cifra, nombre, fecha, requisito o código que no esté literalmente
@@ -183,8 +189,13 @@ async def _generate(state: VerificationState) -> dict:
         temperature=state["temperature"],
         max_tokens=state["max_tokens"],
     )
+    # Drop an appended "contacta a Uniputumayo" block before grading — models
+    # tack it onto grounded answers and the grader then rejects the whole
+    # thing as ungrounded (see strip_unsolicited_contact_block). No-op on a
+    # genuine refusal or an answer that never included the block.
+    draft = strip_unsolicited_contact_block(result["content"])
     return {
-        "draft_answer": result["content"],
+        "draft_answer": draft,
         "finish_reason": result.get("finish_reason"),
         "tokens_used": result.get("tokens_used"),
         "attempts": state["attempts"] + 1,

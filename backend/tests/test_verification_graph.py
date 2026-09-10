@@ -301,3 +301,13 @@ async def test_grading_error_fails_open(monkeypatch):
     # than looping forever or surfacing an error to the user.
     assert result["approved"] is True
     assert result["attempts"] == 1
+
+
+def test_grade_prompt_covers_ciclo_propedeutico():
+    # The grader must treat a combined "ciclo tecnológico / ciclo profesional"
+    # malla as valid context for a question about either program — otherwise it
+    # rejects correct answers about "Tecnología en X" when the retrieved doc is
+    # titled "Ingeniería en X" (GoldStandard GS-014). Mirrors _SYSTEM_WITH_CONTEXT
+    # section E and goldstandard_eval_service._JUDGE_PROMPT.
+    prompt = verification_graph._GRADE_PROMPT.lower()
+    assert "ciclo tecnológico" in prompt and "ciclo profesional" in prompt

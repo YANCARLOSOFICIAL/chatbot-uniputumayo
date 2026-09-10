@@ -164,6 +164,14 @@ def _compute_generation_stats(g: dict) -> dict:
         if c.get("rag_quality") not in ("weak", "none", "good")
     ]
 
+    # Coverage: a low hallucination rate means nothing if it's bought by
+    # refusing the hard questions. `answered` = gave a real reply (not a
+    # refusal, not a "which program?" clarification). `useful` = answered AND
+    # the judge found it grounded. Denominator is every in-scope question.
+    n_answerable = len(in_scope)
+    answered = judged + judge_failed  # in_scope, not refused, not clarification
+    n_useful = sum(1 for c in judged if not c.get("hallucinated"))
+
     return {
         "provider": g.get("provider", ""),
         "model": g.get("model", ""),
@@ -174,6 +182,11 @@ def _compute_generation_stats(g: dict) -> dict:
         ) if refusal_expected else 0.0,
         "avg_generation_ms": g.get("avg_generation_ms", 0),
         "error_cases": g.get("error_cases", 0),
+        "answerable_cases": n_answerable,
+        "answer_rate": (len(answered) / n_answerable) if n_answerable else 0.0,
+        "unnecessary_refusal_rate": (len(unexpected_refusal) / n_answerable) if n_answerable else 0.0,
+        "clarification_rate": (len(clarification_triggered) / n_answerable) if n_answerable else 0.0,
+        "useful_answer_rate": (n_useful / n_answerable) if n_answerable else 0.0,
         "unexpected_refusal": unexpected_refusal,
         "refusal_quality_gap": refusal_quality_gap,
         "refusal_self_refused": refusal_self_refused,
@@ -215,6 +228,25 @@ def _render_markdown_report(run: GoldEvalRun) -> str:
     lines.append("| Tasa de rechazo seguro | " + " | ".join(f"{g['safe_rejection_rate']:.3f}" for g in gens) + " |")
     lines.append("| Tiempo promedio de generación (ms) | " + " | ".join(f"{g['avg_generation_ms']:.0f}" for g in gens) + " |")
     lines.append("| Casos con error (excluidos de las tasas anteriores) | " + " | ".join(str(g["error_cases"]) for g in gens) + " |")
+
+    lines += [
+        "",
+        "## Cobertura (¿responde lo que debería?)",
+        "",
+        "La tasa de alucinación de arriba solo mira las respuestas que el bot "
+        "efectivamente dio. Esta tabla mira lo contrario: de todas las preguntas "
+        "que SÍ debía responder desde la base de conocimientos, ¿cuántas contestó? "
+        "Una tasa de alucinación baja no vale nada si se consigue rechazando las "
+        "preguntas difíciles.",
+        "",
+        "| Métrica | " + " | ".join(g.get("provider", "") for g in gens) + " |",
+        "|---|" + "|".join(["---"] * len(gens)) + "|",
+    ]
+    lines.append("| Preguntas dentro de alcance | " + " | ".join(str(g["answerable_cases"]) for g in gens) + " |")
+    lines.append("| Tasa de respuesta (dio una respuesta real) | " + " | ".join(f"{g['answer_rate']:.3f}" for g in gens) + " |")
+    lines.append("| **Tasa de respuesta útil (respondió y el juez la aprobó)** | " + " | ".join(f"**{g['useful_answer_rate']:.3f}**" for g in gens) + " |")
+    lines.append("| Tasa de rechazo indebido (dijo \"no sé\" cuando debía responder) | " + " | ".join(f"{g['unnecessary_refusal_rate']:.3f}" for g in gens) + " |")
+    lines.append("| Tasa de aclaración (\"¿sobre cuál programa?\" en vez de responder) | " + " | ".join(f"{g['clarification_rate']:.3f}" for g in gens) + " |")
 
     lines += ["", "## Casos no juzgados (huecos en la tasa de alucinación)", ""]
     lines.append(

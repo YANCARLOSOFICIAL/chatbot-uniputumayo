@@ -500,3 +500,45 @@ class TestComputeGenerationStatsRecomputesFromCases:
         assert stats["hallucination_rate"] == pytest.approx(0.5)  # 1 real hallucination / 2 judged
         assert len(stats["clarification_triggered"]) == 1
         assert stats["clarification_triggered"][0]["id"] == "GS-003"
+
+    def test_judge_prompt_covers_ciclo_propedeutico(self):
+        # Mirrors verification_graph._GRADE_PROMPT — the eval judge must not
+        # penalize a correct answer about "Tecnología en X" when the context is
+        # the combined malla titled "Ingeniería en X" (GS-014, GS-055).
+        from app.services.goldstandard_eval_service import _JUDGE_PROMPT
+
+        p = _JUDGE_PROMPT.lower()
+        assert "ciclo tecnológico" in p and "ciclo profesional" in p
+
+    def test_coverage_stats_from_cases(self):
+        from app.routers.goldstandard_eval import _compute_generation_stats
+
+        gen = {
+            "provider": "ollama", "model": "qwen2.5:7b", "avg_generation_ms": 1000, "error_cases": 0,
+            "cases": [
+                self._case("GS-001", "Grounded answer", hallucinated=False),
+                self._case("GS-002", "Fabricated answer", hallucinated=True),
+                self._case(
+                    "GS-003",
+                    "No tengo esa información disponible en mi base de conocimientos",
+                    hallucinated=None, refused=True,
+                ),
+                self._case(
+                    "GS-004",
+                    "Tu pregunta puede aplicar a varios programas académicos de Uniputumayo. "
+                    "¿Sobre cuál programa te gustaría saber específicamente?",
+                    hallucinated=None,
+                ),
+                # out-of-scope refusal — not part of the coverage denominator
+                self._case("GS-005", "No tengo esa información", hallucinated=None,
+                           refused=True, expected_refusal=True),
+            ],
+        }
+
+        stats = _compute_generation_stats(gen)
+
+        assert stats["answerable_cases"] == 4  # GS-005 excluded (expected_refusal)
+        assert stats["answer_rate"] == pytest.approx(0.5)          # GS-001, GS-002 answered
+        assert stats["useful_answer_rate"] == pytest.approx(0.25)  # only GS-001 grounded
+        assert stats["unnecessary_refusal_rate"] == pytest.approx(0.25)  # GS-003
+        assert stats["clarification_rate"] == pytest.approx(0.25)  # GS-004

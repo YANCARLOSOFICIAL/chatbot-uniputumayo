@@ -1,8 +1,68 @@
+import re
+
 # Shared prefix of both refusal templates below — chat_service.py imports this
 # to detect a refusal and force an empty sources list. Keeping it as a single
 # constant (rather than a copy hardcoded in chat_service.py) means editing the
 # refusal wording here can't silently desync the two.
 REFUSAL_MARKER = "No tengo esa información disponible en mi base de conocimientos"
+
+# Lines of the "contacta a Uniputumayo" block (address / hours / phone). The
+# system prompt (rule 3 in _SYSTEM_WITH_CONTEXT) reserves this block for the
+# fixed refusal ONLY, but weaker models tack it onto perfectly good answers
+# anyway. The verification grader then correctly flags the address/phone/hours
+# as ungrounded and rejects the WHOLE answer, turning a grounded reply into a
+# refusal — confirmed live (GoldStandard eval GS-022 on Ollama, GS-020 on
+# OpenAI). strip_unsolicited_contact_block() removes it before grading.
+_CONTACT_LINE_RE = re.compile(
+    r"3138052807"
+    r"|l[ií]nea de atenci[oó]n"
+    r"|sector aire libre|barrio luis carlos gal[aá]n|luis carlos gal[aá]n"
+    r"|horario:?\s*lunes a viernes"
+    r"|sede principal[^\n]*mocoa"
+    r"|(para m[aá]s detalles|para (obtener )?informaci[oó]n[^\n]*|te recomiendo contactar"
+    r"|puedes (contactar|comunicarte)|comun[ií]cate|cont[aá]cta(te|r)?)[^\n]*uniputumayo",
+    re.IGNORECASE,
+)
+_CLOSING_LINE_RE = re.compile(
+    r"^¿[^\n]*(ayudar|m[aá]s puedo|otra (cosa|pregunta|consulta))",
+    re.IGNORECASE,
+)
+
+
+def strip_unsolicited_contact_block(answer: str) -> str:
+    """Remove a trailing "contacta a Uniputumayo" block (address/hours/phone)
+    that a model appended to an otherwise substantive answer.
+
+    That block is meant for the fixed refusal only (see _SYSTEM_WITH_CONTEXT
+    rule 3). When a model adds it to a real answer, the verification grader
+    (verification_graph._grade) flags the address/phone/hours as ungrounded
+    and rejects the entire answer — a grounded reply becomes a refusal.
+    Stripping the block before grading keeps the grounded content.
+
+    No-op on a genuine refusal (REFUSAL_MARKER present): there the contact
+    block IS the intended payload. Also a no-op when no trailing contact
+    lines are found, so a normal answer is returned byte-for-byte unchanged.
+    """
+    if REFUSAL_MARKER in answer:
+        return answer
+
+    lines = answer.rstrip().splitlines()
+    i = len(lines) - 1
+    removed = False
+    while i >= 0:
+        stripped = lines[i].strip()
+        if not stripped or _CLOSING_LINE_RE.match(stripped):
+            i -= 1
+            continue
+        if _CONTACT_LINE_RE.search(stripped):
+            removed = True
+            i -= 1
+            continue
+        break
+
+    if not removed or i < 0:
+        return answer
+    return "\n".join(lines[: i + 1]).rstrip()
 
 _NO_CONTEXT_ANSWER = """{refusal_marker}. Para obtener información precisa y actualizada, te recomiendo contactar directamente a Uniputumayo:
 

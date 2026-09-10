@@ -29,7 +29,7 @@ from app.schemas.rag import SearchRequest, SearchFilters
 from app.schemas.llm import GenerateRequest, LLMMessage
 from app.utils.prompts import (
     build_chat_prompt, build_no_context_answer, REFUSAL_MARKER, GREETING_PROMPT,
-    CLARIFICATION_MARKER, build_clarification_message,
+    CLARIFICATION_MARKER, build_clarification_message, strip_unsolicited_contact_block,
 )
 from app.utils.query_utils import (
     detect_temperature, is_greeting, is_varying_topic_query, is_procedural_query, mentions_entity,
@@ -1155,7 +1155,12 @@ class ChatService:
                             temperature=temperature,
                         )
                     )
-                    content = llm_response.content
+                    # Same cleanup the verification loop applies in
+                    # verification_graph._generate — keep it here too so a
+                    # deployment with the loop disabled still doesn't persist
+                    # an unsolicited contact block (see
+                    # strip_unsolicited_contact_block).
+                    content = strip_unsolicited_contact_block(llm_response.content)
                     provider_name = llm_response.provider
                     model_name = llm_response.model
                     tokens_used = llm_response.tokens_used.total if llm_response.tokens_used else None
@@ -1391,6 +1396,11 @@ class ChatService:
                             full_content += token
                             yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
                         finish_reason = stream_meta.get("finish_reason")
+                        # Tokens already streamed to the client, but keep the
+                        # persisted/cached/source-filtered copy free of an
+                        # appended contact block (see
+                        # strip_unsolicited_contact_block).
+                        full_content = strip_unsolicited_contact_block(full_content)
 
                     if finish_reason == "length":
                         logger.warning(

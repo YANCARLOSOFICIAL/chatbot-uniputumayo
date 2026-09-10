@@ -240,6 +240,13 @@ def _summarize_retrieval(results: list[RetrievalCaseResult], k: int) -> Retrieva
     )
 
 
+# NOTE (2026-09-09): the "ciclo tecnológico / ciclo profesional" bullet below was
+# added to match verification_graph._GRADE_PROMPT and _SYSTEM_WITH_CONTEXT section E
+# — the judge was penalizing correct answers about "Tecnología en X" when the
+# retrieved context was the combined malla document titled "Ingeniería en X"
+# (GoldStandard GS-014, GS-055). This is a deliberate calibration change to the
+# measurement instrument: hallucination rates from runs after this date are NOT
+# directly comparable to earlier ones.
 _JUDGE_PROMPT = (
     "Eres un evaluador estricto de un chatbot institucional. Te doy una PREGUNTA, "
     "el CONTEXTO recuperado de documentos oficiales, y la RESPUESTA generada por el asistente.\n"
@@ -248,7 +255,13 @@ _JUDGE_PROMPT = (
     "- Reorganizar, resumir o reformular el contexto con otras palabras.\n"
     "- Combinar varios datos que aparecen por separado en el contexto (ej. una lista de "
     "materias con sus códigos y créditos, cada uno tomado literalmente del contexto).\n"
-    "- Responder de forma incompleta (falta información no es lo mismo que inventarla).\n\n"
+    "- Responder de forma incompleta (falta información no es lo mismo que inventarla).\n"
+    "- Usar una malla que cubre a la vez un ciclo tecnológico (la Tecnología) y un ciclo "
+    "profesional (la Ingeniería/Administración) para responder sobre cualquiera de los dos "
+    "programas. Los primeros semestres pertenecen al ciclo tecnológico aunque el "
+    "encabezado o el nombre del documento mencione solo el programa profesional; una "
+    "respuesta sobre 'Tecnología en X' está respaldada por un documento titulado "
+    "'Ingeniería en X' si este contiene esos semestres.\n\n"
     "SÍ es alucinación:\n"
     "- Agregar cualquier cifra, nombre, fecha, requisito o código que no aparezca "
     "literalmente en el CONTEXTO.\n"
@@ -393,6 +406,17 @@ class GenerationSummary:
     refusal_cases: int
     avg_generation_ms: float
     error_cases: int
+    # Coverage side of the ledger — a low hallucination_rate is worthless if
+    # it's bought by refusing every hard question (GoldStandard 2026-09-05:
+    # Ollama scored 3.3% hallucination while answering only 30/76 in-scope
+    # questions). These track what fraction of answerable questions actually
+    # got a useful reply. Denominator is in_scope_cases: query_type ==
+    # "dentro de alcance", excluding hard errors.
+    in_scope_cases: int
+    answer_rate: float             # gave a real answer (not refused, not "which program?")
+    unnecessary_refusal_rate: float  # refused a question it was supposed to answer
+    clarification_rate: float     # asked "which program/faculty?" instead of answering
+    useful_answer_rate: float     # answered AND the judge found it grounded
     cases: list[dict]
 
 
@@ -416,6 +440,14 @@ async def run_generation_eval(
     judged = [r for r in ok if r.hallucinated is not None]
     refusal_expected = [r for r in ok if r.expected_refusal]
 
+    # Questions the bot was supposed to answer from the KB.
+    in_scope = [r for r in ok if r.query.query_type == _RETRIEVAL_EXPECTED_TYPE]
+    n_in_scope = len(in_scope)
+    answered = [r for r in in_scope if not r.refused and not r.clarification]
+    n_refused = sum(1 for r in in_scope if r.refused)
+    n_clarified = sum(1 for r in in_scope if r.clarification)
+    n_useful = sum(1 for r in answered if r.hallucinated is False)
+
     return GenerationSummary(
         provider=provider_name,
         model=model,
@@ -425,6 +457,11 @@ async def run_generation_eval(
         refusal_cases=len(refusal_expected),
         avg_generation_ms=sum(r.generation_ms for r in ok) / len(ok) if ok else 0.0,
         error_cases=len(results) - len(ok),
+        in_scope_cases=n_in_scope,
+        answer_rate=(len(answered) / n_in_scope) if n_in_scope else 0.0,
+        unnecessary_refusal_rate=(n_refused / n_in_scope) if n_in_scope else 0.0,
+        clarification_rate=(n_clarified / n_in_scope) if n_in_scope else 0.0,
+        useful_answer_rate=(n_useful / n_in_scope) if n_in_scope else 0.0,
         cases=[{
             "id": r.query.id,
             "query": r.query.query,
