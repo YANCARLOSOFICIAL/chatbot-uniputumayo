@@ -44,6 +44,40 @@ class TestDeduplicate:
         assert service._deduplicate([]) == []
 
 
+class TestCapUntaggedShare:
+    def test_untagged_capped_program_chunks_kept(self, service, monkeypatch):
+        monkeypatch.setattr(settings, "rag_program_filter_untagged_cap", 3)
+        items = (
+            [make_item("matr", program=None, document_title="Matriculas") for _ in range(5)]
+            + [make_item("plan", program="Seguridad Informatica", document_title="Plan") for _ in range(2)]
+            + [make_item("estatuto", program=None, document_title="Estatuto")]
+        )
+        result = service._cap_untagged_share(items, "Seguridad Informatica")
+        untagged = [r for r in result if r.program is None]
+        tagged = [r for r in result if r.program == "Seguridad Informatica"]
+        assert len(untagged) == 3  # capped
+        assert len(tagged) == 2    # all program chunks kept
+
+    def test_thin_program_still_backfilled_by_untagged(self, service, monkeypatch):
+        # A program with no chunks of its own (título/perfil question) still
+        # gets the untagged general-reference doc — up to the cap.
+        monkeypatch.setattr(settings, "rag_program_filter_untagged_cap", 3)
+        items = [make_item("perfil", program=None, document_title="Perfiles") for _ in range(6)]
+        result = service._cap_untagged_share(items, "Ingenieria de Sistemas")
+        assert len(result) == 3
+
+    def test_order_is_preserved(self, service, monkeypatch):
+        monkeypatch.setattr(settings, "rag_program_filter_untagged_cap", 1)
+        items = [
+            make_item("u1", program=None),
+            make_item("p1", program="P"),
+            make_item("u2", program=None),
+            make_item("p2", program="P"),
+        ]
+        result = service._cap_untagged_share(items, "P")
+        assert [r.content for r in result] == ["u1", "p1", "p2"]  # u2 dropped, rest in order
+
+
 class TestApplyDiversity:
     def test_caps_chunks_per_document(self, service):
         items = [make_item(f"chunk {i}", document_title="DocA") for i in range(5)]

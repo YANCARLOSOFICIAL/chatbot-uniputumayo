@@ -301,6 +301,41 @@ class RAGService:
 
         return unique
 
+    def _cap_untagged_share(
+        self, results: list[SearchResultItem], program: str,
+    ) -> list[SearchResultItem]:
+        """When retrieval is scoped to one program, keep the untagged
+        general-reference documents (which search()'s WHERE clause
+        deliberately lets through — see there) from crowding out that
+        program's own chunks.
+
+        Walk the reranked order: accept every chunk tagged with `program`,
+        accept untagged chunks only up to
+        `settings.rag_program_filter_untagged_cap`, drop the rest. A program
+        with few/no relevant chunks of its own still gets backfilled (the
+        untagged título/perfil document stays reachable — the case Bug C's
+        fix was about); a program with plenty of its own content keeps the
+        slots. Confirmed live (GS-032, "asignaturas posgrado Seguridad
+        Informática"): without this, 8 of 10 retrieved chunks were untagged
+        institutional boilerplate (matrículas, FICB024, ESTATUTO), burying
+        the 2 real plan-de-estudios chunks and producing an incomplete
+        answer the verification loop then refused.
+
+        No cross-program leak risk: the SQL already excludes other programs'
+        documents, so `not tagged-with-this-program` here means exactly
+        `untagged`, never `some other program`.
+        """
+        cap = settings.rag_program_filter_untagged_cap
+        kept: list[SearchResultItem] = []
+        untagged_used = 0
+        for r in results:
+            if r.program == program:
+                kept.append(r)
+            elif untagged_used < cap:
+                kept.append(r)
+                untagged_used += 1
+        return kept
+
     # ── Context quality validation ────────────────────────────────────────────
 
     def evaluate_context_quality(self, results: list[SearchResultItem]) -> str:
@@ -396,6 +431,12 @@ class RAGService:
                 # sistemas"), and silently never considered the untagged
                 # titles/profiles document that actually answers it — the
                 # malla itself has no título/perfil content at all.
+                #
+                # The untagged share of the final results is then capped in
+                # step 5b (_cap_untagged_share) so a large untagged corpus
+                # can't flood a program-specific query — letting them in as
+                # *candidates* is right, letting them take most of the top_k
+                # slots is not.
                 filters.append("(d.program = :program OR d.program IS NULL OR d.program = '')")
                 params["program"] = request.filters.program
             if request.filters.faculty:
@@ -473,6 +514,13 @@ class RAGService:
 
         # 5. Deduplicate near-identical chunks
         candidates = self._deduplicate(candidates)
+
+        # 5b. Program-scoped search: cap the untagged general-reference share
+        # so it can't crowd out the program's own content (see
+        # _cap_untagged_share). Applied before the top_k cut so freed slots
+        # go back to the program's chunks, not left empty.
+        if request.filters and request.filters.program and candidates:
+            candidates = self._cap_untagged_share(candidates, request.filters.program)
 
         # 6. Diversity filter (max N chunks per document)
         if settings.rag_diversity_enabled and candidates:

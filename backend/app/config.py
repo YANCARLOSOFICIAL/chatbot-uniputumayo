@@ -111,6 +111,18 @@ class Settings(BaseSettings):
     # rag_service.py::_rerank_cross_encoder.
     rag_reranker_enabled: bool = True
     rag_reranker_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
+    # Cuando retrieval está acotado a UN programa (_detect_program_filter), el
+    # WHERE deja pasar también los documentos sin `program` (referencias
+    # institucionales generales — títulos/perfiles, matrículas, ESTATUTO). Eso
+    # es correcto para programas con poco contenido o preguntas de
+    # título/perfil, pero con un corpus grande sin etiquetar inunda una
+    # pregunta específica de programa (GS-032 en vivo: 8 de 10 chunks eran
+    # boilerplate institucional sin etiquetar, sepultando los 2 del plan de
+    # estudios real). Este tope limita cuántos chunks sin etiquetar pueden
+    # ocupar los top_k finales cuando hay filtro de programa activo; los
+    # chunks del propio programa llenan el resto. Ver
+    # rag_service.py::_cap_untagged_share.
+    rag_program_filter_untagged_cap: int = 3
     # NO cambiar embedding_provider sin migrar la dimensión del vector en pgvector
     embedding_provider: str = "ollama"
     # nomic-embed-text=768 | text-embedding-3-small=1536
