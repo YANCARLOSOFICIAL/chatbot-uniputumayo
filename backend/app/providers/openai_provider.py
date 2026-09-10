@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import time
 from typing import AsyncIterator
 
@@ -19,6 +20,28 @@ logger = logging.getLogger(__name__)
 _CHARS_PER_TOKEN = 4
 _RATE_LIMIT_RETRIES = 3
 _RATE_LIMIT_BACKOFF_S = 3.0
+
+# Families that use the newer completion-param shape: `max_completion_tokens`
+# instead of `max_tokens`, and no arbitrary `temperature` (only the default 1
+# is accepted). Confirmed live 2026-08-31: gpt-5.4-mini returns a 400
+# ("Unsupported parameter: 'max_tokens'... Use 'max_completion_tokens'
+# instead"). A model this doesn't match falls through to the legacy shape,
+# which is also what a freshly-added unrecognized model gets until this
+# pattern is updated — the add-model validation call surfaces a hard
+# incompatibility immediately if the guess is wrong.
+_NEW_PARAM_FAMILY_RE = re.compile(r"^(gpt-5|gpt-6|o1|o3|o4)", re.IGNORECASE)
+
+
+def _completion_params(model: str, temperature: float, max_tokens: int) -> dict:
+    """Model-family-appropriate kwargs for `chat.completions.create`."""
+    if _NEW_PARAM_FAMILY_RE.match((model or "").strip()):
+        params: dict = {"max_completion_tokens": max_tokens}
+        # These families reject any temperature other than the default; pass
+        # it only when the caller explicitly wants the default anyway.
+        if temperature == 1:
+            params["temperature"] = 1
+        return params
+    return {"max_tokens": max_tokens, "temperature": temperature}
 
 
 class _TokenRateLimiter:
@@ -116,8 +139,7 @@ class OpenAIProvider(BaseLLMProvider):
             client,
             model=model,
             messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
+            **_completion_params(model, temperature, max_tokens),
         )
 
         choice = response.choices[0]
@@ -151,9 +173,8 @@ class OpenAIProvider(BaseLLMProvider):
             client,
             model=model,
             messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
             stream=True,
+            **_completion_params(model, temperature, max_tokens),
         )
         async for chunk in stream:
             if not chunk.choices:
@@ -193,3 +214,11 @@ class OpenAIProvider(BaseLLMProvider):
     async def is_available(self) -> bool:
         key = runtime_config.openai_api_key
         return bool(key and key != "sk-your-key-here")
+
+    async def list_models(self) -> list[str]:
+        """Every model id the configured API key can see (chat, embedding,
+        audio, … — the caller filters). Used by the admin 'discover models'
+        action so new OpenAI releases can be added without a code change."""
+        client = self._ensure_client()
+        resp = await client.models.list()
+        return [m.id for m in resp.data]

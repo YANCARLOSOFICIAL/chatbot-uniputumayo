@@ -47,6 +47,19 @@ export default function ConfigPage() {
 
   const [clearingCache, setClearingCache] = useState(false);
 
+  // OpenAI model-list management
+  const [newModel, setNewModel]             = useState("");
+  const [addingModel, setAddingModel]       = useState(false);
+  const [modelActionError, setModelActionError] = useState<string | null>(null);
+  const [discovered, setDiscovered]         = useState<string[] | null>(null);
+  const [discovering, setDiscovering]       = useState(false);
+
+  // Ollama model download
+  const [ollamaPullModel, setOllamaPullModel] = useState("");
+  const [pullStatus, setPullStatus] = useState<
+    { active: boolean; model: string | null; status: string; percent: number; error: string | null } | null
+  >(null);
+
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailApiKey, setEmailApiKey]       = useState("");
   const [emailFromEmail, setEmailFromEmail] = useState("");
@@ -81,7 +94,80 @@ export default function ConfigPage() {
     } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => { loadProviders(); loadKeyStatus(); loadEmailKeyStatus(); }, [loadProviders, loadKeyStatus, loadEmailKeyStatus]);
+  useEffect(() => {
+    loadProviders(); loadKeyStatus(); loadEmailKeyStatus();
+    // Pick up an Ollama pull already in progress (e.g. after a page reload).
+    apiClient.getOllamaPullStatus().then((s) => { if (s.status !== "idle") setPullStatus(s); }).catch(() => {});
+  }, [loadProviders, loadKeyStatus, loadEmailKeyStatus]);
+
+  // Poll pull progress while a download is active.
+  useEffect(() => {
+    if (!pullStatus?.active) return;
+    const id = setInterval(async () => {
+      try {
+        const s = await apiClient.getOllamaPullStatus();
+        setPullStatus(s);
+        if (!s.active) {
+          clearInterval(id);
+          if (s.status === "success") { setOllamaPullModel(""); loadProviders(); }
+        }
+      } catch { /* transient — keep polling */ }
+    }, 2000);
+    return () => clearInterval(id);
+  }, [pullStatus?.active, loadProviders]);
+
+  const handleAddModel = async (modelArg?: string) => {
+    const model = (modelArg ?? newModel).trim();
+    if (!model) return;
+    setAddingModel(true); setModelActionError(null); setError(null); setSuccess(null);
+    try {
+      const res = await apiClient.addOpenAIModel(model);
+      if (res.success) {
+        setSuccess(`Modelo agregado: ${model}`);
+        setNewModel("");
+        setDiscovered((d) => d?.filter((m) => m !== model) ?? null);
+        await loadProviders();
+      } else {
+        setModelActionError(res.detail ?? "No se pudo agregar el modelo");
+      }
+    } catch (err) {
+      setModelActionError(err instanceof Error ? err.message : "Error agregando el modelo");
+    } finally { setAddingModel(false); }
+  };
+
+  const handleRemoveModel = async (model: string) => {
+    setModelActionError(null); setError(null); setSuccess(null);
+    try {
+      const res = await apiClient.removeOpenAIModel(model);
+      if (res.success) { setSuccess(`Modelo quitado: ${model}`); await loadProviders(); }
+      else setModelActionError(res.detail ?? "No se pudo quitar el modelo");
+    } catch (err) {
+      setModelActionError(err instanceof Error ? err.message : "Error quitando el modelo");
+    }
+  };
+
+  const handleDiscover = async () => {
+    setDiscovering(true); setModelActionError(null);
+    try {
+      const res = await apiClient.discoverOpenAIModels();
+      if (res.success) setDiscovered(res.models);
+      else setModelActionError(res.detail ?? "No se pudo consultar OpenAI");
+    } catch (err) {
+      setModelActionError(err instanceof Error ? err.message : "Error consultando OpenAI");
+    } finally { setDiscovering(false); }
+  };
+
+  const handlePull = async () => {
+    const model = ollamaPullModel.trim();
+    if (!model) return;
+    setError(null); setSuccess(null);
+    try {
+      await apiClient.pullOllamaModel(model);
+      setPullStatus({ active: true, model, status: "starting", percent: 0, error: null });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error iniciando la descarga");
+    }
+  };
 
   const handleSelectModel = async (providerName: string, model: string) => {
     setSwitching(true); setError(null); setSuccess(null);
@@ -266,7 +352,7 @@ export default function ConfigPage() {
                     <div>
                       <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "var(--text-3)", marginBottom: 10 }}>
                         {provider.models.length === 0
-                          ? provider.name === "ollama" ? "Ningun modelo instalado" : "Sin modelos disponibles"
+                          ? provider.name === "ollama" ? "Ningun modelo instalado" : "Sin modelos en la lista"
                           : "Seleccionar modelo"
                         }
                       </div>
@@ -276,37 +362,160 @@ export default function ConfigPage() {
                           {provider.models.map((model) => {
                             const isActiveModel = isActive && provider.default_model === model;
                             const canSelect = provider.is_available && !switching;
+                            const canRemove = provider.name === "openai" && !isActiveModel && !switching && !addingModel;
                             return (
-                              <button key={model} disabled={!canSelect || isActiveModel}
-                                onClick={() => handleSelectModel(provider.name, model)}
-                                style={{
-                                  display: "inline-flex", alignItems: "center", gap: 6,
-                                  padding: "5px 12px", borderRadius: 8,
-                                  fontFamily: "var(--font-mono)", fontSize: 12, border: "1px solid",
-                                  cursor: isActiveModel ? "default" : canSelect ? "pointer" : "not-allowed",
-                                  transition: "all 0.15s",
-                                  background: isActiveModel ? "var(--brand-primary)" : "var(--surface-2)",
-                                  borderColor: isActiveModel ? "var(--brand-primary)" : "var(--border)",
-                                  color: isActiveModel ? "#fff" : canSelect ? "var(--text-2)" : "var(--text-3)",
-                                  opacity: !canSelect && !isActiveModel ? 0.45 : 1,
-                                }}
-                                onMouseEnter={(e) => { if (canSelect && !isActiveModel) { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--brand-primary)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--brand-primary)"; } }}
-                                onMouseLeave={(e) => { if (canSelect && !isActiveModel) { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--text-2)"; } }}
-                              >
-                                {isActiveModel && <Check size={11} strokeWidth={2.5} />}
-                                {switching && !isActiveModel && (
-                                  <span style={{ width: 10, height: 10, borderRadius: "50%", border: "1.5px solid currentColor", borderTopColor: "transparent", display: "inline-block", animation: "spin 0.7s linear infinite" }} />
+                              <span key={model} style={{ display: "inline-flex", alignItems: "stretch" }}>
+                                <button disabled={!canSelect || isActiveModel}
+                                  onClick={() => handleSelectModel(provider.name, model)}
+                                  style={{
+                                    display: "inline-flex", alignItems: "center", gap: 6,
+                                    padding: "5px 12px",
+                                    borderRadius: canRemove ? "8px 0 0 8px" : 8,
+                                    fontFamily: "var(--font-mono)", fontSize: 12, border: "1px solid",
+                                    borderRight: canRemove ? "none" : undefined,
+                                    cursor: isActiveModel ? "default" : canSelect ? "pointer" : "not-allowed",
+                                    transition: "all 0.15s",
+                                    background: isActiveModel ? "var(--brand-primary)" : "var(--surface-2)",
+                                    borderColor: isActiveModel ? "var(--brand-primary)" : "var(--border)",
+                                    color: isActiveModel ? "#fff" : canSelect ? "var(--text-2)" : "var(--text-3)",
+                                    opacity: !canSelect && !isActiveModel ? 0.45 : 1,
+                                  }}
+                                >
+                                  {isActiveModel && <Check size={11} strokeWidth={2.5} />}
+                                  {switching && !isActiveModel && (
+                                    <span style={{ width: 10, height: 10, borderRadius: "50%", border: "1.5px solid currentColor", borderTopColor: "transparent", display: "inline-block", animation: "spin 0.7s linear infinite" }} />
+                                  )}
+                                  {model}
+                                </button>
+                                {canRemove && (
+                                  <button onClick={() => handleRemoveModel(model)} title="Quitar de la lista"
+                                    style={{
+                                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                      padding: "0 7px", borderRadius: "0 8px 8px 0",
+                                      border: "1px solid var(--border)", background: "var(--surface-2)",
+                                      color: "var(--text-3)", cursor: "pointer", transition: "all 0.15s",
+                                    }}
+                                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--error)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--error)"; }}
+                                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--text-3)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"; }}
+                                  >
+                                    <X size={11} />
+                                  </button>
                                 )}
-                                {model}
-                              </button>
+                              </span>
                             );
                           })}
                         </div>
                       ) : provider.name === "ollama" ? (
                         <p style={{ fontSize: 12, color: "var(--text-3)", fontStyle: "italic", margin: 0 }}>
-                          Reinicia los contenedores Docker para descargar los modelos automaticamente.
+                          Descarga un modelo abajo, o reinicia los contenedores Docker para bajar los predeterminados.
                         </p>
-                      ) : null}
+                      ) : (
+                        <p style={{ fontSize: 12, color: "var(--text-3)", fontStyle: "italic", margin: 0 }}>
+                          Agrega un modelo abajo. El modelo activo sigue funcionando aunque la lista esté vacía.
+                        </p>
+                      )}
+
+                      {/* OpenAI: agregar / descubrir modelos */}
+                      {provider.name === "openai" && (
+                        <div style={{ marginTop: 14 }}>
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                            <input
+                              value={newModel}
+                              onChange={(e) => setNewModel(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter") handleAddModel(); }}
+                              placeholder="p. ej. gpt-6"
+                              className="input"
+                              style={{ fontFamily: "var(--font-mono)", fontSize: 12, maxWidth: 220, padding: "6px 10px" }}
+                            />
+                            <button className="btn btn-secondary btn-sm"
+                              disabled={!newModel.trim() || addingModel || !provider.is_available}
+                              onClick={() => handleAddModel()}>
+                              {addingModel ? "Validando…" : "Agregar modelo"}
+                            </button>
+                            <button className="btn btn-secondary btn-sm"
+                              disabled={discovering || !provider.is_available}
+                              onClick={handleDiscover}>
+                              {discovering ? "Buscando…" : "Descubrir de mi cuenta"}
+                            </button>
+                          </div>
+
+                          {modelActionError && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 12, color: "var(--error)" }}>
+                              <AlertCircle size={12} style={{ flexShrink: 0 }} /> {modelActionError}
+                            </div>
+                          )}
+
+                          {discovered && (
+                            <div style={{ marginTop: 10 }}>
+                              {discovered.length === 0 ? (
+                                <p style={{ fontSize: 12, color: "var(--text-3)", margin: 0 }}>No se encontraron modelos nuevos.</p>
+                              ) : (
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                                  {discovered.map((m) => (
+                                    <button key={m} disabled={addingModel} onClick={() => handleAddModel(m)}
+                                      style={{
+                                        display: "inline-flex", alignItems: "center", gap: 4,
+                                        padding: "4px 10px", borderRadius: 8, fontFamily: "var(--font-mono)", fontSize: 12,
+                                        border: "1px dashed var(--border)", background: "transparent", color: "var(--text-2)",
+                                        cursor: addingModel ? "not-allowed" : "pointer",
+                                      }}>
+                                      + {m}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 10, lineHeight: 1.5 }}>
+                            &quot;Validar&quot; hace una llamada real de prueba — confirma que el modelo responde, no que todo funcione.
+                            El modelo activo también corre el verification loop y el juez de la evaluación.
+                            Tras cambiar de modelo, considera limpiar el caché de respuestas (abajo).
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Ollama: descargar modelo */}
+                      {provider.name === "ollama" && (
+                        <div style={{ marginTop: 14 }}>
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                            <input
+                              value={ollamaPullModel}
+                              onChange={(e) => setOllamaPullModel(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter") handlePull(); }}
+                              placeholder="p. ej. qwen2.5:7b"
+                              className="input"
+                              disabled={pullStatus?.active}
+                              style={{ fontFamily: "var(--font-mono)", fontSize: 12, maxWidth: 220, padding: "6px 10px" }}
+                            />
+                            <button className="btn btn-secondary btn-sm"
+                              disabled={!ollamaPullModel.trim() || pullStatus?.active || !provider.is_available}
+                              onClick={handlePull}>
+                              {pullStatus?.active ? "Descargando…" : "Descargar modelo"}
+                            </button>
+                          </div>
+
+                          {pullStatus && pullStatus.status !== "idle" && (
+                            <div style={{ marginTop: 10 }}>
+                              {pullStatus.active && (
+                                <div style={{ height: 6, borderRadius: 3, background: "var(--surface-2)", overflow: "hidden", marginBottom: 6 }}>
+                                  <div style={{ height: "100%", width: `${pullStatus.percent}%`, background: "var(--brand-primary)", transition: "width 0.4s" }} />
+                                </div>
+                              )}
+                              <p style={{
+                                fontSize: 12, margin: 0,
+                                color: pullStatus.status === "error" ? "var(--error)" : pullStatus.status === "success" ? "var(--success)" : "var(--text-2)",
+                              }}>
+                                {pullStatus.status === "error"
+                                  ? `Error: ${pullStatus.error}`
+                                  : pullStatus.status === "success"
+                                    ? `${pullStatus.model} descargado. Clic en Actualizar para verlo.`
+                                    : `${pullStatus.model}: ${pullStatus.status}${pullStatus.percent ? ` · ${pullStatus.percent}%` : ""}`}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

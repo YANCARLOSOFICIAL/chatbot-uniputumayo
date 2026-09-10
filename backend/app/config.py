@@ -1,7 +1,10 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
 
-# Modelos OpenAI disponibles para selección desde la UI (verificados mayo 2026)
+# Semilla de la lista de modelos OpenAI del selector del panel (verificados
+# mayo 2026). En el primer arranque se copia a
+# llm_configurations.config['chat_models'] y de ahí en adelante el admin la
+# edita en vivo desde /admin/config — ver llm_config_store.py / llm_service.py.
 OPENAI_CHAT_MODELS: list[str] = [
     "gpt-5.4-mini",  # Recomendado: eficiente, $0.75/1M tokens, 400 K ctx
     "gpt-5.4",       # Mayor calidad, $2.50/1M tokens

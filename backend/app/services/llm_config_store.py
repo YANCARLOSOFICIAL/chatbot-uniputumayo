@@ -37,8 +37,15 @@ async def load_into_runtime_config(db: AsyncSession) -> None:
         if row.model_name:
             runtime_config.set_model(provider, row.model_name)
         cfg = row.config or {}
-        if provider == "openai" and cfg.get("api_key"):
-            runtime_config.openai_api_key = cfg["api_key"]
+        if provider == "openai":
+            if cfg.get("api_key"):
+                runtime_config.openai_api_key = cfg["api_key"]
+            # Persisted, admin-editable model list wins over the config.py
+            # seed. Always keep the active model in it (set_model already
+            # appends, but a persisted list could pre-date that guarantee).
+            if cfg.get("chat_models"):
+                runtime_config.openai_chat_models = list(cfg["chat_models"])
+            runtime_config.add_openai_model(runtime_config.openai_default_model)
         if row.is_default:
             runtime_config.default_llm_provider = provider
         if "temperature" in cfg:
@@ -69,8 +76,10 @@ async def persist_runtime_config(db: AsyncSession) -> None:
             cfg = dict(row.config or {})
             cfg["temperature"] = runtime_config.default_temperature
             cfg["max_tokens"] = runtime_config.default_max_tokens
-            if provider == "openai" and runtime_config.openai_api_key:
-                cfg["api_key"] = runtime_config.openai_api_key
+            if provider == "openai":
+                cfg["chat_models"] = list(runtime_config.openai_chat_models)
+                if runtime_config.openai_api_key:
+                    cfg["api_key"] = runtime_config.openai_api_key
             row.config = cfg
         await db.commit()
     except Exception as e:

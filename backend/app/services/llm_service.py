@@ -1,3 +1,4 @@
+import re
 import time
 
 from app.schemas.llm import (
@@ -11,7 +12,25 @@ from app.schemas.llm import (
 )
 from app.providers.provider_factory import ProviderFactory
 from app.runtime_config import runtime_config
-from app.config import OPENAI_CHAT_MODELS
+
+# A model id is only ever forwarded to OpenAI and stored in JSONB — keep it to
+# what real ids (incl. fine-tunes like "ft:gpt-4.1:org::abc") actually use.
+_MODEL_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:\-]{0,99}$")
+
+# Heuristic used by "discover models" to hide the non-chat ids OpenAI's
+# /v1/models returns (embeddings, audio, image, moderation, legacy
+# completions). It will age as naming schemes change — the manual "add model"
+# box is the escape hatch when it does.
+_CHAT_MODEL_INCLUDE_RE = re.compile(r"^(gpt-|o1|o3|o4|chatgpt-)", re.IGNORECASE)
+_CHAT_MODEL_EXCLUDE_RE = re.compile(
+    r"(embed|audio|realtime|transcribe|tts|whisper|dall-e|image|moderation"
+    r"|search|-instruct|davinci|babbage|codex)",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_chat_model(model_id: str) -> bool:
+    return bool(_CHAT_MODEL_INCLUDE_RE.search(model_id)) and not _CHAT_MODEL_EXCLUDE_RE.search(model_id)
 
 
 class LLMService:
@@ -108,13 +127,68 @@ class LLMService:
 
         providers.append(ProviderInfo(
             name="openai",
-            models=OPENAI_CHAT_MODELS,
+            models=list(runtime_config.openai_chat_models),
             is_available=openai_available,
             is_default=(runtime_config.default_llm_provider == "openai"),
             default_model=runtime_config.openai_default_model,
         ))
 
         return ProvidersResponse(providers=providers)
+
+    # ── OpenAI model list management (admin, no code change needed) ──
+
+    async def add_openai_model(self, model: str) -> dict:
+        """Validate a model id with one minimal real call, then add it to the
+        selector list. 'Validated' means it answered a basic request — not
+        that every code path (long context, streaming) is guaranteed."""
+        model = (model or "").strip()
+        if not _MODEL_ID_RE.match(model):
+            return {"success": False, "detail": "ID de modelo inválido."}
+        if model in runtime_config.openai_chat_models:
+            return {"success": False, "detail": "Ese modelo ya está en la lista."}
+
+        provider = ProviderFactory.get_provider("openai")
+        if not await provider.is_available():
+            return {"success": False, "detail": "Configura primero la API key de OpenAI."}
+        try:
+            await provider.generate(
+                messages=[
+                    {"role": "system", "content": "Responde con una palabra."},
+                    {"role": "user", "content": "Di: listo"},
+                ],
+                model=model,
+                temperature=1,   # familias nuevas rechazan otro valor
+                max_tokens=16,
+            )
+        except Exception as e:
+            return {"success": False, "detail": f"El modelo no respondió a una prueba básica: {e}"}
+
+        runtime_config.add_openai_model(model)
+        return {"success": True, "models": list(runtime_config.openai_chat_models)}
+
+    def remove_openai_model(self, model: str) -> dict:
+        if model == runtime_config.openai_default_model:
+            return {
+                "success": False,
+                "detail": "Es el modelo activo. Cambia el modelo activo antes de quitarlo.",
+            }
+        if model not in runtime_config.openai_chat_models:
+            return {"success": False, "detail": "Ese modelo no está en la lista."}
+        runtime_config.remove_openai_model(model)
+        return {"success": True, "models": list(runtime_config.openai_chat_models)}
+
+    async def discover_openai_models(self) -> dict:
+        """Chat-like model ids the API key can see that aren't already listed."""
+        provider = ProviderFactory.get_provider("openai")
+        if not await provider.is_available():
+            return {"success": False, "detail": "Configura primero la API key de OpenAI.", "models": []}
+        try:
+            ids = await provider.list_models()
+        except Exception as e:
+            return {"success": False, "detail": f"No se pudo consultar OpenAI: {e}", "models": []}
+        known = set(runtime_config.openai_chat_models)
+        found = sorted(m for m in ids if m not in known and _looks_like_chat_model(m))
+        return {"success": True, "models": found}
 
     async def update_config(self, config: LLMConfigUpdate) -> dict:
         old_provider = runtime_config.default_llm_provider

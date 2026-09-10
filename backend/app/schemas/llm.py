@@ -60,3 +60,15 @@ class LLMConfigUpdate(BaseModel):
     default_model: str | None = None
     temperature: float | None = None
     max_tokens: int | None = None
+
+
+class ModelIdRequest(BaseModel):
+    model: str
+
+
+class OllamaPullStatus(BaseModel):
+    active: bool
+    model: str | None
+    status: str          # "idle" | "starting" | free-text Ollama status | "success" | "error"
+    percent: int
+    error: str | None

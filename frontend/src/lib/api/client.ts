@@ -411,6 +411,36 @@ export const apiClient = {
       body: JSON.stringify(config),
     }),
 
+  // ── OpenAI model list (admin-editable) ──
+  discoverOpenAIModels: () =>
+    request<{ success: boolean; detail?: string; models: string[] }>(
+      "/api/v1/llm/config/openai-models/discover"
+    ),
+
+  addOpenAIModel: (model: string) =>
+    request<{ success: boolean; detail?: string; models?: string[] }>("/api/v1/llm/config/openai-models", {
+      method: "POST",
+      body: JSON.stringify({ model }),
+    }),
+
+  removeOpenAIModel: (model: string) =>
+    request<{ success: boolean; detail?: string; models?: string[] }>(
+      `/api/v1/llm/config/openai-models?model=${encodeURIComponent(model)}`,
+      { method: "DELETE" }
+    ),
+
+  // ── Ollama model download ──
+  pullOllamaModel: (model: string) =>
+    request<{ started: boolean; model: string }>("/api/v1/llm/ollama/pull", {
+      method: "POST",
+      body: JSON.stringify({ model }),
+    }),
+
+  getOllamaPullStatus: () =>
+    request<{ active: boolean; model: string | null; status: string; percent: number; error: string | null }>(
+      "/api/v1/llm/ollama/pull/status"
+    ),
+
   // ── API Key ──
   setApiKey: (provider: string, api_key: string) =>
     request<{ success: boolean; is_available: boolean }>("/api/v1/llm/api-key", {

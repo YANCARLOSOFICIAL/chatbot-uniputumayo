@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import re
-from typing import AsyncIterator
+from typing import AsyncIterator, Callable
 
 import httpx
 
@@ -198,3 +198,27 @@ class OllamaProvider(BaseLLMProvider):
                 return response.status_code == 200
         except Exception:
             return False
+
+    async def pull_model(self, model: str, on_progress: Callable[[dict], None] | None = None) -> None:
+        """Run `ollama pull <model>`, streaming progress lines to
+        `on_progress`. Raises RuntimeError on an Ollama-reported error (model
+        not in registry, disk full, …). No overall timeout — a large model on
+        a slow link legitimately takes a long time; the caller runs this as a
+        background task and tracks state separately."""
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, read=None)) as client:
+            async with client.stream(
+                "POST", f"{self.base_url}/api/pull",
+                json={"name": model, "stream": True},
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if data.get("error"):
+                        raise RuntimeError(data["error"])
+                    if on_progress is not None:
+                        on_progress(data)
