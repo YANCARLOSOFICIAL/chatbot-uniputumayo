@@ -273,7 +273,9 @@ _JUDGE_PROMPT = (
 )
 
 
-async def _judge_hallucination(provider_name: str, model: str, query: str, context: str, answer: str) -> bool:
+async def _judge_hallucination(
+    provider_name: str, model: str, query: str, context: str, answer: str,
+) -> tuple[bool, str | None]:
     """Judge whether `answer` is grounded in `context`.
 
     Uses `resolve_grader` (see verification_graph.py) instead of always
@@ -297,6 +299,18 @@ async def _judge_hallucination(provider_name: str, model: str, query: str, conte
     `OpenAIProvider` itself (2026-08-22) so every OpenAI call site (this
     judge, verification grading, chat generation) shares one pacing budget
     and one retry policy instead of three independent, uncoordinated ones.
+
+    Returns `(hallucinated, reason)` — the reason is the judge's own short
+    explanation (whatever preceded its verdict line), previously discarded.
+    2026-09-11: a manual review of a real run's judged-hallucinated cases
+    found the judge disagreeing with its own contemporaneous
+    verification-loop grader on the SAME final draft + SAME narrowed context
+    in every single case, and a human reviewer confirmed 5/5 sampled OpenAI
+    "hallucinations" were false positives (real rate 0%, not 7%) — see
+    goldstandard_eval_wip memory. Without the judge's stated reason captured,
+    diagnosing *why* it disagreed required re-deriving the exact context by
+    hand from prod logs. Capturing it here (mirroring `_grade`'s existing
+    `grade_reason`) makes every future run self-diagnosing.
     """
     grader_provider_name, grader_model = resolve_grader(provider_name, model)
     provider = ProviderFactory.get_provider(grader_provider_name)
@@ -309,7 +323,9 @@ async def _judge_hallucination(provider_name: str, model: str, query: str, conte
     )
     lines = [l.strip() for l in result.get("content", "").strip().splitlines() if l.strip()]
     verdict = lines[-1].upper() if lines else ""
-    return verdict.startswith("SI") or verdict.startswith("SÍ")
+    hallucinated = verdict.startswith("SI") or verdict.startswith("SÍ")
+    reason = " ".join(lines[:-1]).strip() or None
+    return hallucinated, reason
 
 
 @dataclass
@@ -325,6 +341,7 @@ class GenerationCaseResult:
     error: str | None = None  # set when process_message itself blew up (e.g. Ollama ReadTimeout) — case excluded from every rate, not counted as a failure
     verification_reason: str | None = None  # grader's own explanation for its last verdict (see ChatService.last_verification_reason) — most useful on `refused` cases, to see WHY without live tracing
     rag_quality: str | None = None  # ChatService.last_rag_quality ("good"/"weak"/"none") — on a `refused` case, distinguishes "retrieval came back weak/empty" (quality != "good", zero LLM calls) from "LLM had good context but self-refused anyway" (quality == "good", REFUSAL_MARKER short-circuit in verification_graph._grade leaves verification_reason=None too — see goldstandard_eval_wip memory, 2026-08-24)
+    hallucination_reason: str | None = None  # the eval judge's own explanation (see _judge_hallucination) — set whenever hallucinated is not None; lets a `hallucinated=True` case be diagnosed from the report alone instead of re-deriving context by hand (see goldstandard_eval_wip memory, 2026-09-11)
 
 
 async def _run_generation_case(
@@ -366,6 +383,7 @@ async def _run_generation_case(
     refusal_ok = (refused == expected_refusal)
 
     hallucinated = None
+    hallucination_reason = None
     if q.query_type == _RETRIEVAL_EXPECTED_TYPE and not refused and not clarification:
         try:
             # Judge against the context this exact call actually fed the LLM
@@ -382,7 +400,9 @@ async def _run_generation_case(
             full_context = chat_service.last_rag_context_text or ""
             max_context_chars = settings.chunk_size * 4 * settings.rag_top_k
             judge_context = context_for_grading(full_context, answer, max_context_chars)
-            hallucinated = await _judge_hallucination(provider_name, model, q.query, judge_context, answer)
+            hallucinated, hallucination_reason = await _judge_hallucination(
+                provider_name, model, q.query, judge_context, answer,
+            )
         except Exception as e:
             hallucinated = None  # judge call failed — excluded from the rate, not counted as a hallucination
             logger.warning(
@@ -393,6 +413,7 @@ async def _run_generation_case(
         query=q, answer=answer, refused=refused, clarification=clarification, expected_refusal=expected_refusal,
         refusal_ok=refusal_ok, hallucinated=hallucinated, generation_ms=generation_ms,
         verification_reason=verification_reason, rag_quality=rag_quality,
+        hallucination_reason=hallucination_reason,
     )
 
 
@@ -475,6 +496,7 @@ async def run_generation_eval(
             "error": r.error,
             "verification_reason": r.verification_reason,
             "rag_quality": r.rag_quality,
+            "hallucination_reason": r.hallucination_reason,
         } for r in results],
     )
 

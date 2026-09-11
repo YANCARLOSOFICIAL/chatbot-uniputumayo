@@ -1,6 +1,6 @@
 from app.utils.query_utils import (
     detect_temperature, is_greeting, keyword_score,
-    is_varying_topic_query, mentions_entity,
+    is_varying_topic_query, mentions_entity, is_last_semester_query,
 )
 
 
@@ -155,3 +155,28 @@ class TestKeywordScore:
     def test_partial_overlap_is_proportional(self):
         score = keyword_score("materias creditos semestre", "el semestre tiene materias")
         assert score == 2 / 3
+
+
+class TestIsLastSemesterQuery:
+    """See rag_service.py's _boost_last_semester_chunk — the actual fix this
+    detector powers, for the confirmed-live 2026-09-11 GS-060/GS-064 bug."""
+
+    def test_ultimo_semestre_matches(self):
+        assert is_last_semester_query(
+            "¿Qué materias se ven en el último semestre de Ingeniería de Sistemas?"
+        ) is True
+
+    def test_cuantos_semestres_matches(self):
+        assert is_last_semester_query("¿Cuántos semestres tiene Contaduría Pública?") is True
+
+    def test_total_de_semestres_matches(self):
+        assert is_last_semester_query("¿Cuál es el total de semestres del programa?") is True
+
+    def test_semestre_final_matches(self):
+        assert is_last_semester_query("¿Qué se ve en el semestre final de la carrera?") is True
+
+    def test_ordinary_semester_question_does_not_match(self):
+        assert is_last_semester_query("¿Qué materias tiene el segundo semestre?") is False
+
+    def test_unrelated_query_does_not_match(self):
+        assert is_last_semester_query("¿Cuáles son los requisitos de admisión?") is False

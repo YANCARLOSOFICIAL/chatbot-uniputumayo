@@ -160,6 +160,37 @@ _COLLECTIVE_ENUMERATION_PATTERNS = re.compile(
 )
 
 
+# Questions asking specifically for the LAST semester (or the total semester
+# count) of a program — "¿qué materias tiene el último semestre de X?",
+# "¿cuántos semestres tiene X?". Root cause this exists for, confirmed live
+# 2026-09-11 (GoldStandard GS-060/GS-064): the word "último" shares no
+# literal token with any specific semester's label in the corpus ("VII",
+# "X", "décimo"...), so plain semantic search has nothing to anchor on and
+# inconsistently lands on the right chunk — it happens to work when HyDE's
+# synthetic pseudo-document paraphrases toward the true last semester's
+# wording, and reproducibly fails when it doesn't (confirmed live: Ollama,
+# which has HyDE off for latency — see project_rag_performance_2026 memory —
+# deterministically retrieved a WRONG, non-last semester's chunk and
+# labeled it "el último" both in the original eval run and a fresh re-test).
+# See rag_service.py's `_boost_last_semester_chunk` for the fix this powers:
+# an explicit content-based lookup for the highest semester number, instead
+# of trusting embedding similarity to infer "last" from "único".
+_LAST_SEMESTER_PATTERNS = re.compile(
+    r"\b(el\s+)?[uú]ltimo\s+semestre\b|"
+    r"\bsemestre\s+final\b|"
+    r"\bcu[aá]ntos?\s+semestres?\b|"
+    r"\btotal\s+de\s+semestres?\b",
+    re.IGNORECASE,
+)
+
+
+def is_last_semester_query(query: str) -> bool:
+    """True if the query asks about a program's LAST semester or its total
+    semester count — see `_LAST_SEMESTER_PATTERNS` docstring for why this
+    needs a dedicated retrieval path rather than plain semantic search."""
+    return bool(_LAST_SEMESTER_PATTERNS.search(query))
+
+
 def is_procedural_query(query: str) -> bool:
     """True if the query is about an institution-wide administrative
     procedure (see _PROCEDURAL_TOPIC_PATTERNS) — exposed standalone (not just

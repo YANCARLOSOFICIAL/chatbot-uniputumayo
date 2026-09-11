@@ -4,7 +4,7 @@ import pytest
 
 from app.config import settings
 from app.schemas.rag import SearchResultItem
-from app.services.rag_service import RAGService
+from app.services.rag_service import RAGService, _highest_semester_marker, _roman_to_int
 
 
 def make_item(content, score=0.5, document_title="Doc", program=None, faculty=None):
@@ -213,3 +213,122 @@ class TestEvaluateContextQuality:
     def test_top_score_below_threshold_is_weak(self, service):
         items = [make_item("x", score=0.01)]
         assert service.evaluate_context_quality(items) == "weak"
+
+
+class TestHighestSemesterMarker:
+    """See rag_service.py's _boost_last_semester_chunk — confirmed live
+    2026-09-11 (GS-060/GS-064) that plain semantic search can't reliably
+    find the true last semester's chunk for "último semestre" queries; this
+    is the literal content scan that replaces trusting embedding similarity."""
+
+    def test_finds_roman_numeral(self):
+        assert _highest_semester_marker("SEMESTRE VII: Programación Avanzada") == 7
+
+    def test_finds_arabic_numeral(self):
+        assert _highest_semester_marker("Semestre 10 — Proyecto de Grado") == 10
+
+    def test_picks_the_max_among_several_mentions(self):
+        content = "SEMESTRE III: x\n\nSEMESTRE VIII: y\n\nSEMESTRE V: z"
+        assert _highest_semester_marker(content) == 8
+
+    def test_no_semester_mention_returns_none(self):
+        assert _highest_semester_marker("Requisitos de admisión para el programa") is None
+
+
+class TestRomanToInt:
+    def test_common_curriculum_values(self):
+        assert _roman_to_int("VII") == 7
+        assert _roman_to_int("X") == 10
+        assert _roman_to_int("IV") == 4
+        assert _roman_to_int("I") == 1
+
+    def test_invalid_token_returns_none(self):
+        assert _roman_to_int("abc") is None
+        assert _roman_to_int("") is None
+
+
+class _FakeRow:
+    def __init__(self, chunk_id, content, document_title="Doc", program=None, faculty=None, metadata=None):
+        self.chunk_id = chunk_id
+        self.content = content
+        self.document_title = document_title
+        self.program = program
+        self.faculty = faculty
+        self.metadata = metadata
+
+
+class _FakeResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchall(self):
+        return self._rows
+
+
+class _FakeDB:
+    """Ignores the query text entirely — _boost_last_semester_chunk's SQL is
+    a plain content scan, not under test here; only what it does with the
+    returned rows is."""
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    async def execute(self, *args, **kwargs):
+        return _FakeResult(self._rows)
+
+
+class TestBoostLastSemesterChunk:
+    """Confirmed live 2026-09-11: Ollama's HyDE-off retrieval deterministically
+    landed on "SEMESTRE VII" (wrong) for a program whose real last semester is
+    X, while OpenAI's HyDE-on retrieval got "décimo semestre" (correct) for
+    the byte-identical query — see query_utils.is_last_semester_query and the
+    goldstandard_eval_wip memory for the full root-cause writeup."""
+
+    @pytest.mark.asyncio
+    async def test_promotes_higher_semester_chunk_found_in_db(self):
+        wrong = make_item("SEMESTRE VII: materias equivocadas", program="ingenieria de sistemas")
+        service = RAGService(db=_FakeDB([
+            _FakeRow(uuid.uuid4(), "SEMESTRE X: materias correctas", program="ingenieria de sistemas"),
+        ]))
+
+        result = await service._boost_last_semester_chunk([wrong], "ingenieria de sistemas")
+
+        assert len(result) == 1  # replaces, doesn't grow the result set
+        assert "SEMESTRE X" in result[0].content
+
+    @pytest.mark.asyncio
+    async def test_noop_when_results_already_have_the_true_max(self):
+        correct = make_item("SEMESTRE X: materias correctas", program="ingenieria de sistemas")
+        service = RAGService(db=_FakeDB([
+            _FakeRow(uuid.uuid4(), "SEMESTRE V: otras materias", program="ingenieria de sistemas"),
+        ]))
+
+        result = await service._boost_last_semester_chunk([correct], "ingenieria de sistemas")
+
+        assert result[0].content == correct.content
+        assert result[0].chunk_id == correct.chunk_id
+
+    @pytest.mark.asyncio
+    async def test_preserves_result_count_across_multiple_items(self):
+        items = [
+            make_item("SEMESTRE 1: x", program="p"),
+            make_item("SEMESTRE 2: y", program="p"),
+            make_item("SEMESTRE 3: z", program="p"),
+        ]
+        service = RAGService(db=_FakeDB([
+            _FakeRow(uuid.uuid4(), "SEMESTRE 10: la respuesta real", program="p"),
+        ]))
+
+        result = await service._boost_last_semester_chunk(items, "p")
+
+        assert len(result) == len(items)
+        assert "SEMESTRE 10" in result[0].content
+
+    @pytest.mark.asyncio
+    async def test_no_db_row_beats_current_results_returns_unchanged(self):
+        items = [make_item("SEMESTRE X: la correcta", program="p")]
+        service = RAGService(db=_FakeDB([]))
+
+        result = await service._boost_last_semester_chunk(items, "p")
+
+        assert result == items

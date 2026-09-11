@@ -171,6 +171,7 @@ def _compute_generation_stats(g: dict) -> dict:
     n_answerable = len(in_scope)
     answered = judged + judge_failed  # in_scope, not refused, not clarification
     n_useful = sum(1 for c in judged if not c.get("hallucinated"))
+    hallucinated_cases = [c for c in judged if c.get("hallucinated")]
 
     return {
         "provider": g.get("provider", ""),
@@ -193,6 +194,7 @@ def _compute_generation_stats(g: dict) -> dict:
         "refusal_undiagnosed": refusal_undiagnosed,
         "clarification_triggered": clarification_triggered,
         "judge_failed": judge_failed,
+        "hallucinated_cases": hallucinated_cases,
     }
 
 
@@ -322,6 +324,25 @@ def _render_markdown_report(run: GoldEvalRun) -> str:
                     lines.append(f"- `{c.get('id', '')}`: {c.get('query', '')}{suffix}")
                 if len(refusal_undiagnosed) > 20:
                     lines.append(f"- ... y {len(refusal_undiagnosed) - 20} más")
+
+    lines += ["", "## Casos con alucinación detectada", ""]
+    lines.append(
+        "El juez es un LLM, no un oráculo — revisa esta lista contra la respuesta real "
+        "antes de aceptar la tasa de alucinación de arriba como definitiva. Hallazgo real "
+        "2026-09-11: de 5 casos de OpenAI marcados aquí en una corrida, los 5 resultaron "
+        "ser falsos positivos al revisarlos a mano (ver goldstandard_eval_wip memory)."
+    )
+    for g in gens:
+        hallucinated_cases = g["hallucinated_cases"]
+        if not hallucinated_cases:
+            continue
+        lines += ["", f"### {g['provider']} — {len(hallucinated_cases)} caso(s) marcado(s) como alucinación", ""]
+        for c in hallucinated_cases[:20]:
+            reason = c.get("hallucination_reason")
+            suffix = f" — motivo del juez: «{reason}»" if reason else ""
+            lines.append(f"- `{c.get('id', '')}`: {c.get('query', '')}{suffix}")
+        if len(hallucinated_cases) > 20:
+            lines.append(f"- ... y {len(hallucinated_cases) - 20} más")
 
     return "\n".join(lines) + "\n"
 

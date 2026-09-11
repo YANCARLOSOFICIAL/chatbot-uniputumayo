@@ -181,6 +181,80 @@ class TestJudgeHallucinationContextSizing:
         assert provider.calls and marker in provider.calls[0]["messages"][0]["content"]
 
 
+class TestJudgeHallucinationCapturesReason:
+    """2026-09-11: a manual review of a real run's `hallucinated=True` cases
+    found the eval judge disagreeing with the production verification-loop
+    grader on the exact same draft + context in every sampled case, and a
+    human reviewer confirmed 5/5 sampled OpenAI "hallucinations" were false
+    positives. Diagnosing *why* required re-deriving the judge's context by
+    hand from prod logs — this test guards that the judge's own reasoning
+    (mirroring verification_graph._grade's `grade_reason`) is captured
+    instead of discarded, so future runs are self-diagnosing."""
+
+    @pytest.mark.asyncio
+    async def test_returns_reason_alongside_the_verdict(self, monkeypatch):
+        class FakeJudgeProvider:
+            async def generate(self, **kwargs):
+                return {"content": "El contexto sí confirma el dato.\nSI"}
+
+        monkeypatch.setattr(ProviderFactory, "get_provider", lambda name: FakeJudgeProvider())
+
+        hallucinated, reason = await _judge_hallucination(
+            "openai", "gpt-4.1", "query", "context", "answer",
+        )
+
+        assert hallucinated is True
+        assert reason == "El contexto sí confirma el dato."
+
+    @pytest.mark.asyncio
+    async def test_reason_is_none_when_verdict_is_bare(self, monkeypatch):
+        class FakeJudgeProvider:
+            async def generate(self, **kwargs):
+                return {"content": "NO"}
+
+        monkeypatch.setattr(ProviderFactory, "get_provider", lambda name: FakeJudgeProvider())
+
+        hallucinated, reason = await _judge_hallucination(
+            "openai", "gpt-4.1", "query", "context", "answer",
+        )
+
+        assert hallucinated is False
+        assert reason is None
+
+    @pytest.mark.asyncio
+    async def test_run_generation_case_stores_hallucination_reason(self, monkeypatch):
+        from app.services.goldstandard_eval_service import _run_generation_case
+
+        answer = "El programa tiene 10 semestres [1]."
+
+        async def fake_process_message(self, *args, **kwargs):
+            self.last_rag_context_text = "[1] Malla real\nEl programa tiene 10 semestres."
+            return SimpleNamespace(assistant_message=SimpleNamespace(content=answer))
+
+        monkeypatch.setattr(
+            "app.services.goldstandard_eval_service.ChatService.process_message",
+            fake_process_message,
+        )
+
+        async def fake_judge(provider_name, model, query, context, answer):
+            return True, "Afirma una cifra que el contexto citado no confirma."
+
+        monkeypatch.setattr(
+            "app.services.goldstandard_eval_service._judge_hallucination", fake_judge,
+        )
+
+        fake_db = SimpleNamespace(add=lambda *_: None, flush=_noop)
+        q = GoldQuery(
+            id="GS-060", category="c", query="¿Cuántos semestres tiene X?",
+            query_type="dentro de alcance", expected_documents=["07_x"],
+        )
+
+        result = await _run_generation_case(fake_db, q, "openai", "gpt-4.1")
+
+        assert result.hallucinated is True
+        assert result.hallucination_reason == "Afirma una cifra que el contexto citado no confirma."
+
+
 class TestJudgeHallucinationUsesIndependentGrader:
     """Self-judging was the original design (see module docstring) but proved
     both unreliable and biased the Ollama-vs-OpenAI comparison — see
@@ -259,7 +333,7 @@ class TestClarificationExcludedFromHallucinationJudging:
         async def fail_if_called(*args, **kwargs):
             nonlocal called
             called = True
-            return True
+            return True, None
 
         monkeypatch.setattr(
             "app.services.goldstandard_eval_service._judge_hallucination", fail_if_called,
@@ -310,7 +384,7 @@ class TestJudgeUsesActualChatContext:
         async def capture_judge(provider_name, model, query, context, answer):
             nonlocal seen_context
             seen_context = context
-            return False
+            return False, None
 
         monkeypatch.setattr(
             "app.services.goldstandard_eval_service._judge_hallucination", capture_judge,
@@ -363,7 +437,7 @@ class TestJudgeContextNarrowedToCitedSources:
         async def capture_judge(provider_name, model, query, context, answer):
             nonlocal seen_context
             seen_context = context
-            return False
+            return False, None
 
         monkeypatch.setattr(
             "app.services.goldstandard_eval_service._judge_hallucination", capture_judge,
@@ -470,12 +544,35 @@ class TestComputeGenerationStatsRecomputesFromCases:
     stored `hallucinated` value for a clarification case is a stale True/False
     from the old buggy judge call, and they have no `clarification` key at all)."""
 
-    def _case(self, id, answer, hallucinated, refused=False, expected_refusal=False, error=None):
+    def _case(self, id, answer, hallucinated, refused=False, expected_refusal=False, error=None,
+              hallucination_reason=None):
         return {
             "id": id, "query": f"query {id}", "answer": answer, "refused": refused,
             "expected_refusal": expected_refusal, "refusal_ok": refused == expected_refusal,
             "hallucinated": hallucinated, "generation_ms": 100, "error": error,
+            "hallucination_reason": hallucination_reason,
         }
+
+    def test_hallucinated_cases_list_includes_reason(self):
+        from app.routers.goldstandard_eval import _compute_generation_stats
+
+        gen = {
+            "provider": "openai", "model": "gpt-4.1", "avg_generation_ms": 1000, "error_cases": 0,
+            "cases": [
+                self._case("GS-001", "Correct grounded answer", hallucinated=False),
+                self._case(
+                    "GS-002", "Fabricated answer", hallucinated=True,
+                    hallucination_reason="Inventa un dato no presente en el contexto.",
+                ),
+            ],
+        }
+
+        stats = _compute_generation_stats(gen)
+
+        assert [c["id"] for c in stats["hallucinated_cases"]] == ["GS-002"]
+        assert stats["hallucinated_cases"][0]["hallucination_reason"] == (
+            "Inventa un dato no presente en el contexto."
+        )
 
     def test_old_run_without_clarification_field_is_corrected(self):
         from app.routers.goldstandard_eval import _compute_generation_stats

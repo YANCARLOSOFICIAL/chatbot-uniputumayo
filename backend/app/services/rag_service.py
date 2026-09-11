@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import time
 
 from sqlalchemy import text
@@ -13,6 +14,7 @@ from app.models.retrieval_log import RetrievalLog
 from app.providers.provider_factory import ProviderFactory
 from app.runtime_config import runtime_config
 from app.utils.cache import rag_cache
+from app.utils.query_utils import is_last_semester_query
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +22,44 @@ logger = logging.getLogger(__name__)
 # well-established default across BM25/vector hybrid search implementations,
 # not a retrieval-quality knob worth exposing as a setting.
 _RRF_K = 60
+
+# "SEMESTRE VII", "Semestre 8", etc. — matches both the Roman-numeral labels
+# used in the "RESUMEN DE MATERIAS POR SEMESTRE" block and plain Arabic
+# numerals, wherever they appear in a chunk's content. See
+# `_boost_last_semester_chunk` for why this needs to be found directly
+# instead of trusted to embedding similarity.
+_SEMESTER_MARKER_RE = re.compile(r"semestre\s+([ivxlcdm]+|\d{1,2})\b", re.IGNORECASE)
+_ROMAN_VALUES = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100, "d": 500, "m": 1000}
+
+
+def _roman_to_int(token: str) -> int | None:
+    """Minimal Roman numeral parser — curriculum semester labels never
+    exceed ~XII, so no validation beyond "every character is a known
+    numeral" is needed (an invalid shape like "IIII" still parses to a
+    number; it's only ever used to find the MAX among real labels, not
+    displayed back to anyone)."""
+    token = token.lower()
+    if not token or any(ch not in _ROMAN_VALUES for ch in token):
+        return None
+    total = 0
+    prev = 0
+    for ch in reversed(token):
+        value = _ROMAN_VALUES[ch]
+        total += -value if value < prev else value
+        prev = max(prev, value)
+    return total
+
+
+def _highest_semester_marker(content: str) -> int | None:
+    """The highest semester number mentioned in `content` ("SEMESTRE VII",
+    "Semestre 8"), or None if it mentions no semester at all."""
+    best: int | None = None
+    for m in _SEMESTER_MARKER_RE.finditer(content):
+        token = m.group(1)
+        n = int(token) if token.isdigit() else _roman_to_int(token)
+        if n is not None and (best is None or n > best):
+            best = n
+    return best
 
 
 def _get_reranker():
@@ -336,6 +376,70 @@ class RAGService:
                 untagged_used += 1
         return kept
 
+    async def _boost_last_semester_chunk(
+        self, results: list[SearchResultItem], program: str,
+    ) -> list[SearchResultItem]:
+        """For "¿qué materias tiene el último semestre de X?" / "¿cuántos
+        semestres tiene X?" style queries (see `is_last_semester_query`),
+        make sure the chunk that actually contains the HIGHEST semester
+        number for `program` is in the results — instead of trusting
+        embedding similarity to infer "último" means "highest-numbered".
+
+        Root cause this exists for (confirmed live 2026-09-11, GoldStandard
+        GS-060/GS-064): "último" shares no literal token with any specific
+        semester's label ("VII", "X", "décimo"...), so plain semantic search
+        has nothing to anchor on. It happens to work when HyDE's synthetic
+        pseudo-document paraphrases toward the true last semester's wording
+        (OpenAI, HyDE on) and reproducibly fails when it doesn't (Ollama,
+        HyDE off for latency — see project_rag_performance_2026 memory):
+        live re-test got "décimo semestre" (correct) from OpenAI and
+        "Semestre VII" (wrong — the real last semester is X) from Ollama for
+        the byte-identical question, confirmed via the RAG quality log line
+        showing two different top-scoring chunks for the same query text.
+
+        A cheap, literal content scan beats trying to fix this via embedding
+        tuning or HyDE-for-Ollama (already rejected on latency grounds, see
+        the same memory) — this only runs for the narrow query shape that
+        actually needs it, no LLM/embedding call involved.
+        """
+        already_best = max((_highest_semester_marker(r.content) or 0) for r in results) if results else 0
+
+        rows = (await self.db.execute(
+            text("""
+                SELECT dc.id AS chunk_id, dc.content, d.title AS document_title,
+                       d.program, d.faculty, dc.metadata
+                FROM document_chunks dc
+                JOIN documents d ON dc.document_id = d.id
+                WHERE (d.program = :program OR d.program IS NULL OR d.program = '')
+                  AND dc.content ~* 'semestre\\s+([ivxlcdm]+|\\d{1,2})\\b'
+                LIMIT 60
+            """),
+            {"program": program},
+        )).fetchall()
+
+        best_row = None
+        best_n = already_best
+        for row in rows:
+            n = _highest_semester_marker(row.content)
+            if n is not None and n > best_n:
+                best_n = n
+                best_row = row
+
+        if best_row is None:
+            return results  # nothing beats what's already in `results`
+
+        boosted = SearchResultItem(
+            chunk_id=best_row.chunk_id,
+            content=best_row.content,
+            score=results[0].score if results else settings.rag_score_threshold,
+            document_title=best_row.document_title,
+            program=best_row.program,
+            faculty=best_row.faculty,
+            metadata=best_row.metadata,
+        )
+        rest = [r for r in results if r.chunk_id != boosted.chunk_id]
+        return [boosted] + rest[: max(len(results) - 1, 0)]
+
     # ── Context quality validation ────────────────────────────────────────────
 
     def evaluate_context_quality(self, results: list[SearchResultItem]) -> str:
@@ -527,6 +631,16 @@ class RAGService:
             final_results = self._apply_diversity(candidates, max_per_doc=10, top_k=request.top_k)
         else:
             final_results = candidates[:request.top_k]
+
+        # 7. "Último semestre" queries need the chunk with the highest
+        # semester number specifically — see _boost_last_semester_chunk.
+        if (
+            request.filters and request.filters.program
+            and is_last_semester_query(request.query)
+        ):
+            final_results = await self._boost_last_semester_chunk(
+                final_results, request.filters.program,
+            )
 
         total_ms = int((time.time() - t0) * 1000)
         top_score = final_results[0].score if final_results else 0.0
