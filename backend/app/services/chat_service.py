@@ -88,6 +88,18 @@ _CICLO_TECNOLOGICO_RE = re.compile(
     r"Primer ciclo de formaci[oó]n\s*(?:\([^)]*\))?\s*:\s*([^—(\n]+)", re.IGNORECASE
 )
 
+# The taxonomy has no pregrado/posgrado level field (see _detect_ambiguity) —
+# "Seguridad Informatica" is, as of this writing, the only posgrado program
+# in the corpus, tagged like any other program. Real incident (GoldStandard
+# GS-094, 2026-09-11): its plan-de-estudios document scored within the
+# ambiguity margin of "ingenieria de sistemas" for "¿qué materias veo si
+# entro a estudiar software?" — an unambiguously pregrado question — and got
+# offered as a candidate program anyway. Its title always contains
+# "posgrado" (e.g. "CC3Anexo 2Plan de Estudios posgrado en Seguridad
+# Inf..."), unlike any pregrado malla document, so a title check is a cheap,
+# accurate proxy for the missing level field without a schema change.
+_POSGRADO_TITLE_RE = re.compile(r"posgrado", re.IGNORECASE)
+
 
 @dataclass
 class _RAGContext:
@@ -897,8 +909,19 @@ class ChatService:
         if not is_varying_topic_query(query) or not rag_ctx.source_infos:
             return None
 
-        top_score = max(s.score for s in rag_ctx.source_infos)
-        all_programs = {s.program for s in rag_ctx.source_infos if s.program}
+        # Posgrado sources never belong in a pregrado-shaped "which program?"
+        # menu — see _POSGRADO_TITLE_RE. Skipped only when the query already
+        # names the posgrado program directly, same as any other candidate.
+        eligible_sources = [
+            s for s in rag_ctx.source_infos
+            if not _POSGRADO_TITLE_RE.search(s.document_title)
+            or mentions_entity(query, s.program or "")
+        ]
+        if not eligible_sources:
+            return None
+
+        top_score = max(s.score for s in eligible_sources)
+        all_programs = {s.program for s in eligible_sources if s.program}
         query_already_names_a_program = any(mentions_entity(query, p) for p in all_programs)
 
         for attr, entity_type in (("program", "program"), ("faculty", "faculty")):
@@ -906,7 +929,7 @@ class ChatService:
                 continue
 
             best_by_name: dict[str, float] = {}
-            for s in rag_ctx.source_infos:
+            for s in eligible_sources:
                 name = getattr(s, attr)
                 if not name:
                     continue

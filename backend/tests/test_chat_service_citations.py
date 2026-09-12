@@ -13,14 +13,16 @@ from app.utils.prompts import REFUSAL_MARKER, CLARIFICATION_MARKER
 
 def make_rag_ctx(n_sources: int, programs: list[str | None] | None = None,
                   faculties: list[str | None] | None = None,
-                  scores: list[float] | None = None, quality: str = "good") -> _RAGContext:
+                  scores: list[float] | None = None, quality: str = "good",
+                  titles: list[str] | None = None) -> _RAGContext:
     programs = programs or [None] * n_sources
     faculties = faculties or [None] * n_sources
     scores = scores or [0.5] * n_sources
+    titles = titles or [f"Doc {i + 1}" for i in range(n_sources)]
     source_infos = [
         SourceInfo(
             chunk_id=uuid.uuid4(),
-            document_title=f"Doc {i + 1}",
+            document_title=titles[i],
             content_preview="preview",
             score=scores[i],
             program=programs[i],
@@ -194,6 +196,41 @@ class TestDetectAmbiguity:
             quality="weak",
         )
         result = service._detect_ambiguity("¿Cuáles son las materias del pensum?", rag_ctx)
+        assert result is None
+
+    def test_posgrado_source_excluded_from_pregrado_ambiguity(self, service):
+        # Real incident (GoldStandard GS-094, 2026-09-11): "¿Qué materias veo
+        # si entro a estudiar software?" (unambiguously pregrado) surfaced
+        # "Seguridad Informatica" (the corpus's only posgrado program,
+        # tagged like any other program — there's no level field) within
+        # margin of "Ingeniería de Sistemas", producing a nonsensical
+        # posgrado option in a pregrado clarification menu.
+        rag_ctx = make_rag_ctx(
+            2,
+            programs=["Ingeniería de Sistemas", "Seguridad Informatica"],
+            titles=["Malla Ingeniería de Sistemas", "CC3Anexo 2Plan de Estudios posgrado en Seguridad Inf."],
+        )
+        result = service._detect_ambiguity("¿Qué materias veo si entro a estudiar software?", rag_ctx)
+        assert result is None  # only 1 eligible candidate left — nothing to clarify
+
+    def test_naming_the_posgrado_program_still_suppresses_ambiguity(self, service):
+        # The posgrado exclusion must not remove it so completely that
+        # "already named" stops being recognized — if it did, a user who
+        # explicitly asked about Seguridad Informatica would incorrectly get
+        # asked to choose between the two OTHER (genuinely ambiguous)
+        # pregrado programs instead of getting an answer.
+        rag_ctx = make_rag_ctx(
+            3,
+            programs=["Ingeniería de Sistemas", "Seguridad Informatica", "Ingeniería Agroindustrial"],
+            titles=[
+                "Malla Ingeniería de Sistemas",
+                "CC3Anexo 2Plan de Estudios posgrado en Seguridad Inf.",
+                "Malla Ingeniería Agroindustrial",
+            ],
+        )
+        result = service._detect_ambiguity(
+            "¿Qué materias tiene Seguridad Informatica?", rag_ctx
+        )
         assert result is None
 
 
