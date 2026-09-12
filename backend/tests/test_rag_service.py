@@ -332,3 +332,25 @@ class TestBoostLastSemesterChunk:
         result = await service._boost_last_semester_chunk(items, "p")
 
         assert result == items
+
+    @pytest.mark.asyncio
+    async def test_promotes_true_max_already_present_but_buried(self):
+        """Live re-test 2026-09-11 (GS-064, Ingeniería Ambiental) found the
+        true highest-semester chunk (X) was already retrieved but sitting at
+        position 4, below several lower-numbered chunks — a no-HyDE local
+        model answered from the more prominent lower chunk instead. The old
+        logic's "already_best" short-circuit treated mere presence anywhere
+        in `results` as good enough and left the order untouched."""
+        buried_correct = make_item("SEMESTRE X: la correcta", program="p")
+        items = [
+            make_item("SEMESTRE III: otras materias", program="p"),
+            make_item("SEMESTRE V: otras materias", program="p"),
+            make_item("SEMESTRE VIII: casi la correcta", program="p"),
+            buried_correct,
+        ]
+        service = RAGService(db=_FakeDB([]))  # DB scan finds nothing better
+
+        result = await service._boost_last_semester_chunk(items, "p")
+
+        assert result[0].chunk_id == buried_correct.chunk_id
+        assert len(result) == len(items)

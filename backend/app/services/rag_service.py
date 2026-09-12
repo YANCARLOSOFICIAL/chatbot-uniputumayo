@@ -411,8 +411,27 @@ class RAGService:
         ones before the true highest-semester chunk is ever scanned. `ORDER
         BY (d.program = :program) DESC` guarantees the program's own rows
         are considered first.
+
+        A THIRD live re-test after that fix still failed the same GS-064
+        case: `/rag/search` confirmed the true highest-semester chunk (X)
+        was already present in `results` — just buried around position 4-5,
+        below several lower-numbered chunks. The old logic only replaced
+        `results` when the DB scan found something with a STRICTLY HIGHER
+        marker than whatever was already present anywhere in the list — if
+        the winning chunk was already there but not first, it left the list
+        (and its order) untouched, "present but buried". A no-HyDE, weaker
+        local model (qwen2.5:7b) reliably answers from whichever chunk reads
+        most prominently rather than scanning every chunk for the true max,
+        so presence alone doesn't fix the answer — the winning chunk must be
+        moved to the front. Now always promotes the overall best chunk
+        (from `results` or the DB scan, whichever has the higher marker) to
+        index 0 instead of only acting when the DB scan strictly improves on
+        what was already there.
         """
-        already_best = max((_highest_semester_marker(r.content) or 0) for r in results) if results else 0
+        best_in_results = max(
+            results, key=lambda r: _highest_semester_marker(r.content) or -1, default=None
+        )
+        best_n = (_highest_semester_marker(best_in_results.content) if best_in_results else None) or 0
 
         rows = (await self.db.execute(
             text("""
@@ -428,28 +447,33 @@ class RAGService:
             {"program": program},
         )).fetchall()
 
-        best_row = None
-        best_n = already_best
+        best_db_row = None
         for row in rows:
             n = _highest_semester_marker(row.content)
             if n is not None and n > best_n:
                 best_n = n
-                best_row = row
+                best_db_row = row
 
-        if best_row is None:
-            return results  # nothing beats what's already in `results`
+        if best_db_row is not None:
+            boosted = SearchResultItem(
+                chunk_id=best_db_row.chunk_id,
+                content=best_db_row.content,
+                score=results[0].score if results else settings.rag_score_threshold,
+                document_title=best_db_row.document_title,
+                program=best_db_row.program,
+                faculty=best_db_row.faculty,
+                metadata=best_db_row.metadata,
+            )
+            rest = [r for r in results if r.chunk_id != boosted.chunk_id]
+            return [boosted] + rest[: max(len(results) - 1, 0)]
 
-        boosted = SearchResultItem(
-            chunk_id=best_row.chunk_id,
-            content=best_row.content,
-            score=results[0].score if results else settings.rag_score_threshold,
-            document_title=best_row.document_title,
-            program=best_row.program,
-            faculty=best_row.faculty,
-            metadata=best_row.metadata,
-        )
-        rest = [r for r in results if r.chunk_id != boosted.chunk_id]
-        return [boosted] + rest[: max(len(results) - 1, 0)]
+        if best_in_results is not None and results and results[0].chunk_id != best_in_results.chunk_id:
+            # The winning chunk was already retrieved, just not first —
+            # reorder without a DB round-trip.
+            rest = [r for r in results if r.chunk_id != best_in_results.chunk_id]
+            return [best_in_results] + rest
+
+        return results  # already first, or no chunk mentions a semester at all
 
     # ── Context quality validation ────────────────────────────────────────────
 
