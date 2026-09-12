@@ -401,6 +401,16 @@ class RAGService:
         tuning or HyDE-for-Ollama (already rejected on latency grounds, see
         the same memory) — this only runs for the narrow query shape that
         actually needs it, no LLM/embedding call involved.
+
+        Live re-test after deploying this fix (2026-09-11) found it still
+        failed for GS-064 (Ingeniería Ambiental) while fixing GS-060
+        (Ingeniería de Sistemas): the WHERE clause below also admits every
+        untagged chunk corpus-wide, and without an ORDER BY the LIMIT 60 cut
+        is whatever order Postgres happens to return — the target program's
+        own ~10 chunks can lose out to a larger pool of unrelated untagged
+        ones before the true highest-semester chunk is ever scanned. `ORDER
+        BY (d.program = :program) DESC` guarantees the program's own rows
+        are considered first.
         """
         already_best = max((_highest_semester_marker(r.content) or 0) for r in results) if results else 0
 
@@ -412,6 +422,7 @@ class RAGService:
                 JOIN documents d ON dc.document_id = d.id
                 WHERE (d.program = :program OR d.program IS NULL OR d.program = '')
                   AND dc.content ~* 'semestre\\s+([ivxlcdm]+|\\d{1,2})\\b'
+                ORDER BY (d.program = :program) DESC
                 LIMIT 60
             """),
             {"program": program},
