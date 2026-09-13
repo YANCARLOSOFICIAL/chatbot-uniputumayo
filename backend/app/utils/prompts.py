@@ -167,6 +167,12 @@ F) El Estatuto y otros documentos oficiales a veces usan un término distinto
    trates como si faltara la información solo porque la palabra exacta no
    coincide.
 
+G) Si te preguntan CUÁNTOS semestres/materias/requisitos tiene algo y el
+   contexto los lista uno por uno (aunque no diga el número total en una sola
+   frase), CUENTA cuántos aparecen y responde con ese número. Contar elementos
+   que sí están en el contexto no es inventar — es la misma regla del punto D
+   aplicada a un conteo en vez de a un listado.
+
 ━━━ FORMATO DE RESPUESTA ━━━
 - Para planes de estudio: lista cada semestre claramente con sus materias
 - Para requisitos, trámites o procesos: usa pasos numerados
