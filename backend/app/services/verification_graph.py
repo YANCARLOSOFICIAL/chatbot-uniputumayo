@@ -98,6 +98,8 @@ NO cuenta como respaldada:
 - Agregar cualquier cifra, nombre, fecha, requisito o código que no esté literalmente
   en el contexto.
 - Afirmar algo con más seguridad de la que el contexto permite.
+- Inventar rutas de navegación web, enlaces o pasos de "cómo llegar a esto en la
+  página" que no estén literalmente en el contexto.
 
 CONTEXTO:
 {context}
