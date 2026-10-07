@@ -101,6 +101,8 @@ services:
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_DIMENSIONS: "768"
       CORS_ORIGINS: "http://localhost:3000,http://localhost:3001,http://localhost:80,http://localhost"
+      # Dev chain: client -> nginx:80 -> backend (single hop).
+      TRUSTED_PROXY_COUNT: "1"
       MAX_UPLOAD_SIZE_MB: "50"
       UPLOAD_DIR: /app/uploads
       REDIS_URL: redis://redis:6379/0

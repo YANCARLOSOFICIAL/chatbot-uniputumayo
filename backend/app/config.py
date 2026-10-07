@@ -218,10 +218,14 @@ class Settings(BaseSettings):
     port: int = 8000
     log_level: str = "info"
     cors_origins: str = "http://localhost:3000,http://localhost:3001"
-    # Number of trusted reverse-proxy hops in front of the backend (nginx = 1).
+    # Number of trusted reverse-proxy hops in front of the backend.
     # Used to pick the right entry in X-Forwarded-For for rate limiting —
-    # nginx appends the real client IP rather than replacing the header, so
-    # the trustworthy value is `trusted_proxy_count` entries from the end.
+    # proxies append rather than replace, so the trustworthy value is
+    # `trusted_proxy_count` entries from the end.
+    # Dev (browser -> nginx -> backend) = 1.
+    # Prod (browser -> outer proxy/Cloudflare -> nginx -> backend) = 2
+    # (see TRUSTED_PROXY_COUNT in docker-compose.prod.yml). A wrong value
+    # here collapses every user into one shared rate-limit bucket (429s).
     trusted_proxy_count: int = 1
 
     # Document Upload

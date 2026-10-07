@@ -187,6 +187,12 @@ services:
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_DIMENSIONS: "768"
       CORS_ORIGINS: "*"
+      # Prod chain: client -> outer proxy/Cloudflare -> nginx:8080 -> backend.
+      # nginx appends, so the real client IP is 2 hops from the end of
+      # X-Forwarded-For. With the dev default (1) every user collapsed to
+      # the proxy/gateway IP sharing one 20/min chat bucket (429s).
+      # CF-Connecting-IP (handled in rate_limit.py) covers Cloudflare too.
+      TRUSTED_PROXY_COUNT: "2"
       MAX_UPLOAD_SIZE_MB: "50"
       UPLOAD_DIR: /app/uploads
       REDIS_URL: redis://redis:6379/0
