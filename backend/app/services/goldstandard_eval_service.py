@@ -68,12 +68,23 @@ from app.schemas.rag import SearchRequest
 from app.services.chat_service import ChatService
 from app.services.rag_service import RAGService
 from app.services.verification_graph import context_for_grading, resolve_grader
+from app.providers.openai_provider import OpenAIProvider
 from app.providers.provider_factory import ProviderFactory
 from app.runtime_config import runtime_config
 from app.utils.prompts import CLARIFICATION_MARKER, REFUSAL_MARKER
 from app.utils.text_processing import normalize_for_match
 
 logger = logging.getLogger(__name__)
+
+# Dedicated OpenAI instance for the eval judge: its own pacing budget, so a
+# bulk eval run (decenas de queries secuenciales) doesn't queue behind — ni
+# delante de — el chat interactivo en el mismo lock del limiter compartido.
+# La pata de generación del eval SÍ pasa por ChatService (presupuesto
+# compartido, a propósito: mide la ruta real de producción) — por eso los
+# evals pesados siguen recomendados fuera de horas pico. Si el presupuesto
+# combinado supera el techo real de la cuenta, los reintentos reactivos del
+# SDK absorben el pico (ya existen en OpenAIProvider).
+_eval_openai_provider = OpenAIProvider()
 
 _EVAL_CONVERSATION_TITLE = "gold-eval"
 
@@ -309,9 +320,9 @@ async def _judge_hallucination(
     verification loop's own grader (see verification_graph.py's `_grade`).
 
     Rate-limit retry used to be hand-rolled here — moved into
-    `OpenAIProvider` itself (2026-08-22) so every OpenAI call site (this
-    judge, verification grading, chat generation) shares one pacing budget
-    and one retry policy instead of three independent, uncoordinated ones.
+    `OpenAIProvider` itself (2026-08-22). The judge paces on its own
+    `_eval_openai_provider` budget (module-level above), not the interactive
+    chat budget, so bulk evals don't starve live users on the same lock.
 
     Returns `(hallucinated, reason)` — the reason is the judge's own short
     explanation (whatever preceded its verdict line), previously discarded.
@@ -326,7 +337,11 @@ async def _judge_hallucination(
     `grade_reason`) makes every future run self-diagnosing.
     """
     grader_provider_name, grader_model = resolve_grader(provider_name, model)
-    provider = ProviderFactory.get_provider(grader_provider_name)
+    provider = (
+        _eval_openai_provider
+        if grader_provider_name == "openai"
+        else ProviderFactory.get_provider(grader_provider_name)
+    )
     max_context_chars = settings.chunk_size * 4 * settings.rag_top_k
     result = await provider.generate(
         messages=[{"role": "user", "content": _JUDGE_PROMPT.format(

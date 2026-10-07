@@ -84,6 +84,37 @@ async def test_token_rate_limiter_waits_when_budget_exhausted(monkeypatch):
     assert slept[0] > 0
 
 
+async def test_token_rate_limiter_settle_frees_over_reserved_budget():
+    limiter = _TokenRateLimiter(tokens_per_minute=100)
+    lease = await limiter.reserve(90)  # books almost the whole budget
+    await limiter.settle(lease, 10)  # real usage was far smaller
+    assert sum(t for _, t in limiter._window) == 10
+    await limiter.reserve(80)  # fits only because settle freed the phantom tokens
+    assert sum(t for _, t in limiter._window) == 90
+
+
+async def test_token_rate_limiter_release_drops_failed_calls():
+    limiter = _TokenRateLimiter(tokens_per_minute=100)
+    lease = await limiter.reserve(90)
+    await limiter.release(lease)
+    assert limiter._window == []
+    await limiter.reserve(100)  # full budget available again
+    assert sum(t for _, t in limiter._window) == 100
+
+
+async def test_token_rate_limiter_times_out_instead_of_hanging(monkeypatch):
+    limiter = _TokenRateLimiter(tokens_per_minute=100, wait_timeout_s=10)
+    await limiter.reserve(90)
+
+    async def fake_sleep(seconds):
+        # Window never ages out — the wait must be cut short by the timeout.
+        pass
+
+    monkeypatch.setattr(mod.asyncio, "sleep", fake_sleep)
+    with pytest.raises(mod.TokenBudgetExhausted):
+        await limiter.reserve(50)
+
+
 async def test_token_rate_limiter_never_wedges_on_a_single_oversized_request():
     # A lone request bigger than the whole budget must still go through —
     # pacing prevents pile-ups, it shouldn't deadlock a legitimate request.
@@ -121,11 +152,25 @@ async def test_generate_paces_through_the_shared_rate_limiter(monkeypatch):
 
     reserved: list[int] = []
 
-    async def fake_reserve(estimated_tokens):
-        reserved.append(estimated_tokens)
+    class FakeLimiter:
+        async def reserve(self, estimated_tokens):
+            reserved.append(estimated_tokens)
+            return ["lease"]
 
-    monkeypatch.setattr(provider._rate_limiter, "reserve", fake_reserve)
+        async def settle(self, lease, actual_tokens):
+            pass
+
+        async def release(self, lease):
+            pass
+
+    monkeypatch.setattr(provider, "_limiter_for", lambda model: FakeLimiter())
     await provider.generate(
         messages=[{"role": "user", "content": "x" * 40}], model="gpt-4.1", max_tokens=20,
     )
     assert reserved == [(40 // 4) + 20]
+
+
+def test_limiter_pools_are_split_per_model():
+    provider = OpenAIProvider()
+    assert provider._limiter_for("gpt-5.4-mini") is provider._limiter_for("gpt-5.4-mini")
+    assert provider._limiter_for("gpt-5.4-mini") is not provider._limiter_for("gpt-4.1-mini")

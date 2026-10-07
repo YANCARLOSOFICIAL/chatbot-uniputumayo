@@ -151,6 +151,11 @@ class Settings(BaseSettings):
     # que es más barata y no genera ruido en logs. Margen del 10% por
     # imprecisión en la estimación de tokens (chars/4, sin tokenizer real).
     openai_tpm_limit: int = 27000
+    # Espera máxima en la cola del presupuesto OpenAI antes de devolver 429
+    # ("sistema ocupado, reintenta") en vez de colgar el spinner minutos con
+    # 5+ usuarios simultáneos (~9k tokens por mensaje frente a 27k/minuto ≈
+    # 3 mensajes/minuto). TokenBudgetExhausted -> 429, ver main.py.
+    openai_budget_wait_timeout_seconds: float = 120.0
 
     # Answer cache: sirve respuestas completas ya generadas para preguntas con
     # significado similar (no solo texto exacto), saltándose RAG + LLM por

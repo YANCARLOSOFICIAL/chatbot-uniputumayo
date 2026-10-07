@@ -174,7 +174,11 @@ class TestJudgeHallucinationContextSizing:
         assert len(context) < settings.chunk_size * 4 * settings.rag_top_k
 
         provider = FakeRateLimitedProvider(failures_before_success=0, verdict="NO")
-        monkeypatch.setattr(ProviderFactory, "get_provider", lambda name: provider)
+        # The judge paces on its own eval provider instance (not the shared
+        # factory singleton) so bulk evals don't starve interactive chat.
+        monkeypatch.setattr(
+            "app.services.goldstandard_eval_service._eval_openai_provider", provider,
+        )
 
         await _judge_hallucination("openai", "gpt-4.1", "query", context, "answer")
 
@@ -197,7 +201,10 @@ class TestJudgeHallucinationCapturesReason:
             async def generate(self, **kwargs):
                 return {"content": "El contexto sí confirma el dato.\nSI"}
 
-        monkeypatch.setattr(ProviderFactory, "get_provider", lambda name: FakeJudgeProvider())
+        monkeypatch.setattr(
+            "app.services.goldstandard_eval_service._eval_openai_provider",
+            FakeJudgeProvider(),
+        )
 
         hallucinated, reason = await _judge_hallucination(
             "openai", "gpt-4.1", "query", "context", "answer",
@@ -212,7 +219,10 @@ class TestJudgeHallucinationCapturesReason:
             async def generate(self, **kwargs):
                 return {"content": "NO"}
 
-        monkeypatch.setattr(ProviderFactory, "get_provider", lambda name: FakeJudgeProvider())
+        monkeypatch.setattr(
+            "app.services.goldstandard_eval_service._eval_openai_provider",
+            FakeJudgeProvider(),
+        )
 
         hallucinated, reason = await _judge_hallucination(
             "openai", "gpt-4.1", "query", "context", "answer",
@@ -269,17 +279,20 @@ class TestJudgeHallucinationUsesIndependentGrader:
         monkeypatch.setattr(runtime_config, "openai_api_key", "sk-real-key")
         monkeypatch.setattr(runtime_config, "openai_default_model", "gpt-5.4-mini")
 
-        requested_names = []
+        provider = FakeRateLimitedProvider(failures_before_success=0, verdict="NO")
+        monkeypatch.setattr(
+            "app.services.goldstandard_eval_service._eval_openai_provider", provider,
+        )
 
-        def get_provider(name):
-            requested_names.append(name)
-            return FakeRateLimitedProvider(failures_before_success=0, verdict="NO")
+        def fail_if_factory_used(name):
+            raise AssertionError(f"judge must use the dedicated eval provider, not the factory ({name})")
 
-        monkeypatch.setattr(ProviderFactory, "get_provider", get_provider)
+        monkeypatch.setattr(ProviderFactory, "get_provider", fail_if_factory_used)
 
         await _judge_hallucination("ollama", "qwen2.5:7b", "query", "context", "answer")
 
-        assert requested_names == ["openai"]
+        assert provider.call_count == 1
+        assert provider.calls[0]["model"] == "gpt-5.4-mini"
 
     @pytest.mark.asyncio
     async def test_falls_back_to_self_when_openai_not_configured(self, monkeypatch):

@@ -6,11 +6,13 @@ from datetime import datetime, timezone, timedelta
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from sqlalchemy import select, delete as sql_delete
 
 from app.config import settings
+from app.providers.openai_provider import TokenBudgetExhausted
 from app.routers import health, chat, rag, llm, documents, config, auth, audio, analytics, taxonomy, rag_eval, goldstandard_eval
 from app.middleware.error_handler import global_exception_handler
 from app.utils.rate_limit import limiter
@@ -329,6 +331,20 @@ app = FastAPI(
 # Rate limiter
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+async def _token_budget_exhausted_handler(request, exc: TokenBudgetExhausted):
+    """Shared OpenAI token budget saturated — fail fast with 429 instead of
+    hanging the chat spinner for minutes (see openai_provider._TokenRateLimiter
+    and settings.openai_budget_wait_timeout_seconds)."""
+    return JSONResponse(
+        status_code=429,
+        content={"detail": str(exc)},
+        headers={"Retry-After": "60"},
+    )
+
+
+app.add_exception_handler(TokenBudgetExhausted, _token_budget_exhausted_handler)
 
 # CORS
 origins = [origin.strip() for origin in settings.cors_origins.split(",")]
