@@ -236,6 +236,46 @@ class TestAnswerCacheEntityGuard:
             entry, "¿Qué materias incluye la Tecnología en Gestión Empresarial?",
         ) is False
 
+    def test_price_synonym_paraphrase_passes_title_fallback(self):
+        # Confirmed live 2026-10-12: "cuales son los costos de inscripcion y
+        # matricula...?" answered and cached, but the same question with
+        # "precios"/"valores” was refused — logged as "guard rejected hit
+        # (similarity=0.973, entity mismatch)". The synonym breaks the
+        # question-overlap subset check ("precios" is not among the cached
+        # question's words) and the title fallback (the query never names
+        # "resolucion"/"pecuniarios"), rejecting a hit the cosine similarity
+        # had already approved. Canonicalizing price synonyms to "costo" on
+        # both sides restores the "same question" verdict.
+        entry = self._entry(
+            [{
+                "program": None, "faculty": None,
+                "document_title": "Resolucion 1056 derechos pecuniarios 2026",
+            }],
+            question="cuales son los costos de inscripcion y matricula del ciclo tecnologico?",
+        )
+        assert AsyncAnswerCache._entity_guard_passes(
+            entry, "cuales son los precios de inscripcion y matricula del ciclo tecnologico?"
+        ) is True
+        assert AsyncAnswerCache._entity_guard_passes(
+            entry, "cuales son los valores de inscripcion y matricula del ciclo tecnologico?"
+        ) is True
+
+    def test_price_canonicalization_does_not_wave_through_unrelated_question(self):
+        # "valores institucionales" also canonicalizes "valores"->"costo",
+        # but the remaining words ("institucionales") still break the subset
+        # check and share nothing with the title — a genuinely different
+        # question must still be rejected.
+        entry = self._entry(
+            [{
+                "program": None, "faculty": None,
+                "document_title": "Resolucion 1056 derechos pecuniarios 2026",
+            }],
+            question="cuales son los costos de inscripcion y matricula del ciclo tecnologico?",
+        )
+        assert AsyncAnswerCache._entity_guard_passes(
+            entry, "cuales son los valores institucionales de uniputumayo?"
+        ) is False
+
 
 class TestAnswerCacheSemesterGuard:
     def _entry(self, question):

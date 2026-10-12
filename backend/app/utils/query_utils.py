@@ -312,7 +312,12 @@ _ALREADY_CANONICAL_RE = re.compile(
     re.IGNORECASE,
 )
 
-_COST_SYNONYM_EXPANSION = "costos derechos pecuniarios"
+# Appended to the full-text query only (see expand_cost_synonyms). Covers the
+# three literal wordings found in the corpus: "costos" (FICB024), "derechos
+# pecuniarios" (resolutions) and "valor" (the Tríptico Oferta Académica price
+# table — confirmed live 2026-10-12, the served answer quotes "Matrícula o
+# valor total del semestre financiero" verbatim).
+_COST_SYNONYM_EXPANSION = "costos derechos pecuniarios valor"
 
 
 def expand_cost_synonyms(query: str) -> str:
@@ -333,6 +338,43 @@ def expand_cost_synonyms(query: str) -> str:
     if _VALOR_WORD_RE.search(query) and _PECUNIARY_CONTEXT_RE.search(query):
         return f"{query} {_COST_SYNONYM_EXPANSION}"
     return query
+
+
+# Canonical form for price-synonym words in word-set comparisons (the
+# answer-cache entity guard — see cache.AsyncAnswerCache._entity_guard_passes).
+# Same live case as expand_cost_synonyms above, one layer downstream:
+# 2026-10-12, "¿cuáles son los costos de inscripción y matrícula...?" answered
+# and cached, but "...los precios..." was refused. The guard's "same
+# question" subset check compares the new query's significant words against
+# the cached question's — "precios" ∉ {"costos", ...} breaks the subset, and
+# the title fallback ("resolucion"/"pecuniarios" never named by the query)
+# rejects a hit the cosine similarity had already approved (logged live:
+# "guard rejected hit (similarity=0.973, entity mismatch)"). Mapping every
+# price synonym to "costo" makes the guard see the same question it is.
+# Normalized (accent-stripped, lowercase) forms only, matching
+# _significant_words output — callers must canonicalize AFTER extracting
+# significant words, not on raw text.
+_PRICE_SYNONYM_CANONICAL = "costo"
+_PRICE_SYNONYM_WORDS: frozenset[str] = frozenset({
+    "precio", "precios", "valor", "valores", "tarifa", "tarifas",
+    "cuesta", "cuestan", "vale", "valen", "costo", "costos",
+})
+
+
+def canonicalize_price_words(words: set[str]) -> set[str]:
+    """Map every price-synonym word in `words` to "costo", leave the rest.
+
+    Pure set transformation for guard comparisons only — never applied to text
+    shown to the LLM or embedded for retrieval. Safe against the ambiguous
+    "valores" (principles vs prices): the guard still requires cosine
+    similarity >= threshold AND (question-subset OR title/entity overlap),
+    and a genuinely different question ("valores institucionales") still
+    breaks both checks on its remaining words — see the tests.
+    """
+    return {
+        _PRICE_SYNONYM_CANONICAL if w in _PRICE_SYNONYM_WORDS else w
+        for w in words
+    }
 
 
 def keyword_score(query: str, text: str) -> float:

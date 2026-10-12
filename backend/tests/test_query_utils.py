@@ -1,7 +1,7 @@
 from app.utils.query_utils import (
     detect_temperature, is_greeting, keyword_score,
     is_varying_topic_query, mentions_entity, is_last_semester_query,
-    expand_cost_synonyms,
+    expand_cost_synonyms, canonicalize_price_words,
 )
 
 
@@ -133,6 +133,7 @@ class TestExpandCostSynonyms:
         q = self.REPORTED_QUERY.replace("costos", "precios")
         expanded = expand_cost_synonyms(q)
         assert "costos" in expanded and "derechos pecuniarios" in expanded
+        assert " valor" in expanded  # Tríptico price table wording ("valor total")
         assert expanded.startswith(q)  # expansion appends, never rewrites
 
     def test_valores_paraphrase_appends_canonical_terms(self):
@@ -173,6 +174,20 @@ class TestExpandCostSynonyms:
     def test_valor_singular_with_matricula_expands(self):
         expanded = expand_cost_synonyms("¿cuál es el valor de la matrícula?")
         assert "costos" in expanded
+
+
+class TestCanonicalizePriceWords:
+    def test_synonyms_map_to_costo(self):
+        assert canonicalize_price_words({"precios", "matricula"}) == {"costo", "matricula"}
+        assert canonicalize_price_words({"valores", "ciclo"}) == {"costo", "ciclo"}
+        assert canonicalize_price_words({"tarifas"}) == {"costo"}
+        assert canonicalize_price_words({"cuesta", "vale"}) == {"costo"}
+
+    def test_costo_itself_is_stable(self):
+        assert canonicalize_price_words({"costos", "matricula"}) == {"costo", "matricula"}
+
+    def test_unrelated_words_untouched(self):
+        assert canonicalize_price_words({"materias", "semestre"}) == {"materias", "semestre"}
 
 
 class TestMentionsEntity:

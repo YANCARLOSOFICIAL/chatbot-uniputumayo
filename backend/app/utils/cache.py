@@ -18,7 +18,7 @@ import logging
 import re
 import time
 
-from app.utils.query_utils import _normalize, _significant_words, mentions_entity
+from app.utils.query_utils import _normalize, _significant_words, mentions_entity, canonicalize_price_words
 
 logger = logging.getLogger(__name__)
 
@@ -344,15 +344,24 @@ class AsyncAnswerCache:
         check either way, since that introduces a new significant word not
         in the cached question — but that's not the only path to a
         collision, hence keeping the field check unconditional.
+
+        Price-synonym paraphrases ("precios"/"valores" for a cached "costos"
+        question — confirmed live 2026-10-12 via "guard rejected hit
+        (similarity=0.973, entity mismatch)" on the byte-identical question
+        with one synonym swapped) are canonicalized to "costo" on both sides
+        before comparing, so a one-synonym swap doesn't break the subset
+        check the way a genuinely new word (another program's name) does.
         """
         sources = entry.get("sources") or []
-        query_words = _significant_words(query_text)
-        cached_question_words = _significant_words(entry.get("question", ""))
+        query_words = canonicalize_price_words(_significant_words(query_text))
+        cached_question_words = canonicalize_price_words(_significant_words(entry.get("question", "")))
         # `question_overlap` deliberately compares the RAW query words, not
         # the alias-expanded set below — it's a "same question as the one
         # that filled this cache entry" signal, and alias expansion only
         # ever adds words, which could accidentally break that subset check
-        # rather than help it.
+        # rather than help it. (Price-synonym canonicalization above is not
+        # expansion — it renames in place, so the subset relation is
+        # preserved, just synonym-tolerant.)
         question_overlap = bool(query_words) and query_words <= cached_question_words
 
         # Expand with each named ciclo-tecnológico alias's canonical program
@@ -383,7 +392,7 @@ class AsyncAnswerCache:
         if not checked_any_field and not question_overlap:
             titles = {s.get("document_title") for s in sources if s.get("document_title")}
             if len(titles) == 1:
-                entity_words = _significant_words(next(iter(titles)))
+                entity_words = canonicalize_price_words(_significant_words(next(iter(titles))))
                 if entity_words and not (entity_words & field_check_words):
                     return False
 
