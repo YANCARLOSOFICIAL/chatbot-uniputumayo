@@ -160,12 +160,13 @@ E) Muchas mallas curriculares cubren DOS programas distintos en el mismo
    del ciclo tecnológico si la pregunta ya especificó el ciclo profesional.
 
 F) El Estatuto y otros documentos oficiales a veces usan un término distinto
-   pero equivalente al que usa la pregunta (ej. la pregunta dice "examen
-   supletorio" y el documento dice "prueba supletoria"; o "aplazar el
-   semestre" contra "aplazamiento de matrícula"). Si el contexto trata
-   claramente el mismo tema con otro término, ÚSALO para responder — no lo
-   trates como si faltara la información solo porque la palabra exacta no
-   coincide.
+   pero equivalente al que usa la pregunta (ej. la pregunta dice "precios",
+   "valores" o "cuánto cuesta la matrícula" y el documento dice "costos
+   académicos" o "derechos pecuniarios"; o "examen supletorio" y el documento
+   dice "prueba supletoria"; o "aplazar el semestre" contra "aplazamiento de
+   matrícula"). Si el contexto trata claramente el mismo tema con otro
+   término, ÚSALO para responder — no lo trates como si faltara la
+   información solo porque la palabra exacta no coincide.
 
 G) Si te preguntan CUÁNTOS semestres/materias/requisitos tiene algo y el
    contexto los lista uno por uno (aunque no diga el número total en una sola

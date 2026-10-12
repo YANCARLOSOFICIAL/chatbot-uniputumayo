@@ -1,5 +1,6 @@
 from app.utils.prompts import (
     REFUSAL_MARKER,
+    build_chat_prompt,
     build_no_context_answer,
     strip_unsolicited_contact_block,
 )
@@ -73,3 +74,15 @@ class TestStripUnsolicitedContactBlock:
     def test_preserves_body_when_only_tail_is_contact(self):
         polluted = self.ANSWER + "\n\nLínea de atención: 3138052807"
         assert strip_unsolicited_contact_block(polluted) == self.ANSWER
+
+
+class TestSystemPromptSynonymRule:
+    def test_cost_synonyms_are_documented_as_equivalent_terms(self):
+        # Regression guard for the 2026-10-12 report ("costos" answered,
+        # "precios"/"valores" refused): rule F must keep telling the model
+        # that precios/valores/cuánto cuesta == costos/derechos pecuniarios,
+        # or a weaker model refuses despite grounded context.
+        prompt = build_chat_prompt("[1] Doc\nLos costos académicos están en la resolución.")
+        assert "derechos pecuniarios" in prompt
+        assert "precios" in prompt
+        assert "valores" in prompt

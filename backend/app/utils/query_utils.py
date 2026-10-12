@@ -271,6 +271,70 @@ def is_greeting(query: str) -> bool:
     return len(query.split()) <= 6
 
 
+# Students ask about pecuniary matters with interchangeable words — "costos",
+# "precios", "valores", "tarifas", "cuánto cuesta/vale" — while the knowledge
+# base writes them literally as "costos" / "derechos pecuniarios" (e.g. the
+# FICB024 response and Resolución 1056 de derechos pecuniarios). Confirmed
+# live 2026-10-12: "¿cuáles son los costos de inscripción y matrícula del
+# ciclo tecnológico...?" answered fine, but swapping "costos" for "precios"
+# or "valores" got a "no tengo información" refusal. The full-text search leg
+# (rag_service._keyword_search) stems precio->preci / costo->cost /
+# valor->valor as distinct Spanish lexemes, so the synonym query loses the
+# true chunk's strongest term matches, drops in ts_rank_cd, and falls out of
+# the LIMIT against a full production corpus — while the "costos" phrasing
+# keeps them. Vector search is semantic and doesn't need this; the exact-match
+# leg is the one that deterministically breaks on synonyms.
+_COST_PRICE_WORD_RE = re.compile(
+    r"\b(precios?|tarifas?|cuesta(?:n)?|vale(?:n)?)\b",
+    re.IGNORECASE,
+)
+# "valor/valores" alone is ambiguous ("valores institucionales" = principles,
+# not prices) — only treated as pecuniary beside an explicit enrollment/money
+# context word, so a principles question never gets price terms appended.
+# NOTE: spelled `valor(?:es)?`, NOT `valores?` — the latter parses as
+# "valore"+`s?` and never matches the singular "valor" (same irregular-plural
+# trap _FACTUAL_PATTERNS documents for valor->valores).
+_VALOR_WORD_RE = re.compile(r"\bvalor(?:es)?\b", re.IGNORECASE)
+_PECUNIARY_CONTEXT_RE = re.compile(
+    r"\b("
+    r"matr[ií]culas?|matricular|inscripci[oó]n(?:es)?|inscribir|"
+    r"pagos?|pagar|derechos?|pecuniarios?|financiaci[oó]n|becas?|"
+    r"subsidios?|descuentos?|cuotas?|semestres?|ciclos?|programas?|"
+    r"carreras?|cu[aá]nto|costos?|precios?|tarifas?|cuesta(?:n)?|vale(?:n)?"
+    r")\b",
+    re.IGNORECASE,
+)
+# The query already carries the canonical wording — nothing to add (also
+# keeps today's working "costos" phrasing byte-identical, so its retrieval
+# behavior and cache keys don't shift at all).
+_ALREADY_CANONICAL_RE = re.compile(
+    r"\b(costos?|derechos?|pecuniarios?)\b",
+    re.IGNORECASE,
+)
+
+_COST_SYNONYM_EXPANSION = "costos derechos pecuniarios"
+
+
+def expand_cost_synonyms(query: str) -> str:
+    """Append canonical price terms to a pecuniary query phrased with a synonym.
+
+    Expansion (append), never replacement: the original words stay, so nothing
+    is lost if the corpus happens to use the synonym literally too, and
+    non-pecuniary queries are returned byte-identical (zero behavior change
+    for all other traffic — see _ALREADY_CANONICAL_RE / _VALOR_WORD_RE above).
+
+    Meant for the exact-match retrieval leg only (rag_service._keyword_search),
+    not for what's shown to the LLM or used as a cache key.
+    """
+    if _ALREADY_CANONICAL_RE.search(query):
+        return query
+    if _COST_PRICE_WORD_RE.search(query):
+        return f"{query} {_COST_SYNONYM_EXPANSION}"
+    if _VALOR_WORD_RE.search(query) and _PECUNIARY_CONTEXT_RE.search(query):
+        return f"{query} {_COST_SYNONYM_EXPANSION}"
+    return query
+
+
 def keyword_score(query: str, text: str) -> float:
     """Simple TF-style keyword overlap score [0, 1] between query and chunk text.
 

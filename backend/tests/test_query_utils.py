@@ -1,6 +1,7 @@
 from app.utils.query_utils import (
     detect_temperature, is_greeting, keyword_score,
     is_varying_topic_query, mentions_entity, is_last_semester_query,
+    expand_cost_synonyms,
 )
 
 
@@ -114,6 +115,64 @@ class TestIsVaryingTopicQuery:
         # No collective quantifier — this one SHOULD still gate as varying.
         assert is_varying_topic_query("¿Qué título otorga el programa?") is True
         assert is_varying_topic_query("¿Cuáles son las materias del pensum?") is True
+
+
+class TestExpandCostSynonyms:
+    """See query_utils.expand_cost_synonyms — confirmed live 2026-10-12 that
+    "¿cuáles son los costos de inscripción y matrícula...?" answered while the
+    same question with "precios"/"valores" got a "no tengo información"
+    refusal, because the corpus writes "costos"/"derechos pecuniarios"
+    literally and Spanish stemming treats those as distinct lexemes."""
+
+    REPORTED_QUERY = (
+        "cuales son los costos de inscripcion y matricula del ciclo "
+        "tecnologico y tecnico profesional?"
+    )
+
+    def test_precios_paraphrase_appends_canonical_terms(self):
+        q = self.REPORTED_QUERY.replace("costos", "precios")
+        expanded = expand_cost_synonyms(q)
+        assert "costos" in expanded and "derechos pecuniarios" in expanded
+        assert expanded.startswith(q)  # expansion appends, never rewrites
+
+    def test_valores_paraphrase_appends_canonical_terms(self):
+        q = self.REPORTED_QUERY.replace("costos", "valores")
+        expanded = expand_cost_synonyms(q)
+        assert "costos" in expanded and "derechos pecuniarios" in expanded
+
+    def test_reported_working_phrasing_is_returned_unchanged(self):
+        # The "costos" phrasing already works today — byte-identical means its
+        # retrieval behavior and cache keys don't shift at all.
+        assert expand_cost_synonyms(self.REPORTED_QUERY) == self.REPORTED_QUERY
+
+    def test_cuanto_cuesta_matricula_expands(self):
+        expanded = expand_cost_synonyms("¿cuánto cuesta la matrícula?")
+        assert "costos" in expanded and "derechos pecuniarios" in expanded
+
+    def test_cuanto_vale_semestre_expands(self):
+        expanded = expand_cost_synonyms("¿cuánto vale el semestre?")
+        assert "costos" in expanded
+
+    def test_tarifas_expands(self):
+        expanded = expand_cost_synonyms("¿cuáles son las tarifas de matrícula?")
+        assert "costos" in expanded
+
+    def test_valores_institucionales_does_not_expand(self):
+        # "valores" = principles here, not prices — no pecuniary context word.
+        q = "¿cuáles son los valores institucionales de Uniputumayo?"
+        assert expand_cost_synonyms(q) == q
+
+    def test_mision_vision_does_not_expand(self):
+        q = "¿cuál es la misión y visión de Uniputumayo?"
+        assert expand_cost_synonyms(q) == q
+
+    def test_unrelated_factual_query_does_not_expand(self):
+        q = "¿cuáles son las materias del segundo semestre?"
+        assert expand_cost_synonyms(q) == q
+
+    def test_valor_singular_with_matricula_expands(self):
+        expanded = expand_cost_synonyms("¿cuál es el valor de la matrícula?")
+        assert "costos" in expanded
 
 
 class TestMentionsEntity:

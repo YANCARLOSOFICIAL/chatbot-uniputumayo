@@ -1,9 +1,12 @@
+import hashlib
+import json
 import uuid
+from types import SimpleNamespace
 
 import pytest
 
 from app.config import settings
-from app.schemas.rag import SearchResultItem
+from app.schemas.rag import SearchRequest, SearchResultItem
 from app.services.rag_service import RAGService, _highest_semester_marker, _roman_to_int
 
 
@@ -354,3 +357,91 @@ class TestBoostLastSemesterChunk:
 
         assert result[0].chunk_id == buried_correct.chunk_id
         assert len(result) == len(items)
+
+
+class _ScoredRow(_FakeRow):
+    def __init__(self, *args, score=0.9, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.score = score
+
+
+class _SearchFakeDB(_FakeDB):
+    def add(self, *args, **kwargs):
+        pass  # RetrievalLog write — not under test
+
+    async def flush(self):
+        pass
+
+
+class _NoopCache:
+    def make_key(self, **kwargs):
+        raw = json.dumps(kwargs, sort_keys=True, default=str)
+        return hashlib.sha256(raw.encode()).hexdigest()
+
+    async def get(self, key):
+        return None
+
+    async def set(self, key, value):
+        pass
+
+
+class _FakeLLMService:
+    async def embed(self, request):
+        return SimpleNamespace(embeddings=[[0.1] * 8])
+
+
+class TestSearchKeywordExpansion:
+    """search() must feed the full-text leg an expanded query when the user
+    phrases a pecuniary question with a synonym ("precios"/"valores"), while
+    leaving the already-working "costos" phrasing untouched — confirmed live
+    2026-10-12 (costos answered, precios/valores refused). The vector/HyDE
+    path is semantic and keeps the original query; only the exact-match FTS
+    leg (Spanish stemming: preci vs cost vs valor) needs the canonical terms.
+    """
+
+    async def _run_search(self, monkeypatch, query):
+        captured = {}
+
+        async def fake_keyword_search(self, query_text, *args, **kwargs):
+            captured["query_text"] = query_text
+            return []
+
+        monkeypatch.setattr(RAGService, "_keyword_search", fake_keyword_search)
+        monkeypatch.setattr("app.services.rag_service.LLMService", _FakeLLMService)
+        monkeypatch.setattr("app.services.rag_service.rag_cache", _NoopCache())
+        service = RAGService(db=_SearchFakeDB([
+            _ScoredRow(uuid.uuid4(), "recibo de pago por derechos de matrícula"),
+        ]))
+        response = await service.search(
+            SearchRequest(query=query, hyde_provider_override="ollama")
+        )
+        assert len(response.results) == 1  # vector leg still works
+        return captured["query_text"]
+
+    @pytest.mark.asyncio
+    async def test_precios_query_reaches_fts_expanded(self, monkeypatch):
+        fts_query = await self._run_search(
+            monkeypatch,
+            "cuales son los precios de inscripcion y matricula del ciclo tecnologico?",
+        )
+        assert "costos" in fts_query
+        assert "derechos pecuniarios" in fts_query
+
+    @pytest.mark.asyncio
+    async def test_valores_query_reaches_fts_expanded(self, monkeypatch):
+        fts_query = await self._run_search(
+            monkeypatch,
+            "cuales son los valores de inscripcion y matricula del ciclo tecnologico?",
+        )
+        assert "costos" in fts_query
+        assert "derechos pecuniarios" in fts_query
+
+    @pytest.mark.asyncio
+    async def test_costos_query_reaches_fts_unchanged(self, monkeypatch):
+        query = "cuales son los costos de inscripcion y matricula del ciclo tecnologico?"
+        assert await self._run_search(monkeypatch, query) == query
+
+    @pytest.mark.asyncio
+    async def test_unrelated_query_reaches_fts_unchanged(self, monkeypatch):
+        query = "cuales son las materias del segundo semestre?"
+        assert await self._run_search(monkeypatch, query) == query

@@ -14,7 +14,7 @@ from app.models.retrieval_log import RetrievalLog
 from app.providers.provider_factory import ProviderFactory
 from app.runtime_config import runtime_config
 from app.utils.cache import rag_cache
-from app.utils.query_utils import is_last_semester_query
+from app.utils.query_utils import is_last_semester_query, expand_cost_synonyms
 
 logger = logging.getLogger(__name__)
 
@@ -636,10 +636,22 @@ class RAGService:
         # similarity found. Pure-vector retrieval can miss chunks that share
         # exact terms (program names, codes) with the query but whose overall
         # embedding drifts below threshold.
+        #
+        # The query text is first passed through expand_cost_synonyms():
+        # students say "precios"/"valores"/"tarifas"/"cuánto cuesta" while the
+        # corpus writes "costos"/"derechos pecuniarios" literally, and Spanish
+        # stemming maps those to distinct lexemes (preci vs cost vs valor) —
+        # without the expansion the true chunk loses its strongest term
+        # matches and can fall out of the LIMIT on a full corpus (confirmed
+        # live 2026-10-12: "costos de inscripción y matrícula..." answered,
+        # "precios/valores de ..." refused). Vector/HyDE/reranker keep the
+        # original query (semantic, synonym-tolerant); only this exact-match
+        # leg needs the canonical terms appended. Returns the input unchanged
+        # for non-pecuniary queries, so nothing else shifts.
         fts_candidates: list[SearchResultItem] = []
         try:
             fts_candidates = await self._keyword_search(
-                request.query, where_clause, params, exclude_ids=seen_chunk_ids,
+                expand_cost_synonyms(request.query), where_clause, params, exclude_ids=seen_chunk_ids,
                 limit=request.top_k,
             )
         except Exception as e:
