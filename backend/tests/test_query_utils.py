@@ -1,4 +1,5 @@
 from app.utils.query_utils import (
+    is_pecuniary_query,
     detect_temperature, is_greeting, keyword_score,
     is_varying_topic_query, mentions_entity, is_last_semester_query,
     expand_cost_synonyms, canonicalize_price_words,
@@ -254,3 +255,27 @@ class TestIsLastSemesterQuery:
 
     def test_unrelated_query_does_not_match(self):
         assert is_last_semester_query("¿Cuáles son los requisitos de admisión?") is False
+
+
+class TestIsPecuniaryQuery:
+    # Live 2026-10-12: these three phrasings of the same cost question got
+    # pensum chunks in 4-6 of their top-10 retrieval slots; see
+    # is_pecuniary_query for why they must exclude document_type='pensum'.
+    def test_canonical_cost_wording(self):
+        assert is_pecuniary_query("¿cuáles son los costos de inscripción y matrícula del ciclo tecnológico?")
+
+    def test_colloquial_pay_wording(self):
+        assert is_pecuniary_query("cuánto toca pagar para entrar al ciclo tecnológico?")
+
+    def test_valor_with_enrollment_context(self):
+        assert is_pecuniary_query("qué valor tiene el semestre en una tecnología?")
+
+    def test_price_synonyms(self):
+        assert is_pecuniary_query("¿cuánto cuesta estudiar ingeniería de sistemas?")
+        assert is_pecuniary_query("¿qué precio tiene la inscripción?")
+
+    def test_institutional_values_are_not_pecuniary(self):
+        assert not is_pecuniary_query("¿cuáles son los valores institucionales de la universidad?")
+
+    def test_curriculum_question_is_not_pecuniary(self):
+        assert not is_pecuniary_query("¿qué materias tiene el primer semestre de ingeniería de sistemas?")

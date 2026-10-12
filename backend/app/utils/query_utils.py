@@ -320,6 +320,39 @@ _ALREADY_CANONICAL_RE = re.compile(
 _COST_SYNONYM_EXPANSION = "costos derechos pecuniarios valor"
 
 
+# "pagar"/"pagos" aren't in _COST_PRICE_WORD_RE (that list feeds the FTS
+# synonym expansion, where appending price terms to "¿cómo pago la
+# matrícula?" would be noise) but they are an unmistakable pecuniary signal
+# for the retrieval-scope decision below.
+_PAYMENT_WORD_RE = re.compile(r"\b(pagar|pagos?|pague|pagu[eé]n|inscripci[oó]n(?:es)?|matr[ií]culas?)\b", re.IGNORECASE)
+
+
+def is_pecuniary_query(query: str) -> bool:
+    """True if the query is about money — costs, prices, enrollment fees,
+    how/how much to pay. Mirrors `is_procedural_query`'s role for
+    `ChatService._run_rag`'s `exclude_document_type='pensum'` filter: the
+    answer to any of these lives in the Tríptico de oferta / resoluciones de
+    derechos pecuniarios / FICB024, never in a curriculum document, yet the
+    curriculum documents flood the candidate pool for sharing "semestre",
+    "ciclo tecnológico" or a program name. Confirmed live 2026-10-12 via the
+    admin /rag/search endpoint: for "¿cuánto toca pagar para entrar al ciclo
+    tecnológico?" and "¿qué valor tiene el semestre en una tecnología?",
+    4–6 of the top-10 results were pensum chunks and the Tríptico (the only
+    document with the prices) was not in the top 10 at all; for the
+    canonical "costos de inscripción y matrícula..." wording it reached
+    rank 10 of 10 — found by the FTS leg alone, score 0.35.
+
+    Same ambiguity guard as expand_cost_synonyms: "valor/valores" counts only
+    beside an explicit enrollment/money word, so "¿cuáles son los valores
+    institucionales?" is NOT pecuniary.
+    """
+    if _ALREADY_CANONICAL_RE.search(query) or _COST_PRICE_WORD_RE.search(query):
+        return True
+    if _VALOR_WORD_RE.search(query) and _PECUNIARY_CONTEXT_RE.search(query):
+        return True
+    return bool(_PAYMENT_WORD_RE.search(query))
+
+
 def expand_cost_synonyms(query: str) -> str:
     """Append canonical price terms to a pecuniary query phrased with a synonym.
 

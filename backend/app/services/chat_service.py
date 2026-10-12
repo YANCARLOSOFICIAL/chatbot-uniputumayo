@@ -32,7 +32,8 @@ from app.utils.prompts import (
     CLARIFICATION_MARKER, build_clarification_message, strip_unsolicited_contact_block,
 )
 from app.utils.query_utils import (
-    detect_temperature, is_greeting, is_varying_topic_query, is_procedural_query, mentions_entity,
+    detect_temperature, is_greeting, is_varying_topic_query, is_procedural_query, is_pecuniary_query,
+    mentions_entity,
 )
 from app.utils.cache import answer_cache, suggestion_cache, program_list_cache, program_alias_cache
 from app.runtime_config import runtime_config
@@ -410,7 +411,7 @@ class ChatService:
         """
         rag_service = RAGService(self.db)
         filters = await self._detect_program_filter(query)
-        if is_procedural_query(query):
+        if is_procedural_query(query) or is_pecuniary_query(query):
             # Institution-wide procedures (aplazamiento, homologación,
             # reingreso...) kept losing to every curriculum document's
             # identical "=== RESUMEN DE MATERIAS POR SEMESTRE ===" boilerplate
@@ -423,6 +424,11 @@ class ChatService:
             # same program-independent answer, so excluding document_type
             # 'pensum' (curriculum only) can't hide real content here, only
             # the boilerplate that was drowning it out.
+            #
+            # Pecuniary questions (costos/precios/pagar/matrícula...) get the
+            # same treatment for the same reason — see is_pecuniary_query:
+            # the prices live in the Tríptico/resoluciones, and pensum chunks
+            # were taking 4-6 of the top-10 slots on every phrasing tested.
             filters = filters or SearchFilters()
             filters.exclude_document_type = "pensum"
         search_results = await rag_service.search(
