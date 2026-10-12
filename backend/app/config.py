@@ -114,6 +114,22 @@ class Settings(BaseSettings):
     # rag_service.py::_rerank_cross_encoder.
     rag_reranker_enabled: bool = True
     rag_reranker_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
+    # Multi-query (RAG-Fusion): si la primera pasada de retrieval sale
+    # "weak"/"none", se piden N reformulaciones de la pregunta a un modelo
+    # barato (openai_condensation_model), se recupera (vector + FTS) con cada
+    # una y se fusiona TODO con RRF antes de decidir el rechazo. Ataca el
+    # desajuste de vocabulario pregunta/documento de forma general, en vez de
+    # listas de sinónimos a mano por familia (expand_cost_synonyms solo cubre
+    # precios). Confirmado live 2026-10-12: "costos de inscripción y
+    # matrícula..." respondía y "precios de..." era rechazada. Solo con
+    # proveedor OpenAI — misma razón que HyDE/reranker (Ollama en CPU no
+    # tiene margen para una llamada extra). Ver rag_service.py::_multiquery_lists.
+    rag_multiquery_enabled: bool = True
+    rag_multiquery_variants: int = 3
+    # True = expandir SIEMPRE (+1 llamada LLM y +2N búsquedas por consulta,
+    # más recall). False = solo como reintento antes de rechazar: cero costo
+    # extra cuando la primera pasada ya encontró contexto (el caso común).
+    rag_multiquery_always: bool = False
     # Cuando retrieval está acotado a UN programa (_detect_program_filter), el
     # WHERE deja pasar también los documentos sin `program` (referencias
     # institucionales generales — títulos/perfiles, matrículas, ESTATUTO). Eso

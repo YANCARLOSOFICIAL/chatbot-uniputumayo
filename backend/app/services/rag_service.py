@@ -31,6 +31,37 @@ _RRF_K = 60
 _SEMESTER_MARKER_RE = re.compile(r"semestre\s+([ivxlcdm]+|\d{1,2})\b", re.IGNORECASE)
 _ROMAN_VALUES = {"i": 1, "v": 5, "x": 10, "l": 50, "c": 100, "d": 500, "m": 1000}
 
+# Multi-query (RAG-Fusion, Rackauckas 2024 — arXiv:2402.03367): reformulaciones
+# de la pregunta del usuario generadas por un modelo barato, cada una
+# recuperada por separado (vector + FTS) y fusionadas con RRF junto a la
+# pasada original. Ataca el desajuste de vocabulario pregunta/documento de
+# forma general — el estudiante dice "precios", "materias", "carrera",
+# "pensum" y el corpus escribe "costos"/"derechos pecuniarios", "unidades de
+# formación", "programa", "plan de estudios" — sin mantener listas de
+# sinónimos a mano por familia (ver expand_cost_synonyms, que solo cubre la
+# pecuniaria). Confirmado live 2026-10-12: "¿cuáles son los costos de
+# inscripción y matrícula del ciclo tecnológico...?" respondía y la misma
+# pregunta con "precios"/"valores" era rechazada. Ver `_multiquery_lists`.
+_MULTIQUERY_PROMPT = (
+    "Un estudiante de Uniputumayo (Institución Universitaria del Putumayo) le hizo "
+    "esta pregunta a un asistente que busca en documentos oficiales de la "
+    "institución (reglamentos, mallas curriculares, resoluciones de costos, "
+    "planes de estudio):\n\n{query}\n\n"
+    "Escribe {n} maneras distintas de hacer exactamente la misma pregunta, "
+    "variando el vocabulario como lo haría otro estudiante o como lo escribiría "
+    "un documento oficial (por ejemplo: costos / precios / valor / derechos "
+    "pecuniarios; materias / asignaturas / unidades de formación; carrera / "
+    "programa; malla / pensum / plan de estudios; semestre / periodo académico). "
+    "No cambies el tema, no agregues datos ni respondas la pregunta. "
+    "Responde solo con las preguntas, una por línea, sin numerar ni explicar."
+)
+# "1. ", "- ", "• ", "a) " al inicio de cada línea devuelta por el modelo.
+_VARIANT_PREFIX_RE = re.compile(r"^\s*(?:[-*•]|\d+[.)]|[a-zA-Z][.)])\s*")
+
+
+def _normalize_variant(text_: str) -> str:
+    return re.sub(r"[^\w]+", " ", text_.lower()).strip()
+
 
 def _roman_to_int(token: str) -> int | None:
     """Minimal Roman numeral parser — curriculum semester labels never
@@ -501,6 +532,175 @@ class RAGService:
             return "weak"
         return "good"
 
+    # ── Multi-query expansion (RAG-Fusion) ──────────────────────────────────
+
+    @staticmethod
+    def _multiquery_active(answering_provider: str | None) -> bool:
+        """Same gate as HyDE and the reranker: an extra LLM call is cheap on
+        OpenAI but Ollama on this CPU host has no timeout margin for it."""
+        return settings.rag_multiquery_enabled and answering_provider != "ollama"
+
+    @staticmethod
+    def _parse_variants(raw: str, original: str, n: int) -> list[str]:
+        """One reformulation per line; drop numbering/bullets, quotes, empties,
+        near-duplicates and anything equal to the original question."""
+        seen = {_normalize_variant(original)}
+        variants: list[str] = []
+        for line in raw.splitlines():
+            line = _VARIANT_PREFIX_RE.sub("", line).strip().strip("\"'“”‘’")
+            if len(line) < 8:
+                continue
+            key = _normalize_variant(line)
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            variants.append(line)
+            if len(variants) >= n:
+                break
+        return variants
+
+    async def _generate_query_variants(self, query: str) -> list[str]:
+        """Ask the cheap condensation model for N reformulations. Best-effort:
+        any failure returns [] and retrieval proceeds with the original pass
+        only (same contract as `_generate_hyde_doc`)."""
+        n = max(int(settings.rag_multiquery_variants), 0)
+        if n == 0:
+            return []
+        try:
+            provider = ProviderFactory.get_provider("openai")
+            result = await provider.generate(
+                messages=[{
+                    "role": "user",
+                    "content": _MULTIQUERY_PROMPT.format(query=query, n=n),
+                }],
+                model=settings.openai_condensation_model,
+                temperature=0.3,
+                max_tokens=60 * n + 40,
+            )
+            return self._parse_variants(result.get("content", ""), query, n)
+        except Exception as e:
+            logger.debug("Multi-query variant generation failed, skipping: %s", e)
+            return []
+
+    async def _vector_search(
+        self,
+        query_embedding: list[float],
+        where_clause: str,
+        base_params: dict,
+        candidate_k: int,
+        score_threshold: float,
+    ) -> list[SearchResultItem]:
+        """pgvector cosine search, keeping only rows at/above `score_threshold`.
+        `base_params` carries the filter bindings only; embedding/top_k are
+        bound here so the same filters can be reused across several
+        embeddings (multi-query) without mutating the caller's dict."""
+        params = {k: v for k, v in base_params.items() if k not in ("embedding", "top_k")}
+        params["top_k"] = candidate_k
+        params["embedding"] = "[" + ",".join(map(str, query_embedding)) + "]"
+
+        sql = text(f"""
+            SELECT
+                dc.id          AS chunk_id,
+                dc.content,
+                1 - (dc.embedding <=> CAST(:embedding AS vector)) AS score,
+                d.title        AS document_title,
+                d.program,
+                d.faculty,
+                dc.metadata
+            FROM document_chunks dc
+            JOIN documents d ON dc.document_id = d.id
+            WHERE dc.embedding IS NOT NULL
+              AND {where_clause}
+            ORDER BY dc.embedding <=> CAST(:embedding AS vector)
+            LIMIT :top_k
+        """)
+        result = await self.db.execute(sql, params)
+
+        items: list[SearchResultItem] = []
+        for row in result.fetchall():
+            if row.score >= score_threshold:
+                items.append(SearchResultItem(
+                    chunk_id=row.chunk_id,
+                    content=row.content,
+                    score=round(row.score, 4),
+                    document_title=row.document_title,
+                    program=row.program,
+                    faculty=row.faculty,
+                    metadata=row.metadata,
+                ))
+        return items
+
+    async def _multiquery_lists(
+        self,
+        request: SearchRequest,
+        llm_service: LLMService,
+        where_clause: str,
+        params: dict,
+        candidate_k: int,
+    ) -> tuple[list[list[SearchResultItem]], list[str]]:
+        """Retrieve (vector + FTS) once per reformulation. Returns the ranked
+        lists to fuse alongside the original pass, plus the variants used (for
+        logging). Variants are embedded as-is (no HyDE per variant — one
+        cheap LLM call total, not N+1). No `exclude_ids` on the FTS leg here:
+        a chunk found by several reformulations SHOULD accumulate RRF score,
+        that consensus is the point of the fusion."""
+        variants = await self._generate_query_variants(request.query)
+        if not variants:
+            return [], []
+        try:
+            embed_response = await llm_service.embed(EmbedRequest(texts=variants))
+        except Exception as e:
+            logger.debug("Multi-query embedding failed, skipping: %s", e)
+            return [], variants
+
+        lists: list[list[SearchResultItem]] = []
+        for variant, embedding in zip(variants, embed_response.embeddings):
+            try:
+                lists.append(await self._vector_search(
+                    embedding, where_clause, params, candidate_k, request.score_threshold,
+                ))
+            except Exception as e:
+                logger.debug("Multi-query vector search skipped (%.40s…): %s", variant, e)
+            try:
+                lists.append(await self._keyword_search(
+                    expand_cost_synonyms(variant), where_clause, params,
+                    exclude_ids=set(), limit=request.top_k,
+                ))
+            except Exception as e:
+                logger.debug("Multi-query keyword search skipped (%.40s…): %s", variant, e)
+        return [lst for lst in lists if lst], variants
+
+    async def _finalize_candidates(
+        self,
+        request: SearchRequest,
+        ranked_lists: list[list[SearchResultItem]],
+        answering_provider: str | None,
+    ) -> list[SearchResultItem]:
+        """Steps 4–7 of `search()`: RRF fusion → cross-encoder rerank →
+        dedupe → untagged cap → diversity cut → last-semester boost. Factored
+        out so the multi-query retry can re-run the exact same pipeline over
+        the original lists plus the reformulations' lists."""
+        candidates = self._fuse_rrf(ranked_lists)
+        candidates = await self._rerank_cross_encoder(request.query, candidates, answering_provider)
+        candidates = self._deduplicate(candidates)
+
+        if request.filters and request.filters.program and candidates:
+            candidates = self._cap_untagged_share(candidates, request.filters.program)
+
+        if settings.rag_diversity_enabled and candidates:
+            final_results = self._apply_diversity(candidates, max_per_doc=10, top_k=request.top_k)
+        else:
+            final_results = candidates[:request.top_k]
+
+        if (
+            request.filters and request.filters.program
+            and is_last_semester_query(request.query)
+        ):
+            final_results = await self._boost_last_semester_chunk(
+                final_results, request.filters.program,
+            )
+        return final_results
+
     # ── Search ───────────────────────────────────────────────────────────────
 
     async def search(self, request: SearchRequest) -> SearchResponse:
@@ -551,9 +751,7 @@ class RAGService:
         candidate_k = request.top_k * settings.rag_candidates_multiplier
 
         filters: list[str] = []
-        params: dict = {
-            "top_k": candidate_k,
-        }
+        params: dict = {}
 
         if request.filters:
             if request.filters.program:
@@ -592,45 +790,12 @@ class RAGService:
                 params["exclude_doc_type"] = request.filters.exclude_document_type
 
         where_clause = " AND ".join(filters) if filters else "1=1"
-        embedding_str = "[" + ",".join(map(str, query_embedding)) + "]"
-        params["embedding"] = embedding_str
 
-        sql = text(f"""
-            SELECT
-                dc.id          AS chunk_id,
-                dc.content,
-                1 - (dc.embedding <=> CAST(:embedding AS vector)) AS score,
-                d.title        AS document_title,
-                d.program,
-                d.faculty,
-                dc.metadata
-            FROM document_chunks dc
-            JOIN documents d ON dc.document_id = d.id
-            WHERE dc.embedding IS NOT NULL
-              AND {where_clause}
-            ORDER BY dc.embedding <=> CAST(:embedding AS vector)
-            LIMIT :top_k
-        """)
-
-        result = await self.db.execute(sql, params)
-        rows = result.fetchall()
+        vector_candidates = await self._vector_search(
+            query_embedding, where_clause, params, candidate_k, request.score_threshold,
+        )
+        seen_chunk_ids = {c.chunk_id for c in vector_candidates}
         search_time = int((time.time() - search_start) * 1000)
-
-        # 3. Apply score threshold
-        vector_candidates: list[SearchResultItem] = []
-        seen_chunk_ids: set = set()
-        for row in rows:
-            if row.score >= request.score_threshold:
-                vector_candidates.append(SearchResultItem(
-                    chunk_id=row.chunk_id,
-                    content=row.content,
-                    score=round(row.score, 4),
-                    document_title=row.document_title,
-                    program=row.program,
-                    faculty=row.faculty,
-                    metadata=row.metadata,
-                ))
-                seen_chunk_ids.add(row.chunk_id)
 
         # 3b. Full-text keyword search — widens recall beyond what cosine
         # similarity found. Pure-vector retrieval can miss chunks that share
@@ -657,37 +822,34 @@ class RAGService:
         except Exception as e:
             logger.debug("Full-text keyword search skipped: %s", e)
 
-        # 4. Fuse the two independently-ranked lists (Reciprocal Rank Fusion),
-        # then refine that order with a cross-encoder that reads query+chunk
-        # together — see _fuse_rrf / _rerank_cross_encoder docstrings.
-        candidates = self._fuse_rrf([vector_candidates, fts_candidates])
-        candidates = await self._rerank_cross_encoder(request.query, candidates, answering_provider)
+        # 4–7. Fuse (RRF), rerank, dedupe, cap untagged share, diversity cut,
+        # last-semester boost — see _finalize_candidates.
+        ranked_lists = [vector_candidates, fts_candidates]
+        final_results = await self._finalize_candidates(request, ranked_lists, answering_provider)
+        quality = self.evaluate_context_quality(final_results)
 
-        # 5. Deduplicate near-identical chunks
-        candidates = self._deduplicate(candidates)
-
-        # 5b. Program-scoped search: cap the untagged general-reference share
-        # so it can't crowd out the program's own content (see
-        # _cap_untagged_share). Applied before the top_k cut so freed slots
-        # go back to the program's chunks, not left empty.
-        if request.filters and request.filters.program and candidates:
-            candidates = self._cap_untagged_share(candidates, request.filters.program)
-
-        # 6. Diversity filter (max N chunks per document)
-        if settings.rag_diversity_enabled and candidates:
-            final_results = self._apply_diversity(candidates, max_per_doc=10, top_k=request.top_k)
-        else:
-            final_results = candidates[:request.top_k]
-
-        # 7. "Último semestre" queries need the chunk with the highest
-        # semester number specifically — see _boost_last_semester_chunk.
-        if (
-            request.filters and request.filters.program
-            and is_last_semester_query(request.query)
+        # 8. Multi-query retry (RAG-Fusion). Only when the first pass came back
+        # "weak"/"none" (or rag_multiquery_always): ask for N reformulations,
+        # retrieve each, and fuse EVERYTHING — original lists included — before
+        # the caller turns a retrieval miss into a "no tengo esa información".
+        # Zero extra cost on the (common) path where the first pass already
+        # found good context. See _MULTIQUERY_PROMPT for the vocabulary
+        # mismatch this exists for.
+        if self._multiquery_active(answering_provider) and (
+            quality != "good" or settings.rag_multiquery_always
         ):
-            final_results = await self._boost_last_semester_chunk(
-                final_results, request.filters.program,
+            variant_lists, variants = await self._multiquery_lists(
+                request, llm_service, where_clause, params, candidate_k,
             )
+            if variant_lists:
+                final_results = await self._finalize_candidates(
+                    request, ranked_lists + variant_lists, answering_provider,
+                )
+                quality = self.evaluate_context_quality(final_results)
+                logger.info(
+                    "RAG multi-query | query=%.50s… | variants=%s | quality=%s | results=%d",
+                    request.query, variants, quality, len(final_results),
+                )
 
         total_ms = int((time.time() - t0) * 1000)
         top_score = final_results[0].score if final_results else 0.0
