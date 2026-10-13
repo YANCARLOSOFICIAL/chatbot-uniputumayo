@@ -1,4 +1,5 @@
 from app.utils.query_utils import (
+    is_procedural_query,
     is_pecuniary_query,
     detect_temperature, is_greeting, keyword_score,
     is_varying_topic_query, mentions_entity, is_last_semester_query,
@@ -279,3 +280,19 @@ class TestIsPecuniaryQuery:
 
     def test_curriculum_question_is_not_pecuniary(self):
         assert not is_pecuniary_query("¿qué materias tiene el primer semestre de ingeniería de sistemas?")
+
+
+class TestProceduralGradoOptions:
+    # Live 2026-10-12: the colloquial follow-up below retrieved the Estatuto
+    # chunk that GRADES opciones de grado plus curriculum boilerplate (for
+    # "semestre"), not the chunk listing the options, and the model refused.
+    def test_colloquial_follow_up_is_procedural(self):
+        assert is_procedural_query("ya termine decimo semestre ahora necesito ver que opciones de grado hay para aplicar a una")
+
+    def test_modalidades_and_trabajo_de_grado(self):
+        assert is_procedural_query("¿qué modalidades de grado existen?")
+        assert is_procedural_query("¿cómo presento el trabajo de grado?")
+        assert is_procedural_query("cuáles son los requisitos de grado")
+
+    def test_bare_grado_is_not_procedural(self):
+        assert not is_procedural_query("¿qué título de grado otorga ingeniería de sistemas?")

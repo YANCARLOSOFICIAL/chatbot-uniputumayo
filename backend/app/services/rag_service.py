@@ -726,6 +726,9 @@ class RAGService:
             threshold=request.score_threshold,
             filters=request.filters.model_dump() if request.filters else None,
             hyde=hyde_active,
+            # forced expansions must never collide with (or be served from)
+            # the plain entry for the same question
+            multiquery="forced" if request.force_multiquery else "auto",
         )
         cached = await rag_cache.get(cache_key)
         if cached is not None:
@@ -835,13 +838,15 @@ class RAGService:
         # Zero extra cost on the (common) path where the first pass already
         # found good context. See _MULTIQUERY_PROMPT for the vocabulary
         # mismatch this exists for.
+        multiquery_used = False
         if self._multiquery_active(answering_provider) and (
-            quality != "good" or settings.rag_multiquery_always
+            quality != "good" or settings.rag_multiquery_always or request.force_multiquery
         ):
             variant_lists, variants = await self._multiquery_lists(
                 request, llm_service, where_clause, params, candidate_k,
             )
             if variant_lists:
+                multiquery_used = True
                 final_results = await self._finalize_candidates(
                     request, ranked_lists + variant_lists, answering_provider,
                 )
@@ -866,6 +871,7 @@ class RAGService:
             results=final_results,
             query_embedding_time_ms=embed_time,
             search_time_ms=search_time,
+            multiquery_used=multiquery_used,
         )
 
         # Only cache "good" quality — a "weak"/"none" result can be a transient

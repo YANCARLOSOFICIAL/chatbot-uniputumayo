@@ -110,6 +110,9 @@ class _RAGContext:
     quality: str          # "none" | "weak" | "good"
     embed_ms: int
     search_ms: int
+    # See SearchResponse.multiquery_used / _retry_with_multiquery.
+    multiquery_used: bool = False
+    chunk_ids: frozenset = frozenset()
 
 
 class ChatService:
@@ -394,7 +397,46 @@ class ChatService:
             return None
         return SearchFilters(program=next(iter(matches)))
 
-    async def _run_rag(self, query: str, hyde_provider_override: str | None = None) -> _RAGContext:
+
+    async def _retry_with_multiquery(
+        self, retrieval_query: str, rag_ctx: _RAGContext, provider_name: str,
+    ) -> _RAGContext | None:
+        """Second retrieval pass, with the multi-query expansion forced, for
+        the case rag_service's own retry can't see: retrieval came back
+        "good" (something cleared the threshold) but it was the wrong part of
+        the corpus, so the LLM refused anyway. Confirmed live 2026-10-12 on
+        three unrelated questions — "¿cuánto toca pagar para entrar al ciclo
+        tecnológico?" (got the Tríptico's program list, not its price table),
+        "¿cuánto cuesta estudiar ingeniería de sistemas?" (FICB024/perfiles),
+        and the follow-up "ya terminé décimo semestre, ¿qué opciones de grado
+        hay?" (Estatuto's *grading* of opciones de grado plus curriculum
+        boilerplate pulled in by "semestre", while the chunk that lists the
+        options sat outside the top-10). Each one was answered correctly by a
+        cleaner rewording — which is exactly what the reformulations are.
+
+        Returns the new context only when it is worth regenerating against:
+        "good" quality AND at least one chunk the first pass never showed the
+        model. None otherwise (caller keeps the original refusal). Never runs
+        twice for one message (`rag_ctx.multiquery_used`), and never for
+        Ollama (see RAGService._multiquery_active)."""
+        if rag_ctx.multiquery_used or not RAGService._multiquery_active(provider_name):
+            return None
+        retry_ctx = await self._run_rag(
+            retrieval_query, hyde_provider_override=provider_name, force_multiquery=True,
+        )
+        new_chunks = retry_ctx.chunk_ids - rag_ctx.chunk_ids
+        logger.info(
+            "Refusal retry (multi-query) | query=%.50s… | quality=%s | new_chunks=%d",
+            retrieval_query, retry_ctx.quality, len(new_chunks),
+        )
+        if retry_ctx.quality != "good" or not new_chunks:
+            return None
+        return retry_ctx
+
+    async def _run_rag(
+        self, query: str, hyde_provider_override: str | None = None,
+        force_multiquery: bool = False,
+    ) -> _RAGContext:
         """Run RAG search and return structured context ready for prompt building.
 
         `hyde_provider_override` pins HyDE's provider decision to whichever
@@ -432,7 +474,10 @@ class ChatService:
             filters = filters or SearchFilters()
             filters.exclude_document_type = "pensum"
         search_results = await rag_service.search(
-            SearchRequest(query=query, filters=filters, hyde_provider_override=hyde_provider_override)
+            SearchRequest(
+                query=query, filters=filters, hyde_provider_override=hyde_provider_override,
+                force_multiquery=force_multiquery,
+            )
         )
         quality = rag_service.evaluate_context_quality(search_results.results)
         logger.info(
@@ -481,6 +526,8 @@ class ChatService:
             sources_payload=sources_payload,
             source_infos=source_infos,
             quality=quality,
+            multiquery_used=search_results.multiquery_used,
+            chunk_ids=frozenset(r.chunk_id for r in search_results.results),
             embed_ms=search_results.query_embedding_time_ms,
             search_ms=search_results.search_time_ms,
         )
@@ -1157,6 +1204,30 @@ class ChatService:
                         temperature=temperature,
                         max_tokens=runtime_config.default_max_tokens,
                     )
+                    # The model refused with context in hand — try once more
+                    # against a multi-query retrieval before serving that refusal
+                    # (see _retry_with_multiquery). Nothing was sent to the client
+                    # yet, so a successful retry simply replaces the draft.
+                    if verified["approved"] and REFUSAL_MARKER in verified["content"]:
+                        retry_ctx = await self._retry_with_multiquery(
+                            retrieval_query, rag_ctx, provider_name,
+                        )
+                        if retry_ctx is not None:
+                            retry_messages = self._build_messages(
+                                retry_ctx, history, data.content,
+                                is_greeting_msg=greeting, provider_name=provider_name,
+                            )
+                            retried = await generate_verified(
+                                messages=[{"role": m.role, "content": m.content} for m in retry_messages],
+                                context_text=retry_ctx.context_text,
+                                provider_name=provider_name,
+                                model=model_name,
+                                temperature=temperature,
+                                max_tokens=runtime_config.default_max_tokens,
+                            )
+                            if retried["approved"] and REFUSAL_MARKER not in retried["content"]:
+                                rag_ctx, verified = retry_ctx, retried
+                                self.last_rag_context_text = rag_ctx.context_text
                     finish_reason = verified["finish_reason"]
                     tokens_used = verified["tokens_used"]["total"] if verified["tokens_used"] else None
                     verification_attempts = verified["attempts"]
@@ -1397,6 +1468,30 @@ class ChatService:
                             temperature=temperature,
                             max_tokens=runtime_config.default_max_tokens,
                         )
+                        # Same refusal retry as process_message — this path sends the
+                        # whole approved answer as one event (see above), so nothing
+                        # has reached the client yet either. The candidate sources
+                        # already sent are corrected below from the final rag_ctx.
+                        if verified["approved"] and REFUSAL_MARKER in verified["content"]:
+                            retry_ctx = await self._retry_with_multiquery(
+                                retrieval_query, rag_ctx, provider_name,
+                            )
+                            if retry_ctx is not None:
+                                retry_messages = self._build_messages(
+                                    retry_ctx, history, data.content,
+                                    is_greeting_msg=greeting, provider_name=provider_name,
+                                )
+                                retried = await generate_verified(
+                                    messages=[{"role": m.role, "content": m.content} for m in retry_messages],
+                                    context_text=retry_ctx.context_text,
+                                    provider_name=provider_name,
+                                    model=model,
+                                    temperature=temperature,
+                                    max_tokens=runtime_config.default_max_tokens,
+                                )
+                                if retried["approved"] and REFUSAL_MARKER not in retried["content"]:
+                                    rag_ctx, verified = retry_ctx, retried
+                                    self.last_rag_context_text = rag_ctx.context_text
                         finish_reason = verified["finish_reason"]
                         verification_attempts = verified["attempts"]
                         verification_approved = verified["approved"]

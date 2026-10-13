@@ -31,6 +31,12 @@ class SearchRequest(BaseModel):
     # compares it against multiple generation providers) should pass a fixed
     # value explicitly.
     hyde_provider_override: str | None = None
+    # Run the multi-query expansion (see RAGService._multiquery_lists) even
+    # when the first retrieval pass already came back "good". Used by
+    # ChatService._retry_with_multiquery after the LLM refused DESPITE having
+    # context: "good" only means something cleared the score threshold, not
+    # that it was the right part of the right document.
+    force_multiquery: bool = False
 
 
 class SearchResultItem(BaseModel):
@@ -47,3 +53,6 @@ class SearchResponse(BaseModel):
     results: list[SearchResultItem]
     query_embedding_time_ms: int
     search_time_ms: int
+    # Whether the reformulation lists were fused into these results — lets
+    # the caller skip a second (identical) expansion on refusal.
+    multiquery_used: bool = False
