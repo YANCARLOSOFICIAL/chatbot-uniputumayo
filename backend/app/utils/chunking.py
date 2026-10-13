@@ -137,7 +137,10 @@ def _recursive_split(
 _ARTICLE_MARK_RE = re.compile(r"\bART[ÍI]CULO\s+(\d+)", re.IGNORECASE)
 # "ARTÍCULO 55. OPCIONES DE GRADO." → the heading repeated on every piece of a
 # split article so no piece loses what it is about.
-_ARTICLE_HEAD_RE = re.compile(r"^(ART[ÍI]CULO\s+\d+\s*[.:°º]?\s*[^.\n]{0,120})", re.IGNORECASE)
+# Heading = marker + title up to the first period/colon/newline, capped so a
+# title-less article ("ARTÍCULO 40: En la institución las pruebas...") doesn't
+# drag half a sentence into the repeated heading.
+_ARTICLE_HEAD_RE = re.compile(r"^(ART[ÍI]CULO\s+\d+\s*[.:°º]?\s*[^.:\n]{0,80})", re.IGNORECASE)
 # PDF running headers extracted letter-spaced mid-text:
 # "C O N S E J O D I R E C T I V O P á g i n a 20 | 37" — pure noise for both
 # embedding and the LLM, and it sits inside sentences.
