@@ -695,6 +695,73 @@ class ChatService:
         "SOLO con el resumen actualizado, sin explicaciones ni encabezados."
     )
 
+    # Conversational preambles swamp retrieval: embedding (and HyDE) of "Te
+    # comento estoy en décimo semestre y ya terminé todas mis materias pero
+    # necesito hacer la opción de grado, ¿puedes decirme qué opciones de grado
+    # hay?" lands on "décimo semestre"/"terminar materias", and the Estatuto
+    # chunk that lists the opciones de grado stays outside the top-10 even
+    # with the multi-query expansion forced — while the bare "¿qué opciones
+    # de grado hay?" retrieves it at rank 6 (confirmed live 2026-10-12 via the
+    # admin /rag/search endpoint). Query rewriting for RAG (Ma et al., 2023,
+    # arXiv:2305.14283): distill the message to its information need before
+    # retrieval. Only the RETRIEVAL query changes — the LLM still sees the
+    # user's full message (see _build_messages). Gated on length/markers so
+    # short direct questions pay nothing.
+    _DISTILL_MIN_WORDS = 14
+    _DISTILL_MARKERS_RE = re.compile(
+        r"\b(te comento|estoy en|ya termin[eé]|necesito|puedes? decirme|quisiera saber|"
+        r"me gustar[ií]a|quiero saber|es que|buenas|buenos d[ií]as|hola)\b",
+        re.IGNORECASE,
+    )
+    _DISTILL_PROMPT = (
+        "Un estudiante escribió el siguiente mensaje a un asistente que busca "
+        "respuestas en documentos oficiales de Uniputumayo (reglamentos, mallas, "
+        "costos, fechas):\n\n{message}\n\n"
+        "Extrae la pregunta concreta que hay que buscar en los documentos. Elimina "
+        "saludos, relatos personales y detalles que no cambian la búsqueda; conserva "
+        "el programa, semestre, ciclo o fecha solo si hacen falta para responder. "
+        "Si el mensaje ya es una pregunta corta y directa, repítela sin cambios. "
+        "Responde SOLO con la pregunta, en una línea, sin explicaciones.\n\n"
+        "Ejemplos:\n"
+        "Mensaje: Te comento estoy en décimo semestre y ya terminé todas mis materias "
+        "pero necesito hacer la opción de grado, puedes decirme qué opciones de grado hay?\n"
+        "Pregunta: ¿Cuáles son las opciones de grado?\n\n"
+        "Mensaje: hola buenas, es que quiero saber cuánto vale el semestre de sistemas\n"
+        "Pregunta: ¿Cuánto cuesta el semestre de Ingeniería de Sistemas?\n\n"
+        "Mensaje: ¿Qué materias tiene el primer semestre de Gastronomía?\n"
+        "Pregunta: ¿Qué materias tiene el primer semestre de Gastronomía?"
+    )
+
+    @classmethod
+    def _needs_distillation(cls, content: str) -> bool:
+        return (
+            len(content.split()) >= cls._DISTILL_MIN_WORDS
+            or bool(cls._DISTILL_MARKERS_RE.search(content))
+        )
+
+    async def _distill_query(self, content: str, provider_name: str) -> str:
+        """Return the distilled retrieval query, or `content` unchanged when
+        distillation isn't warranted, isn't available (Ollama), or the model's
+        output looks unusable (empty, longer than the original, no question)."""
+        if provider_name == "ollama" or not self._needs_distillation(content):
+            return content
+        try:
+            provider = ProviderFactory.get_provider("openai")
+            result = await provider.generate(
+                messages=[{"role": "user", "content": self._DISTILL_PROMPT.format(message=content)}],
+                model=settings.openai_condensation_model, temperature=0.0, max_tokens=80,
+            )
+            raw = self._JSON_FENCE_RE.sub("", result.get("content", "")).strip()
+            line = raw.splitlines()[0].strip().strip('"\u201c\u201d') if raw else ""
+            line = re.sub(r"^(pregunta|query)\s*:\s*", "", line, flags=re.IGNORECASE).strip()
+        except Exception as e:
+            logger.debug("Query distillation failed, using the raw message: %s", e)
+            return content
+        if len(line) < 8 or len(line) >= len(content):
+            return content
+        logger.info("Query distilled | raw=%.60s… | distilled=%s", content, line)
+        return line
+
     async def _resolve_followup_query(
         self, history: list[LLMMessage], current_content: str,
         provider_name: str, conversation_id: UUID,
@@ -749,7 +816,7 @@ class ChatService:
                 return True, f"{prev_user.content} {current_content}"
 
         if not history:
-            return False, current_content
+            return False, await self._distill_query(current_content, provider_name)
 
         if provider_name != "ollama":
             condensed = await self._condense_followup_query(
@@ -758,7 +825,12 @@ class ChatService:
             if condensed is not None:
                 return True, condensed
 
-        return await self._resolve_followup_by_program_entity(history, current_content)
+        is_followup, resolved = await self._resolve_followup_by_program_entity(history, current_content)
+        if not is_followup:
+            # The raw message is going to retrieval as-is (not context-dependent,
+            # no program carried forward) — same preamble problem as a first message.
+            resolved = await self._distill_query(resolved, provider_name)
+        return is_followup, resolved
 
     _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$")
 

@@ -52,7 +52,8 @@ _MULTIQUERY_PROMPT = (
     "un documento oficial (por ejemplo: costos / precios / valor / derechos "
     "pecuniarios; materias / asignaturas / unidades de formación; carrera / "
     "programa; malla / pensum / plan de estudios; semestre / periodo académico). "
-    "No cambies el tema, no agregues datos ni respondas la pregunta. "
+    "Formula cada una como una pregunta corta y directa, sin saludos ni contexto "
+    "personal. No cambies el tema, no agregues datos ni respondas la pregunta. "
     "Responde solo con las preguntas, una por línea, sin numerar ni explicar."
 )
 # "1. ", "- ", "• ", "a) " al inicio de cada línea devuelta por el modelo.

@@ -210,3 +210,9 @@ class TestForcedMultiQuery:
         _wire(service, monkeypatch, first_vector=[hit], variant_vector=[], variants=["x" * 20])
         response = await service.search(SearchRequest(query="¿pregunta?", hyde_provider_override="openai"))
         assert response.multiquery_used is False
+
+
+class TestVariantsPromptAsksForShortQuestions:
+    def test_prompt_mentions_short_direct_questions(self):
+        from app.services.rag_service import _MULTIQUERY_PROMPT
+        assert "corta y directa" in _MULTIQUERY_PROMPT
