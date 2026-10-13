@@ -158,14 +158,30 @@ def _article_boundaries(text: str) -> list[int]:
     never become boundaries. Splitting on every marker did exactly that
     (caught by the tests before shipping).
     """
-    boundaries: list[int] = []
-    expected: int | None = None
-    for m in _ARTICLE_MARK_RE.finditer(text):
-        n = int(m.group(1))
-        if expected is None or n == expected:
-            boundaries.append(m.start())
-            expected = n + 1
-    return boundaries
+    marks = [(m.start(), int(m.group(1))) for m in _ARTICLE_MARK_RE.finditer(text)]
+    if not marks:
+        return []
+
+    def chain_from(start: int) -> list[int]:
+        out, expected = [], marks[start][1]
+        for pos, n in marks[start:]:
+            if n == expected:
+                out.append(pos)
+                expected += 1
+        return out
+
+    # The longest consecutive run wins — not the first marker in the text.
+    # Confirmed live 2026-10-12 on ESTATUTO ESTUDIANTIL: its preamble cites
+    # "artículo 76 de la Ley 489 de 1998" BEFORE "ARTÍCULO 1", so starting at
+    # the first marker expected 77 next and left articles 1-76 as one
+    # character-split block carrying "(continuación)" of a law citation.
+    best: list[int] = []
+    for i, (_, n) in enumerate(marks):
+        if n == 1 or not best:
+            chain = chain_from(i)
+            if len(chain) > len(best):
+                best = chain
+    return best
 
 
 def has_article_structure(text: str) -> bool:

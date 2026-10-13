@@ -189,3 +189,16 @@ class TestChunkNormativeText:
         assert "Según el ARTÍCULO 12 del presente estatuto" in art5[0]
         # ARTÍCULO 12 still opens its own chunk boundary later on
         assert sum(1 for c in chunks if "ARTÍCULO 12. TÍTULO" in c["content"]) == 1
+
+    def test_law_citation_in_preamble_does_not_hijack_the_sequence(self):
+        # ESTATUTO ESTUDIANTIL's preamble cites "artículo 76 de la Ley 489 de
+        # 1998" before ARTÍCULO 1 — the sequence must start at the real first article.
+        text = _estatuto(12).replace(
+            "CONSIDERANDO que...",
+            "CONSIDERANDO que el artículo 76 de la Ley 489 de 1998 y el artículo 69 de la Constitución facultan...",
+        )
+        chunks = chunk_normative_text(text, chunk_size=120, chunk_overlap=10)
+        assert not any("(continuación)" in c["content"] for c in chunks)
+        for i in range(1, 13):
+            assert sum(1 for c in chunks if f"ARTÍCULO {i}. TÍTULO" in c["content"]) == 1
+        assert "Ley 489" in chunks[0]["content"]
