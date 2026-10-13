@@ -17,7 +17,7 @@ from app.models.document_chunk import DocumentChunk
 from app.schemas.document import DocumentUploadResponse
 from app.utils.file_parsers import extract_text, normalize_extension
 from app.utils.text_processing import clean_text, normalize_for_match
-from app.utils.chunking import chunk_text, chunk_tabular_text
+from app.utils.chunking import chunk_text, chunk_tabular_text, chunk_normative_text, has_article_structure
 from app.utils.cache import rag_cache, answer_cache
 from app.services.llm_service import LLMService
 from app.schemas.llm import EmbedRequest
@@ -61,6 +61,17 @@ def _looks_like_semester_summary(text: str) -> bool:
 # its extractor interleaves prose paragraphs with occasional tables, so the
 # generic chunker (which already handles that mix reasonably) is a better fit.
 _TABULAR_FILE_TYPES = {"xlsx", "xls", "csv", "pptx"}
+
+
+def select_chunker(file_type: str, text: str):
+    """Row-aware for spreadsheets/decks, article-aware for numbered-article
+    documents (statutes, resolutions — see chunking.chunk_normative_text),
+    recursive character splitting for everything else."""
+    if file_type in _TABULAR_FILE_TYPES:
+        return chunk_tabular_text
+    if has_article_structure(text):
+        return chunk_normative_text
+    return chunk_text
 
 
 class DocumentService:
@@ -402,7 +413,7 @@ class DocumentService:
             file_path = os.path.join(settings.upload_dir, document.file_name)
             try:
                 cleaned_text = await self._build_enriched_text(file_path, document.file_type)
-                chunker = chunk_tabular_text if document.file_type in _TABULAR_FILE_TYPES else chunk_text
+                chunker = select_chunker(document.file_type, cleaned_text)
                 chunks = chunker(
                     cleaned_text,
                     chunk_size=settings.chunk_size,

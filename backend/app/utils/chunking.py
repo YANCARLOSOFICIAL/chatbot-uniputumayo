@@ -119,6 +119,125 @@ def _recursive_split(
     return chunks
 
 
+# ── Article-aware chunking for normative documents ───────────────────────────
+# Statutes, resolutions and agreements are written as numbered ARTÍCULOs, and
+# an article is the natural retrieval unit: the question "¿qué opciones de
+# grado hay?" is answered by one article, whole. Character splitting ignores
+# that structure — confirmed live 2026-10-12 on ESTATUTO ESTUDIANTIL (118
+# articles, 38 chunks of ~3000 chars): "ARTÍCULO 54: FINALIDADES DE LAS
+# OPCIONES DE GRADO" ended one chunk and the article actually LISTING the
+# options started the next, so every "opciones de grado" phrasing retrieved
+# the chunk carrying the heading (plus the one grading them) and the list
+# chunk sat outside the top-10; the model then refused. Chunks here are whole
+# articles (small consecutive ones packed together, an oversized one split
+# with its own heading repeated on each piece), with no cross-article
+# overlap — an article is self-contained, overlap would only re-blur the
+# boundary this exists to keep.
+
+_ARTICLE_MARK_RE = re.compile(r"\bART[ÍI]CULO\s+(\d+)", re.IGNORECASE)
+# "ARTÍCULO 55. OPCIONES DE GRADO." → the heading repeated on every piece of a
+# split article so no piece loses what it is about.
+_ARTICLE_HEAD_RE = re.compile(r"^(ART[ÍI]CULO\s+\d+\s*[.:°º]?\s*[^.\n]{0,120})", re.IGNORECASE)
+# PDF running headers extracted letter-spaced mid-text:
+# "C O N S E J O D I R E C T I V O P á g i n a 20 | 37" — pure noise for both
+# embedding and the LLM, and it sits inside sentences.
+_PAGE_NOISE_RE = re.compile(
+    r"(?:\b[A-ZÁÉÍÓÚÑ]\s){2,}[A-ZÁÉÍÓÚÑ]\b(?:\s+(?:[A-ZÁÉÍÓÚÑ]\s){2,}[A-ZÁÉÍÓÚÑ]\b)*"
+    r"\s+P\s?[áa]\s?g\s?i\s?n\s?a\s+\d+\s*\|\s*\d+",
+)
+MIN_ARTICLES_FOR_ARTICLE_CHUNKING = 10
+
+
+def _article_boundaries(text: str) -> list[int]:
+    """Start offsets of the markers that actually open a new article.
+
+    Only markers in numbering sequence count (1, 2, 3, …; the first accepted
+    one may start anywhere, for excerpts). A statute constantly cites other
+    articles inside a body — "según el ARTÍCULO 12 del presente estatuto" —
+    and a title may repeat its own number; both are out of sequence, so they
+    never become boundaries. Splitting on every marker did exactly that
+    (caught by the tests before shipping).
+    """
+    boundaries: list[int] = []
+    expected: int | None = None
+    for m in _ARTICLE_MARK_RE.finditer(text):
+        n = int(m.group(1))
+        if expected is None or n == expected:
+            boundaries.append(m.start())
+            expected = n + 1
+    return boundaries
+
+
+def has_article_structure(text: str) -> bool:
+    """True when the text reads as a numbered-article document (statute,
+    resolution, agreement) — enough sequential ARTÍCULO markers that
+    splitting on them is meaningful. A single stray "ARTÍCULO 1" in a
+    brochure doesn't count."""
+    return len(_article_boundaries(text)) >= MIN_ARTICLES_FOR_ARTICLE_CHUNKING
+
+
+def chunk_normative_text(
+    text: str,
+    chunk_size: int | None = None,
+    chunk_overlap: int | None = None,
+) -> list[dict]:
+    """Split a numbered-article document into whole-article chunks.
+
+    Same return shape as `chunk_text`. Falls back to `chunk_text` when the
+    text doesn't have article structure (see has_article_structure).
+    """
+    chunk_size = chunk_size or settings.chunk_size
+    chunk_overlap = chunk_overlap or settings.chunk_overlap
+    max_chars = chunk_size * 4
+    overlap_chars = chunk_overlap * 4
+
+    text = _PAGE_NOISE_RE.sub(" ", text)
+    if not has_article_structure(text):
+        return chunk_text(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+
+    cuts = _article_boundaries(text)
+    edges = [0] + cuts + [len(text)]
+    parts = [text[a:b].strip() for a, b in zip(edges, edges[1:])]
+    parts = [p for p in parts if p]
+    contents: list[str] = []
+    current = ""
+
+    def flush() -> None:
+        nonlocal current
+        if current.strip():
+            contents.append(current.strip())
+        current = ""
+
+    for part in parts:
+        if len(part) > max_chars:
+            flush()
+            head = _ARTICLE_HEAD_RE.match(part)
+            heading = head.group(1).strip() if head else ""
+            budget = max(max_chars - len(heading) - 20, max_chars // 2)
+            for j, piece in enumerate(_recursive_split(part, budget, overlap_chars, SEPARATORS)):
+                piece = piece.strip()
+                if not piece:
+                    continue
+                contents.append(piece if j == 0 or not heading else f"{heading} (continuación)\n{piece}")
+            continue
+        candidate = f"{current}\n\n{part}" if current else part
+        if len(candidate) <= max_chars:
+            current = candidate
+        else:
+            flush()
+            current = part
+    flush()
+
+    return [
+        {
+            "content": c,
+            "token_count": _count_tokens(c),
+            "metadata": {"chunk_index": i, "chunking": "article"},
+        }
+        for i, c in enumerate(contents)
+    ]
+
+
 # ── Row-aware chunking for spreadsheets / slide decks ────────────────────────
 
 # Matches the section markers _extract_xlsx/_extract_xls/_extract_pptx (see
