@@ -172,6 +172,14 @@ class Settings(BaseSettings):
     # 5+ usuarios simultáneos (~9k tokens por mensaje frente a 27k/minuto ≈
     # 3 mensajes/minuto). TokenBudgetExhausted -> 429, ver main.py.
     openai_budget_wait_timeout_seconds: float = 120.0
+    # Esfuerzo de razonamiento para la familia gpt-5 ("minimal" | "low" |
+    # "medium" | "high"). Vacío = no enviar el parámetro. Los modelos con
+    # razonamiento gastan max_completion_tokens primero en razonar: con
+    # gpt-5.6-luna y preguntas compuestas el presupuesto (1536) se agotaba
+    # antes de escribir un solo token visible y la respuesta llegaba VACÍA
+    # (confirmado live 2026-10-12). "low" acota ese gasto; verificar que el
+    # modelo activo acepte el parámetro antes de fijarlo en producción.
+    openai_reasoning_effort: str | None = None
 
     # Answer cache: sirve respuestas completas ya generadas para preguntas con
     # significado similar (no solo texto exacto), saltándose RAG + LLM por

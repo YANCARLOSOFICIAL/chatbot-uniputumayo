@@ -1302,7 +1302,11 @@ class ChatService:
                                 temperature=temperature,
                                 max_tokens=runtime_config.default_max_tokens,
                             )
-                            if retried["approved"] and REFUSAL_MARKER not in retried["content"]:
+                            if (
+                                retried["approved"]
+                                and retried["content"].strip()
+                                and REFUSAL_MARKER not in retried["content"]
+                            ):
                                 rag_ctx, verified = retry_ctx, retried
                                 self.last_rag_context_text = rag_ctx.context_text
                     finish_reason = verified["finish_reason"]
@@ -1342,6 +1346,17 @@ class ChatService:
                     model_name = llm_response.model
                     tokens_used = llm_response.tokens_used.total if llm_response.tokens_used else None
                     finish_reason = llm_response.finish_reason
+
+                if not content.strip():
+                    # Belt and braces for the empty-draft case handled in
+                    # verification_graph (and for the loop-disabled path): a
+                    # blank bubble is worse than the honest fixed refusal.
+                    logger.warning(
+                        "Empty answer after generation — serving fixed refusal | conv=%s | provider=%s | "
+                        "model=%s | finish_reason=%s",
+                        conversation_id, provider_name, model_name, finish_reason,
+                    )
+                    content = build_no_context_answer(verification_exhausted=True)
 
                 if finish_reason == "length":
                     logger.warning(
@@ -1566,7 +1581,11 @@ class ChatService:
                                     temperature=temperature,
                                     max_tokens=runtime_config.default_max_tokens,
                                 )
-                                if retried["approved"] and REFUSAL_MARKER not in retried["content"]:
+                                if (
+                                    retried["approved"]
+                                    and retried["content"].strip()
+                                    and REFUSAL_MARKER not in retried["content"]
+                                ):
                                     rag_ctx, verified = retry_ctx, retried
                                     self.last_rag_context_text = rag_ctx.context_text
                         finish_reason = verified["finish_reason"]
@@ -1583,6 +1602,13 @@ class ChatService:
                                 "Verification loop exhausted retries without approval — serving fixed "
                                 "refusal instead | conv=%s | attempts=%d",
                                 conversation_id, verified["attempts"],
+                            )
+                            full_content = build_no_context_answer(verification_exhausted=True)
+                        if not full_content.strip():
+                            logger.warning(
+                                "Empty answer after generation — serving fixed refusal | conv=%s | "
+                                "provider=%s | model=%s | finish_reason=%s",
+                                conversation_id, provider_name, model, finish_reason,
                             )
                             full_content = build_no_context_answer(verification_exhausted=True)
                         yield f"data: {json.dumps({'type': 'token', 'content': full_content})}\n\n"
@@ -1602,6 +1628,14 @@ class ChatService:
                         # appended contact block (see
                         # strip_unsolicited_contact_block).
                         full_content = strip_unsolicited_contact_block(full_content)
+                        if not full_content.strip():
+                            logger.warning(
+                                "Empty streamed answer — serving fixed refusal | conv=%s | provider=%s | "
+                                "model=%s | finish_reason=%s",
+                                conversation_id, provider_name, model, finish_reason,
+                            )
+                            full_content = build_no_context_answer(verification_exhausted=True)
+                            yield f"data: {json.dumps({'type': 'token', 'content': full_content})}\n\n"
 
                     if finish_reason == "length":
                         logger.warning(

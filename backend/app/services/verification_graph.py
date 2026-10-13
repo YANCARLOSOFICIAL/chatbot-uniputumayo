@@ -179,6 +179,12 @@ class VerificationState(TypedDict):
     grade_reason: str | None
 
 
+# Headroom for the one immediate retry after an empty, length-truncated
+# draft (see _generate): x3 the configured budget, never above the cap.
+_EMPTY_DRAFT_HEADROOM = 3
+_EMPTY_DRAFT_MAX_TOKENS = 6000
+
+
 async def _generate(state: VerificationState) -> dict:
     provider = ProviderFactory.get_provider(state["provider_name"])
     messages = list(state["messages"])
@@ -191,6 +197,28 @@ async def _generate(state: VerificationState) -> dict:
         temperature=state["temperature"],
         max_tokens=state["max_tokens"],
     )
+    if not (result.get("content") or "").strip():
+        # Reasoning models (gpt-5 family) spend their *output* budget on
+        # hidden reasoning first: a hard compound question can exhaust
+        # max_completion_tokens before a single visible token, returning
+        # content="" with finish_reason="length". Confirmed live 2026-10-12
+        # (gpt-5.6-luna, "¿cuánto cuesta la inscripción o cómo me matriculo,
+        # qué requisitos debo presentar?": 6031 tokens used, empty answer,
+        # persisted and shown to the user as a blank bubble — twice). Retry
+        # once with real headroom; if it is still empty, _grade rejects it.
+        max_tokens = state["max_tokens"]
+        if result.get("finish_reason") == "length":
+            max_tokens = min(max_tokens * _EMPTY_DRAFT_HEADROOM, _EMPTY_DRAFT_MAX_TOKENS)
+        logger.warning(
+            "Empty draft | model=%s | finish_reason=%s | retrying once with max_tokens=%d",
+            state["model"], result.get("finish_reason"), max_tokens,
+        )
+        result = await provider.generate(
+            messages=messages,
+            model=state["model"],
+            temperature=state["temperature"],
+            max_tokens=max_tokens,
+        )
     # Drop an appended "contacta a Uniputumayo" block before grading — models
     # tack it onto grounded answers and the grader then rejects the whole
     # thing as ungrounded (see strip_unsolicited_contact_block). No-op on a
@@ -205,6 +233,15 @@ async def _generate(state: VerificationState) -> dict:
 
 
 async def _grade(state: VerificationState) -> dict:
+    if not state["draft_answer"].strip():
+        # Nothing to grade and nothing to serve — never approve a blank
+        # answer (the caller would persist and display it). The retry
+        # feedback carries the reason so the next attempt is explicit about
+        # answering briefly.
+        return {
+            "approved": False,
+            "grade_reason": "la respuesta quedó vacía (límite de tokens de salida agotado); responde de forma breve y directa",
+        }
     # A refusal has nothing to hallucinate — approve without spending a call.
     if REFUSAL_MARKER in state["draft_answer"]:
         return {"approved": True, "grade_reason": None}

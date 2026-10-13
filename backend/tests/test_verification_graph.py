@@ -17,6 +17,7 @@ class FakeProvider:
 
     async def generate(self, messages, model, temperature, max_tokens):
         self.calls.append(messages)
+        self.max_tokens_seen = getattr(self, "max_tokens_seen", []) + [max_tokens]
         return self._responses.pop(0)
 
 
@@ -311,3 +312,39 @@ def test_grade_prompt_covers_ciclo_propedeutico():
     # section E and goldstandard_eval_service._JUDGE_PROMPT.
     prompt = verification_graph._GRADE_PROMPT.lower()
     assert "ciclo tecnológico" in prompt and "ciclo profesional" in prompt
+
+
+# Live 2026-10-12 (gpt-5.6-luna): a compound question exhausted
+# max_completion_tokens on hidden reasoning and came back as content="" with
+# finish_reason="length"; the empty draft was approved, persisted and shown as
+# a blank bubble. Empty drafts now get one immediate retry with headroom and
+# are never approved.
+
+async def test_empty_length_truncated_draft_is_retried_with_headroom(monkeypatch):
+    fake = patch_provider(monkeypatch, [
+        {"content": "", "finish_reason": "length", "tokens_used": None},   # generate #1: vacío
+        make_response("La inscripción cuesta $88.000 [1]."),              # reintento con más presupuesto
+        make_response("SI"),                                               # grade
+    ])
+    result = await verification_graph.generate_verified(
+        messages=BASE_MESSAGES, context_text="Contexto: inscripción $88.000 [1]",
+        provider_name="openai", model="gpt-5.6-luna", temperature=0.05, max_tokens=1536,
+    )
+    assert result["approved"] is True
+    assert result["content"] == "La inscripción cuesta $88.000 [1]."
+    assert fake.max_tokens_seen[:2] == [1536, 1536 * 3]
+
+
+async def test_persistently_empty_draft_is_never_approved(monkeypatch):
+    monkeypatch.setattr(settings, "verification_max_attempts", 1)
+    patch_provider(monkeypatch, [
+        {"content": "", "finish_reason": "length", "tokens_used": None},
+        {"content": "   ", "finish_reason": "length", "tokens_used": None},
+    ])
+    result = await verification_graph.generate_verified(
+        messages=BASE_MESSAGES, context_text="Contexto",
+        provider_name="openai", model="gpt-5.6-luna", temperature=0.05, max_tokens=1536,
+    )
+    assert result["approved"] is False
+    assert result["content"].strip() == ""
+    assert "vacía" in (result["grade_reason"] or "")

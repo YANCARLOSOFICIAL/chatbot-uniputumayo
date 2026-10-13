@@ -36,6 +36,12 @@ def _completion_params(model: str, temperature: float, max_tokens: int) -> dict:
     """Model-family-appropriate kwargs for `chat.completions.create`."""
     if _NEW_PARAM_FAMILY_RE.match((model or "").strip()):
         params: dict = {"max_completion_tokens": max_tokens}
+        # Reasoning models spend max_completion_tokens on hidden reasoning
+        # first; "low"/"minimal" keeps that short so the visible answer fits
+        # the budget (see verification_graph._generate for the symptom).
+        # Opt-in: a model that rejects the parameter would fail every call.
+        if settings.openai_reasoning_effort:
+            params["reasoning_effort"] = settings.openai_reasoning_effort
         # These families reject any temperature other than the default; pass
         # it only when the caller explicitly wants the default anyway.
         if temperature == 1:

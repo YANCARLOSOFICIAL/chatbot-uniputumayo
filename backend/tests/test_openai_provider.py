@@ -174,3 +174,14 @@ def test_limiter_pools_are_split_per_model():
     provider = OpenAIProvider()
     assert provider._limiter_for("gpt-5.4-mini") is provider._limiter_for("gpt-5.4-mini")
     assert provider._limiter_for("gpt-5.4-mini") is not provider._limiter_for("gpt-4.1-mini")
+
+
+def test_reasoning_effort_is_opt_in_for_new_param_family(monkeypatch):
+    from app.config import settings as _settings
+    from app.providers.openai_provider import _completion_params
+    monkeypatch.setattr(_settings, "openai_reasoning_effort", None)
+    assert "reasoning_effort" not in _completion_params("gpt-5.6-luna", 0.05, 1536)
+    monkeypatch.setattr(_settings, "openai_reasoning_effort", "low")
+    assert _completion_params("gpt-5.6-luna", 0.05, 1536)["reasoning_effort"] == "low"
+    # legacy family never gets it
+    assert "reasoning_effort" not in _completion_params("gpt-4.1-mini", 0.05, 1536)
