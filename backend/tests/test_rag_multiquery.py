@@ -191,3 +191,28 @@ class TestMultiQueryRetry:
         response = await service.search(SearchRequest(query="¿pregunta?", hyde_provider_override="openai"))
         # RRF: present in 3 lists beats present in 1, regardless of raw cosine
         assert response.results[0].chunk_id == consensus.chunk_id
+
+
+class TestForcedMultiQuery:
+    async def test_force_flag_expands_even_when_first_pass_is_good(self, service, monkeypatch):
+        hit = make_item("primera pasada", score=0.71)
+        extra = make_item("hallado por la reformulación", score=0.55)
+        calls = _wire(service, monkeypatch, first_vector=[hit], variant_vector=[extra], variants=["variante larga uno"])
+        response = await service.search(SearchRequest(
+            query="¿pregunta?", hyde_provider_override="openai", force_multiquery=True,
+        ))
+        assert calls["variants"] == 1
+        assert response.multiquery_used is True
+        assert {r.chunk_id for r in response.results} == {hit.chunk_id, extra.chunk_id}
+
+    async def test_response_reports_when_no_expansion_happened(self, service, monkeypatch):
+        hit = make_item("primera pasada", score=0.71)
+        _wire(service, monkeypatch, first_vector=[hit], variant_vector=[], variants=["x" * 20])
+        response = await service.search(SearchRequest(query="¿pregunta?", hyde_provider_override="openai"))
+        assert response.multiquery_used is False
+
+
+class TestVariantsPromptAsksForShortQuestions:
+    def test_prompt_mentions_short_direct_questions(self):
+        from app.services.rag_service import _MULTIQUERY_PROMPT
+        assert "corta y directa" in _MULTIQUERY_PROMPT

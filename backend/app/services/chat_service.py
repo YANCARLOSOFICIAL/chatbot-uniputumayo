@@ -110,6 +110,9 @@ class _RAGContext:
     quality: str          # "none" | "weak" | "good"
     embed_ms: int
     search_ms: int
+    # See SearchResponse.multiquery_used / _retry_with_multiquery.
+    multiquery_used: bool = False
+    chunk_ids: frozenset = frozenset()
 
 
 class ChatService:
@@ -400,7 +403,46 @@ class ChatService:
             return None
         return SearchFilters(program=next(iter(matches)))
 
-    async def _run_rag(self, query: str, hyde_provider_override: str | None = None) -> _RAGContext:
+
+    async def _retry_with_multiquery(
+        self, retrieval_query: str, rag_ctx: _RAGContext, provider_name: str,
+    ) -> _RAGContext | None:
+        """Second retrieval pass, with the multi-query expansion forced, for
+        the case rag_service's own retry can't see: retrieval came back
+        "good" (something cleared the threshold) but it was the wrong part of
+        the corpus, so the LLM refused anyway. Confirmed live 2026-10-12 on
+        three unrelated questions — "¿cuánto toca pagar para entrar al ciclo
+        tecnológico?" (got the Tríptico's program list, not its price table),
+        "¿cuánto cuesta estudiar ingeniería de sistemas?" (FICB024/perfiles),
+        and the follow-up "ya terminé décimo semestre, ¿qué opciones de grado
+        hay?" (Estatuto's *grading* of opciones de grado plus curriculum
+        boilerplate pulled in by "semestre", while the chunk that lists the
+        options sat outside the top-10). Each one was answered correctly by a
+        cleaner rewording — which is exactly what the reformulations are.
+
+        Returns the new context only when it is worth regenerating against:
+        "good" quality AND at least one chunk the first pass never showed the
+        model. None otherwise (caller keeps the original refusal). Never runs
+        twice for one message (`rag_ctx.multiquery_used`), and never for
+        Ollama (see RAGService._multiquery_active)."""
+        if rag_ctx.multiquery_used or not RAGService._multiquery_active(provider_name):
+            return None
+        retry_ctx = await self._run_rag(
+            retrieval_query, hyde_provider_override=provider_name, force_multiquery=True,
+        )
+        new_chunks = retry_ctx.chunk_ids - rag_ctx.chunk_ids
+        logger.info(
+            "Refusal retry (multi-query) | query=%.50s… | quality=%s | new_chunks=%d",
+            retrieval_query, retry_ctx.quality, len(new_chunks),
+        )
+        if retry_ctx.quality != "good" or not new_chunks:
+            return None
+        return retry_ctx
+
+    async def _run_rag(
+        self, query: str, hyde_provider_override: str | None = None,
+        force_multiquery: bool = False,
+    ) -> _RAGContext:
         """Run RAG search and return structured context ready for prompt building.
 
         `hyde_provider_override` pins HyDE's provider decision to whichever
@@ -438,7 +480,10 @@ class ChatService:
             filters = filters or SearchFilters()
             filters.exclude_document_type = "pensum"
         search_results = await rag_service.search(
-            SearchRequest(query=query, filters=filters, hyde_provider_override=hyde_provider_override)
+            SearchRequest(
+                query=query, filters=filters, hyde_provider_override=hyde_provider_override,
+                force_multiquery=force_multiquery,
+            )
         )
         quality = rag_service.evaluate_context_quality(search_results.results)
         logger.info(
@@ -487,6 +532,8 @@ class ChatService:
             sources_payload=sources_payload,
             source_infos=source_infos,
             quality=quality,
+            multiquery_used=search_results.multiquery_used,
+            chunk_ids=frozenset(r.chunk_id for r in search_results.results),
             embed_ms=search_results.query_embedding_time_ms,
             search_ms=search_results.search_time_ms,
         )
@@ -654,6 +701,78 @@ class ChatService:
         "SOLO con el resumen actualizado, sin explicaciones ni encabezados."
     )
 
+    # Conversational preambles swamp retrieval: embedding (and HyDE) of "Te
+    # comento estoy en décimo semestre y ya terminé todas mis materias pero
+    # necesito hacer la opción de grado, ¿puedes decirme qué opciones de grado
+    # hay?" lands on "décimo semestre"/"terminar materias", and the Estatuto
+    # chunk that lists the opciones de grado stays outside the top-10 even
+    # with the multi-query expansion forced — while the bare "¿qué opciones
+    # de grado hay?" retrieves it at rank 6 (confirmed live 2026-10-12 via the
+    # admin /rag/search endpoint). Query rewriting for RAG (Ma et al., 2023,
+    # arXiv:2305.14283): distill the message to its information need before
+    # retrieval. Only the RETRIEVAL query changes — the LLM still sees the
+    # user's full message (see _build_messages). Gated on length/markers so
+    # short direct questions pay nothing.
+    _DISTILL_MIN_WORDS = 14
+    _DISTILL_MARKERS_RE = re.compile(
+        r"\b(te comento|estoy en|ya termin[eé]|necesito|puedes? decirme|quisiera saber|"
+        r"me gustar[ií]a|quiero saber|es que|buenas|buenos d[ií]as|hola)\b",
+        re.IGNORECASE,
+    )
+    _DISTILL_PROMPT = (
+        "Un estudiante escribió el siguiente mensaje a un asistente que busca "
+        "respuestas en documentos oficiales de Uniputumayo (reglamentos, mallas, "
+        "costos, fechas):\n\n{message}\n\n"
+        "Extrae la pregunta concreta que hay que buscar en los documentos. Elimina "
+        "saludos y TODA la situación personal del usuario (en qué semestre está, qué "
+        "materias terminó, si es nuevo o antiguo, cómo se siente): eso no está en los "
+        "documentos y estorba la búsqueda. Conserva el nombre de un programa, ciclo o "
+        "una fecha ÚNICAMENTE cuando la pregunta es sobre ese programa, ciclo o fecha "
+        "en particular (por ejemplo, las materias de un programa o el costo de un ciclo). "
+        "Si el mensaje ya es una pregunta corta y directa, repítela sin cambios. "
+        "Responde SOLO con la pregunta, en una línea, sin explicaciones.\n\n"
+        "Ejemplos:\n"
+        "Mensaje: Te comento estoy en décimo semestre y ya terminé todas mis materias "
+        "pero necesito hacer la opción de grado, puedes decirme qué opciones de grado hay?\n"
+        "Pregunta: ¿Cuáles son las opciones de grado?\n\n"
+        "Mensaje: hola buenas, es que quiero saber cuánto vale el semestre de sistemas\n"
+        "Pregunta: ¿Cuánto cuesta el semestre de Ingeniería de Sistemas?\n\n"
+        "Mensaje: soy estudiante nuevo de sistemas y estoy perdido, qué materias veo en primer semestre?\n"
+        "Pregunta: ¿Qué materias tiene el primer semestre de Ingeniería de Sistemas?\n\n"
+        "Mensaje: ¿Qué materias tiene el primer semestre de Gastronomía?\n"
+        "Pregunta: ¿Qué materias tiene el primer semestre de Gastronomía?"
+    )
+
+    @classmethod
+    def _needs_distillation(cls, content: str) -> bool:
+        return (
+            len(content.split()) >= cls._DISTILL_MIN_WORDS
+            or bool(cls._DISTILL_MARKERS_RE.search(content))
+        )
+
+    async def _distill_query(self, content: str, provider_name: str) -> str:
+        """Return the distilled retrieval query, or `content` unchanged when
+        distillation isn't warranted, isn't available (Ollama), or the model's
+        output looks unusable (empty, longer than the original, no question)."""
+        if provider_name == "ollama" or not self._needs_distillation(content):
+            return content
+        try:
+            provider = ProviderFactory.get_provider("openai")
+            result = await provider.generate(
+                messages=[{"role": "user", "content": self._DISTILL_PROMPT.format(message=content)}],
+                model=settings.openai_condensation_model, temperature=0.0, max_tokens=80,
+            )
+            raw = self._JSON_FENCE_RE.sub("", result.get("content", "")).strip()
+            line = raw.splitlines()[0].strip().strip('"\u201c\u201d') if raw else ""
+            line = re.sub(r"^(pregunta|query)\s*:\s*", "", line, flags=re.IGNORECASE).strip()
+        except Exception as e:
+            logger.debug("Query distillation failed, using the raw message: %s", e)
+            return content
+        if len(line) < 8 or len(line) >= len(content):
+            return content
+        logger.info("Query distilled | raw=%.60s… | distilled=%s", content, line)
+        return line
+
     async def _resolve_followup_query(
         self, history: list[LLMMessage], current_content: str,
         provider_name: str, conversation_id: UUID,
@@ -708,7 +827,7 @@ class ChatService:
                 return True, f"{prev_user.content} {current_content}"
 
         if not history:
-            return False, current_content
+            return False, await self._distill_query(current_content, provider_name)
 
         if provider_name != "ollama":
             condensed = await self._condense_followup_query(
@@ -717,7 +836,12 @@ class ChatService:
             if condensed is not None:
                 return True, condensed
 
-        return await self._resolve_followup_by_program_entity(history, current_content)
+        is_followup, resolved = await self._resolve_followup_by_program_entity(history, current_content)
+        if not is_followup:
+            # The raw message is going to retrieval as-is (not context-dependent,
+            # no program carried forward) — same preamble problem as a first message.
+            resolved = await self._distill_query(resolved, provider_name)
+        return is_followup, resolved
 
     _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$")
 
@@ -1163,6 +1287,34 @@ class ChatService:
                         temperature=temperature,
                         max_tokens=runtime_config.default_max_tokens,
                     )
+                    # The model refused with context in hand — try once more
+                    # against a multi-query retrieval before serving that refusal
+                    # (see _retry_with_multiquery). Nothing was sent to the client
+                    # yet, so a successful retry simply replaces the draft.
+                    if verified["approved"] and REFUSAL_MARKER in verified["content"]:
+                        retry_ctx = await self._retry_with_multiquery(
+                            retrieval_query, rag_ctx, provider_name,
+                        )
+                        if retry_ctx is not None:
+                            retry_messages = self._build_messages(
+                                retry_ctx, history, data.content,
+                                is_greeting_msg=greeting, provider_name=provider_name,
+                            )
+                            retried = await generate_verified(
+                                messages=[{"role": m.role, "content": m.content} for m in retry_messages],
+                                context_text=retry_ctx.context_text,
+                                provider_name=provider_name,
+                                model=model_name,
+                                temperature=temperature,
+                                max_tokens=runtime_config.default_max_tokens,
+                            )
+                            if (
+                                retried["approved"]
+                                and retried["content"].strip()
+                                and REFUSAL_MARKER not in retried["content"]
+                            ):
+                                rag_ctx, verified = retry_ctx, retried
+                                self.last_rag_context_text = rag_ctx.context_text
                     finish_reason = verified["finish_reason"]
                     tokens_used = verified["tokens_used"]["total"] if verified["tokens_used"] else None
                     verification_attempts = verified["attempts"]
@@ -1200,6 +1352,17 @@ class ChatService:
                     model_name = llm_response.model
                     tokens_used = llm_response.tokens_used.total if llm_response.tokens_used else None
                     finish_reason = llm_response.finish_reason
+
+                if not content.strip():
+                    # Belt and braces for the empty-draft case handled in
+                    # verification_graph (and for the loop-disabled path): a
+                    # blank bubble is worse than the honest fixed refusal.
+                    logger.warning(
+                        "Empty answer after generation — serving fixed refusal | conv=%s | provider=%s | "
+                        "model=%s | finish_reason=%s",
+                        conversation_id, provider_name, model_name, finish_reason,
+                    )
+                    content = build_no_context_answer(verification_exhausted=True)
 
                 if finish_reason == "length":
                     logger.warning(
@@ -1403,6 +1566,34 @@ class ChatService:
                             temperature=temperature,
                             max_tokens=runtime_config.default_max_tokens,
                         )
+                        # Same refusal retry as process_message — this path sends the
+                        # whole approved answer as one event (see above), so nothing
+                        # has reached the client yet either. The candidate sources
+                        # already sent are corrected below from the final rag_ctx.
+                        if verified["approved"] and REFUSAL_MARKER in verified["content"]:
+                            retry_ctx = await self._retry_with_multiquery(
+                                retrieval_query, rag_ctx, provider_name,
+                            )
+                            if retry_ctx is not None:
+                                retry_messages = self._build_messages(
+                                    retry_ctx, history, data.content,
+                                    is_greeting_msg=greeting, provider_name=provider_name,
+                                )
+                                retried = await generate_verified(
+                                    messages=[{"role": m.role, "content": m.content} for m in retry_messages],
+                                    context_text=retry_ctx.context_text,
+                                    provider_name=provider_name,
+                                    model=model,
+                                    temperature=temperature,
+                                    max_tokens=runtime_config.default_max_tokens,
+                                )
+                                if (
+                                    retried["approved"]
+                                    and retried["content"].strip()
+                                    and REFUSAL_MARKER not in retried["content"]
+                                ):
+                                    rag_ctx, verified = retry_ctx, retried
+                                    self.last_rag_context_text = rag_ctx.context_text
                         finish_reason = verified["finish_reason"]
                         verification_attempts = verified["attempts"]
                         verification_approved = verified["approved"]
@@ -1417,6 +1608,13 @@ class ChatService:
                                 "Verification loop exhausted retries without approval — serving fixed "
                                 "refusal instead | conv=%s | attempts=%d",
                                 conversation_id, verified["attempts"],
+                            )
+                            full_content = build_no_context_answer(verification_exhausted=True)
+                        if not full_content.strip():
+                            logger.warning(
+                                "Empty answer after generation — serving fixed refusal | conv=%s | "
+                                "provider=%s | model=%s | finish_reason=%s",
+                                conversation_id, provider_name, model, finish_reason,
                             )
                             full_content = build_no_context_answer(verification_exhausted=True)
                         yield f"data: {json.dumps({'type': 'token', 'content': full_content})}\n\n"
@@ -1436,6 +1634,14 @@ class ChatService:
                         # appended contact block (see
                         # strip_unsolicited_contact_block).
                         full_content = strip_unsolicited_contact_block(full_content)
+                        if not full_content.strip():
+                            logger.warning(
+                                "Empty streamed answer — serving fixed refusal | conv=%s | provider=%s | "
+                                "model=%s | finish_reason=%s",
+                                conversation_id, provider_name, model, finish_reason,
+                            )
+                            full_content = build_no_context_answer(verification_exhausted=True)
+                            yield f"data: {json.dumps({'type': 'token', 'content': full_content})}\n\n"
 
                     if finish_reason == "length":
                         logger.warning(

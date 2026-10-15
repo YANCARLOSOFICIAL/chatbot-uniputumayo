@@ -1,4 +1,4 @@
-from app.utils.chunking import chunk_text, chunk_tabular_text
+from app.utils.chunking import chunk_text, chunk_tabular_text, chunk_normative_text, has_article_structure
 
 
 class TestChunkText:
@@ -122,3 +122,83 @@ class TestChunkTabularText:
         for i in range(len(chunks) - 1):
             last_row_of_chunk = chunks[i]["content"].splitlines()[-1]
             assert last_row_of_chunk in chunks[i + 1]["content"].splitlines()
+
+
+def _estatuto(n_articles=12, body="Texto del artículo con varias disposiciones. "):
+    parts = ["ACUERDO No. 006 DE 2025. Por el cual se adopta el Estatuto Estudiantil. CONSIDERANDO que..."]
+    for i in range(1, n_articles + 1):
+        parts.append(f"ARTÍCULO {i}. TÍTULO DEL ARTÍCULO {i}. " + body * 3)
+    return " ".join(parts)
+
+
+class TestChunkNormativeText:
+    # Live 2026-10-12 (ESTATUTO ESTUDIANTIL): "ARTÍCULO 54: FINALIDADES DE LAS
+    # OPCIONES DE GRADO" closed one character-split chunk and the article that
+    # lists the options opened the next, so no "opciones de grado" phrasing
+    # retrieved the list. Whole-article chunks keep heading and body together.
+
+    def test_detects_article_structure(self):
+        assert has_article_structure(_estatuto(12))
+        assert not has_article_structure("El tríptico menciona el ARTÍCULO 1 de la ley y nada más.")
+
+    def test_each_article_starts_a_chunk_boundary_and_never_splits_mid_article(self):
+        chunks = chunk_normative_text(_estatuto(12), chunk_size=120, chunk_overlap=10)
+        assert len(chunks) > 1
+        joined = [c["content"] for c in chunks]
+        # every article heading appears exactly once, at the start of a line/chunk
+        for i in range(1, 13):
+            holders = [c for c in joined if f"ARTÍCULO {i}." in c]
+            assert len(holders) == 1, f"ARTÍCULO {i} debe estar en un solo chunk"
+        for c in chunks:
+            assert c["metadata"]["chunking"] == "article"
+
+    def test_small_consecutive_articles_are_packed_together(self):
+        chunks = chunk_normative_text(_estatuto(12, body="Corto. "), chunk_size=512, chunk_overlap=10)
+        assert len(chunks) < 12
+        assert "ARTÍCULO 1." in chunks[0]["content"] and "ARTÍCULO 2." in chunks[0]["content"]
+
+    def test_oversized_article_is_split_with_its_heading_repeated(self):
+        long_article = "ARTÍCULO 12. OPCIONES DE GRADO. " + ("Pasantía, diplomado, artículo publicado. " * 120)
+        text = _estatuto(11) + " " + long_article
+        chunks = chunk_normative_text(text, chunk_size=100, chunk_overlap=10)
+        pieces = [c["content"] for c in chunks if "OPCIONES DE GRADO" in c["content"]]
+        assert len(pieces) > 1
+        assert all(p.startswith("ARTÍCULO 12") for p in pieces)
+        assert any("(continuación)" in p for p in pieces[1:])
+
+    def test_page_header_noise_is_removed(self):
+        text = _estatuto(12).replace("ARTÍCULO 6.", "C O N S E J O D I R E C T I V O P á g i n a 20 | 37 ARTÍCULO 6.")
+        chunks = chunk_normative_text(text, chunk_size=512, chunk_overlap=10)
+        assert not any("P á g i n a" in c["content"] for c in chunks)
+        assert any("ARTÍCULO 6." in c["content"] for c in chunks)
+
+    def test_falls_back_to_character_chunking_without_articles(self):
+        text = "Párrafo normal. " * 300
+        a = chunk_normative_text(text, chunk_size=100, chunk_overlap=10)
+        b = chunk_text(text, chunk_size=100, chunk_overlap=10)
+        assert [c["content"] for c in a] == [c["content"] for c in b]
+
+    def test_cross_references_inside_an_article_do_not_split_it(self):
+        text = _estatuto(12).replace(
+            "ARTÍCULO 5. TÍTULO DEL ARTÍCULO 5. ",
+            "ARTÍCULO 5. TÍTULO DEL ARTÍCULO 5. Según el ARTÍCULO 12 del presente estatuto y el ARTÍCULO 2, ",
+        )
+        chunks = chunk_normative_text(text, chunk_size=120, chunk_overlap=10)
+        art5 = [c["content"] for c in chunks if "ARTÍCULO 5. TÍTULO" in c["content"]]
+        assert len(art5) == 1
+        assert "Según el ARTÍCULO 12 del presente estatuto" in art5[0]
+        # ARTÍCULO 12 still opens its own chunk boundary later on
+        assert sum(1 for c in chunks if "ARTÍCULO 12. TÍTULO" in c["content"]) == 1
+
+    def test_law_citation_in_preamble_does_not_hijack_the_sequence(self):
+        # ESTATUTO ESTUDIANTIL's preamble cites "artículo 76 de la Ley 489 de
+        # 1998" before ARTÍCULO 1 — the sequence must start at the real first article.
+        text = _estatuto(12).replace(
+            "CONSIDERANDO que...",
+            "CONSIDERANDO que el artículo 76 de la Ley 489 de 1998 y el artículo 69 de la Constitución facultan...",
+        )
+        chunks = chunk_normative_text(text, chunk_size=120, chunk_overlap=10)
+        assert not any("(continuación)" in c["content"] for c in chunks)
+        for i in range(1, 13):
+            assert sum(1 for c in chunks if f"ARTÍCULO {i}. TÍTULO" in c["content"]) == 1
+        assert "Ley 489" in chunks[0]["content"]

@@ -130,7 +130,16 @@ _PROCEDURAL_TOPIC_PATTERNS = re.compile(
     # by this pattern. "grado"/"causales" alone deliberately left out: too
     # overloaded (grado = degree/grade-level; causales appears in unrelated
     # contexts too) to add without a live false-positive check.
-    r"p[eé]rdida de la calidad|reingres\w*"
+    r"p[eé]rdida de la calidad|reingres\w*|"
+    # 2026-10-12: opciones/modalidades/trabajo/requisitos de grado — governed
+    # by the Estatuto (one answer for every program) and, phrased
+    # colloquially ("ya terminé décimo semestre, ¿qué opciones de grado
+    # hay?"), drowned by curriculum boilerplate for the word "semestre": the
+    # Estatuto chunk that LISTS the options fell outside the top-10 while
+    # the one grading them got in, and the model refused. Specific phrases
+    # only — bare "grado" stays out, as noted above.
+    r"opci[oó]n(?:es)? de grado|modalidad(?:es)? de grado|trabajo de grado|"
+    r"requisitos? de grado|derechos? de grado"
     r")\b",
     re.IGNORECASE,
 )
