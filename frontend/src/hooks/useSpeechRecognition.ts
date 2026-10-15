@@ -103,6 +103,7 @@ export function useSpeechRecognition(
   }, []);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const sessionEndedRef = useRef(true); // guards against double onFinal/onCancelled per session
   const stopVadRef = useRef<(() => void) | null>(null);
@@ -136,6 +137,7 @@ export function useSpeechRecognition(
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       chunksRef.current = [];
 
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
@@ -209,6 +211,26 @@ export function useSpeechRecognition(
   const stopListening = useCallback(() => {
     stopRecorder();
   }, [stopRecorder]);
+
+  // Cleanup al desmontar: detener tracks + recorder + VAD aunque quede grabando
+  // (evita LED del mic encendido y AudioContext fugados).
+  useEffect(() => {
+    return () => {
+      try {
+        stopVadRef.current?.();
+      } catch {}
+      stopVadRef.current = null;
+      try {
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+      } catch {}
+      streamRef.current = null;
+      const recorder = mediaRecorderRef.current;
+      try {
+        if (recorder && recorder.state !== "inactive") recorder.stop();
+      } catch {}
+      mediaRecorderRef.current = null;
+    };
+  }, []);
 
   return {
     interimTranscript,

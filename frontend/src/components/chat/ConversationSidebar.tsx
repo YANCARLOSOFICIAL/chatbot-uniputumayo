@@ -105,8 +105,16 @@ function ConvItem({
 
   return (
     <div className="conv-item-wrap">
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onSelect}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelect();
+          }
+        }}
         style={{
           width: "100%", display: "flex", alignItems: "center", gap: 7,
           padding: "8px 10px", borderRadius: 8, marginBottom: 1, cursor: "pointer",
@@ -127,6 +135,7 @@ function ConvItem({
           <button
             onClick={(e) => { e.stopPropagation(); setEditing(true); }}
             title="Renombrar"
+            aria-label={`Renombrar ${conv.title ?? "conversación"}`}
             style={{ width: 20, height: 20, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.35)" }}
             className="hover:text-white/70"
           >
@@ -135,6 +144,7 @@ function ConvItem({
           <button
             onClick={handleDeleteClick}
             title={confirmDelete ? "Confirmar" : "Eliminar"}
+            aria-label={confirmDelete ? "Confirmar eliminación" : `Eliminar ${conv.title ?? "conversación"}`}
             style={{
               width: 20, height: 20, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center",
               background: "none", border: "none", cursor: "pointer",
@@ -145,7 +155,7 @@ function ConvItem({
             <Trash2 size={10} strokeWidth={1.5} />
           </button>
         </div>
-      </button>
+      </div>
       {confirmDelete && (
         <div style={{ fontSize: 10, color: "rgba(248,113,113,0.75)", padding: "0 10px 4px", marginTop: -3 }}>
           Clic de nuevo para confirmar

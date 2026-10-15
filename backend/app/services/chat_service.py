@@ -145,9 +145,9 @@ class ChatService:
 
     # ── Conversation CRUD ────────────────────────────────────────────────────
 
-    async def create_conversation(self, data: ConversationCreate) -> Conversation:
+    async def create_conversation(self, data: ConversationCreate, user_id=None) -> Conversation:
         conversation = Conversation(
-            user_id=data.user_id,
+            user_id=user_id,
             title=data.title or "Nueva conversación",
         )
         self.db.add(conversation)
@@ -158,9 +158,15 @@ class ChatService:
     async def list_conversations(
         self, limit: int = 20, offset: int = 0, user_id=None
     ) -> list[Conversation]:
-        query = select(Conversation).where(Conversation.is_active.is_(True))
-        if user_id is not None:
-            query = query.where(Conversation.user_id == user_id)
+        # Invitados (user_id=None) no tienen historial persistente: devolver []
+        # en vez de todas las conversaciones activas (filtración/IDOR).
+        if user_id is None:
+            return []
+        query = (
+            select(Conversation)
+            .where(Conversation.is_active.is_(True))
+            .where(Conversation.user_id == user_id)
+        )
         query = query.order_by(desc(Conversation.updated_at)).limit(limit).offset(offset)
         result = await self.db.execute(query)
         return list(result.scalars().all())

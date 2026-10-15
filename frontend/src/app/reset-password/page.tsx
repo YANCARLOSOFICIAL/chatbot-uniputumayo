@@ -117,6 +117,8 @@ function PasswordField({ id, label, value, onChange, placeholder }: {
         />
         <button
           type="button" onClick={() => setShow(!show)}
+          aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
+          aria-pressed={show}
           style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.35)", display: "flex", alignItems: "center", padding: 4 }}
         >
           {show ? <EyeOff size={15} /> : <Eye size={15} />}

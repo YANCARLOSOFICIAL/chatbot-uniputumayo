@@ -7,7 +7,8 @@ _VALID_INPUT_TYPES = {"text", "voice"}
 
 
 class ConversationCreate(BaseModel):
-    user_id: UUID | None = None
+    # user_id se asigna server-side desde el JWT (ver routers/chat.py).
+    # No se acepta del cliente para evitar suplantación de user_id.
     title: str | None = None
 
 

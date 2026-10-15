@@ -57,7 +57,9 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const response = await rawRequest(endpoint, options);
-  return response.json();
+  // 204 / cuerpo vacío (DELETEs) => {} en vez de SyntaxError en response.json()
+  const text = await response.text();
+  return (text ? JSON.parse(text) : {}) as T;
 }
 
 // For endpoints that carry pagination info in a response header (e.g.
@@ -68,7 +70,8 @@ async function requestPaginated<T>(
 ): Promise<{ data: T; total: number }> {
   const response = await rawRequest(endpoint, options);
   const total = Number(response.headers.get("X-Total-Count") ?? "0");
-  const data = await response.json();
+  const text = await response.text();
+  const data = (text ? JSON.parse(text) : []) as T;
   return { data, total };
 }
 

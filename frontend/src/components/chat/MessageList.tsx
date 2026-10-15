@@ -186,7 +186,8 @@ export function MessageList({ messages, sources, isLoading, onQuickReply, onRege
   };
 
   useEffect(() => {
-    if (isAtBottomRef.current) scrollToBottom();
+    // Durante streaming (isLoading) usar salto instantáneo: smooth por token = jank.
+    if (isAtBottomRef.current) scrollToBottom(!isLoading);
   }, [messages, isLoading]);
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, memo } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import dynamic from "next/dynamic";
 import { Check, Copy, Mic, Clock, Zap, RotateCcw } from "lucide-react";
 import type { Message } from "@/types/chat";
@@ -40,7 +40,7 @@ function UserMessage({ message }: { message: Message }) {
         >
           {message.content}
         </div>
-        <span style={{ fontSize: 9, color: "var(--text-3)", opacity: 0 }} className="group-hover:opacity-100 transition-opacity">
+        <span style={{ fontSize: 9, color: "var(--text-3)", opacity: 0 }} className="group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
           {timeStr}
         </span>
       </div>
@@ -50,16 +50,26 @@ function UserMessage({ message }: { message: Message }) {
 
 function BotMessage({ message, isLast, onRegenerate, onCitationClick }: { message: Message; isLast?: boolean; onRegenerate?: () => void; onCitationClick?: (n: number) => void }) {
   const [copied, setCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
   const timeStr = new Date(message.created_at).toLocaleTimeString("es-CO", {
     hour: "2-digit", minute: "2-digit",
   });
   const isStreaming = message.id.startsWith("streaming-");
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(message.content).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    navigator.clipboard
+      .writeText(message.content)
+      .then(() => {
+        setCopied(true);
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => {});
   };
 
   return (
@@ -91,7 +101,7 @@ function BotMessage({ message, isLast, onRegenerate, onCitationClick }: { messag
         {!isStreaming && (
           <div
             style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 8, opacity: 0 }}
-            className="group-hover:opacity-100 transition-opacity duration-150"
+            className="group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity duration-150"
           >
             <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: "var(--text-3)" }}>
               <Clock size={9} /> {timeStr}

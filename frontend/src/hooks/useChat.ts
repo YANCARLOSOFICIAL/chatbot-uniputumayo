@@ -15,6 +15,7 @@ export function useChat() {
 
   // Aborts any in-flight stream if the component unmounts mid-response.
   const activeStreamController = useRef<AbortController | null>(null);
+  const selectReqIdRef = useRef(0);
   useEffect(() => {
     return () => activeStreamController.current?.abort();
   }, []);
@@ -118,12 +119,16 @@ export function useChat() {
 
   const selectConversation = useCallback(
     async (conversationId: string) => {
+      // requestId evita que una respuesta lenta de A sobrescriba a B
+      const reqId = ++selectReqIdRef.current;
       dispatch({ type: "SET_ACTIVE_CONVERSATION", payload: conversationId });
       dispatch({ type: "SET_ERROR", payload: null });
       try {
         const messages = await apiClient.getMessages(conversationId);
+        if (selectReqIdRef.current !== reqId) return; // selección cambió, descartar
         dispatch({ type: "SET_MESSAGES", payload: messages as unknown as Message[] });
       } catch (error) {
+        if (selectReqIdRef.current !== reqId) return;
         dispatch({
           type: "SET_ERROR",
           payload: error instanceof Error ? error.message : "Error cargando mensajes",

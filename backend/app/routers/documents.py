@@ -1,7 +1,7 @@
 import asyncio
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -52,7 +52,15 @@ async def upload_document(
     admin: User = Depends(require_admin),
 ):
     # Validate file extension before touching the payload
-    raw_name = file.filename or ""
+    import os as _os
+    import re as _re
+
+    raw_name = _os.path.basename(file.filename or "")
+    # Rechazar path traversal / subdirectorios y nombres peligrosos
+    if not raw_name or "/" in (file.filename or "") or "\\" in (file.filename or "") or ".." in (file.filename or ""):
+        raise HTTPException(status_code=400, detail="Nombre de archivo inválido")
+    if not _re.fullmatch(r"[A-Za-z0-9._\- ]+", raw_name.rsplit(".", 1)[0] if "." in raw_name else raw_name):
+        raise HTTPException(status_code=400, detail="Nombre de archivo inválido")
     ext = raw_name.rsplit(".", 1)[-1].lower() if "." in raw_name else ""
     if not normalize_extension(ext):
         raise HTTPException(
@@ -61,6 +69,17 @@ async def upload_document(
                 f"Formato '.{ext}' no soportado. "
                 f"Formatos válidos: {', '.join(e.upper() for e in SUPPORTED_EXTENSIONS)}"
             ),
+        )
+
+    # Early 413 por Content-Length (evita leer todo a memoria antes de rechazar)
+    try:
+        content_length = int(request.headers.get("content-length", "0") or "0")
+    except ValueError:
+        content_length = 0
+    if content_length and content_length > _MAX_BYTES + 1024 * 1024:  # margen multipart
+        raise HTTPException(
+            status_code=413,
+            detail=f"Archivo demasiado grande. Máximo permitido: {settings.max_upload_size_mb} MB.",
         )
 
     service = DocumentService(db)
@@ -81,8 +100,8 @@ async def list_documents(
     response: Response,
     status: str | None = None,
     program: str | None = None,
-    page: int = 1,
-    per_page: int = 20,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
@@ -154,8 +173,8 @@ async def delete_document(
 @router.get("/{document_id}/chunks", response_model=list[ChunkResponse])
 async def get_chunks(
     document_id: UUID,
-    page: int = 1,
-    per_page: int = 20,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ):

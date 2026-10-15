@@ -56,11 +56,10 @@ async def create_conversation(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    # Associate conversation with logged-in user if present
-    if current_user:
-        data.user_id = current_user.id
+    # user_id siempre server-side: nunca se confía en el body del cliente.
+    user_id = current_user.id if current_user else None
     service = ChatService(db)
-    return await service.create_conversation(data)
+    return await service.create_conversation(data, user_id=user_id)
 
 
 @router.get("/conversations", response_model=list[ConversationResponse])

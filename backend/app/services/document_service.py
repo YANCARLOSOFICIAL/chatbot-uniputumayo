@@ -8,7 +8,7 @@ from uuid import UUID
 
 import httpx
 
-from fastapi import UploadFile
+from fastapi import HTTPException, UploadFile
 from sqlalchemy import select, delete, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -310,22 +310,30 @@ class DocumentService:
         avoids proxy/edge timeouts (e.g. Cloudflare's ~100s edge limit) aborting the
         upload mid-flight and leaving the client with an uncontrolled network error.
         """
-        content_bytes = await file.read()
-
-        # Enforce file size limit (MAX_UPLOAD_SIZE_MB from config)
+        # Lectura por chunks con tope (no cargar 500 MB a RAM antes de rechazar)
         max_bytes = settings.max_upload_size_mb * 1024 * 1024
-        if len(content_bytes) > max_bytes:
-            size_mb = len(content_bytes) / (1024 * 1024)
-            return DocumentUploadResponse(
-                status="failed",
-                message=(
-                    f"Archivo demasiado grande: {size_mb:.1f} MB. "
-                    f"Máximo permitido: {settings.max_upload_size_mb} MB."
-                ),
-            )
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            piece = await file.read(1024 * 1024)
+            if not piece:
+                break
+            total += len(piece)
+            if total > max_bytes:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Archivo demasiado grande. Máximo permitido: {settings.max_upload_size_mb} MB.",
+                )
+            chunks.append(piece)
+        content_bytes = b"".join(chunks)
 
         raw_ext = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else ""
         file_type = normalize_extension(raw_ext) or "txt"
+        # Verificación magic-bytes (no solo extensión)
+        if file_type == "pdf" and not content_bytes.startswith(b"%PDF"):
+            raise HTTPException(status_code=400, detail="El archivo no es un PDF válido")
+        if file_type == "docx" and not content_bytes.startswith(b"PK"):
+            raise HTTPException(status_code=400, detail="El archivo no es un DOCX válido")
         content_hash = hashlib.sha256(content_bytes).hexdigest()
 
         os.makedirs(settings.upload_dir, exist_ok=True)
@@ -367,8 +375,10 @@ class DocumentService:
         self.db.add(document)
         await self.db.flush()
 
-        # Use document ID as filename prefix to avoid collisions
-        safe_name = f"{document.id}_{file.filename or 'document.txt'}"
+        # Nombre seguro: basename + whitelist, prefijo UUID evita colisiones
+        base = os.path.basename(file.filename or "document.txt")
+        base = re.sub(r"[^A-Za-z0-9._\-]", "_", base)[:100] or "document.txt"
+        safe_name = f"{document.id}_{base}"
         file_path = os.path.join(settings.upload_dir, safe_name)
         with open(file_path, "wb") as f:
             f.write(content_bytes)

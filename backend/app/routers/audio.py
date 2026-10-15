@@ -3,22 +3,51 @@ import logging
 import os
 import tempfile
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from app.utils.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_ALLOWED_VOICES = {
+    "es-CO-SalomeNeural",
+    "es-CO-GonzaloNeural",
+    "es-MX-DaliaNeural",
+    "es-ES-ElviraNeural",
+}
+_MAX_TTS_CHARS = 2000
+_MAX_AUDIO_BYTES = 10 * 1024 * 1024  # 10 MB para STT
 
 
 class TTSRequest(BaseModel):
     text: str
     voice: str = "es-CO-SalomeNeural"
 
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Texto vacío")
+        if len(v) > _MAX_TTS_CHARS:
+            raise ValueError(f"Texto demasiado largo (máx {_MAX_TTS_CHARS} caracteres)")
+        return v
+
+    @field_validator("voice")
+    @classmethod
+    def validate_voice(cls, v: str) -> str:
+        if v not in _ALLOWED_VOICES:
+            raise ValueError("Voz no permitida")
+        return v
+
 
 @router.post("/tts", response_class=Response)
-async def text_to_speech(body: TTSRequest):
+@limiter.limit("30/minute")
+async def text_to_speech(request: Request, body: TTSRequest):
     """Generate speech audio from text using Microsoft Edge TTS neural voices."""
     try:
         import edge_tts
@@ -71,7 +100,8 @@ def _get_whisper_model():
 
 
 @router.post("/stt")
-async def speech_to_text(audio: UploadFile = File(...)):
+@limiter.limit("20/minute")
+async def speech_to_text(request: Request, audio: UploadFile = File(...)):
     """Transcribe audio to text using Whisper (cross-browser STT fallback)."""
     model = _get_whisper_model()
     if model is None:
@@ -81,12 +111,32 @@ async def speech_to_text(audio: UploadFile = File(...)):
         )
 
     try:
-        audio_bytes = await audio.read()
+        # Lectura con tope (no cargar archivos gigantes a RAM)
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            piece = await audio.read(1024 * 1024)
+            if not piece:
+                break
+            total += len(piece)
+            if total > _MAX_AUDIO_BYTES:
+                raise HTTPException(status_code=413, detail="Audio demasiado grande (máx 10 MB)")
+            chunks.append(piece)
+        audio_bytes = b"".join(chunks)
         if not audio_bytes:
             raise HTTPException(status_code=400, detail="Audio vacío")
 
-        content_type = audio.content_type or ""
-        suffix = ".webm" if "webm" in content_type else ".ogg"
+        # Validar magic-bytes reales, no solo content_type del cliente
+        if audio_bytes.startswith(b"\x1a\x45\xdf\xa3"):
+            suffix = ".webm"
+        elif audio_bytes.startswith(b"OggS"):
+            suffix = ".ogg"
+        elif audio_bytes.startswith(b"RIFF"):
+            suffix = ".wav"
+        elif audio_bytes.startswith(b"\xff\xfb") or audio_bytes.startswith(b"ID3"):
+            suffix = ".mp3"
+        else:
+            raise HTTPException(status_code=400, detail="Formato de audio no soportado")
 
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
             f.write(audio_bytes)
@@ -101,7 +151,10 @@ async def speech_to_text(audio: UploadFile = File(...)):
 
             transcript = await loop.run_in_executor(None, do_transcribe)
         finally:
-            os.unlink(temp_path)
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
 
         return {"transcript": transcript.strip()}
 

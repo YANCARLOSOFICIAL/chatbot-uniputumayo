@@ -44,6 +44,8 @@ function DarkInputField({
           <button
             type="button"
             onClick={() => setShow(!show)}
+            aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
+            aria-pressed={show}
             style={{
               position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
               background: "none", border: "none", cursor: "pointer",

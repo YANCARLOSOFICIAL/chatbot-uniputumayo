@@ -4,7 +4,9 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+import hashlib
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,6 +62,11 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
 
 
 class UserResponse(BaseModel):
@@ -182,8 +189,8 @@ async def get_me(user: User = Depends(require_auth)):
 @router.get("/users", response_model=list[UserResponse])
 async def list_users(
     response: Response,
-    page: int = 1,
-    per_page: int = 20,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1, le=100),
     user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -247,6 +254,11 @@ async def update_user_role(
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
     if target_user.role == "admin" and data.role != "admin":
+        # Lock de filas admin para evitar TOCTOU: dos degradaciones
+        # concurrentes veían count==2 y dejaban cero admins.
+        await db.execute(
+            select(User.id).where(User.role == "admin").with_for_update()
+        )
         admin_count = await db.scalar(
             select(func.count()).select_from(User).where(User.role == "admin")
         )
@@ -279,7 +291,10 @@ async def forgot_password(
 
     if user and user.is_active:
         token = secrets.token_urlsafe(32)
-        user.password_reset_token = token
+        # Guardar solo el hash SHA-256 (no el token en claro): si la BD se
+        # filtra, el atacante no puede usar el token directamente.
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        user.password_reset_token = token_hash
         user.password_reset_expires_at = datetime.now(timezone.utc) + timedelta(
             minutes=settings.password_reset_expire_minutes
         )
@@ -299,8 +314,9 @@ async def forgot_password(
 async def reset_password(
     request: Request, data: ResetPasswordRequest, db: AsyncSession = Depends(get_db)
 ):
+    token_hash = hashlib.sha256(data.token.encode()).hexdigest()
     result = await db.execute(
-        select(User).where(User.password_reset_token == data.token)
+        select(User).where(User.password_reset_token == token_hash)
     )
     user = result.scalar_one_or_none()
 
