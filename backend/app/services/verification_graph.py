@@ -160,7 +160,11 @@ def resolve_grader(provider_name: str, model: str) -> tuple[str, str]:
     """
     key = runtime_config.openai_api_key
     if key and key != "sk-your-key-here":
-        return "openai", runtime_config.resolve_model("openai")
+        # Grading is a short yes/no judgment; a dedicated cheap model
+        # (settings.openai_grader_model) keeps it off the chat model's
+        # latency. Unset = the chat model, as before — keep it explicit in
+        # production so GoldStandard runs record which judge they used.
+        return "openai", settings.openai_grader_model or runtime_config.resolve_model("openai")
     return provider_name, model
 
 

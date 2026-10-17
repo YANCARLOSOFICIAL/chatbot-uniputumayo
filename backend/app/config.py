@@ -186,6 +186,13 @@ class Settings(BaseSettings):
     # (confirmado live 2026-10-12). "low" acota ese gasto; verificar que el
     # modelo activo acepte el parámetro antes de fijarlo en producción.
     openai_reasoning_effort: str | None = None
+    # Modelo del juez de verificación (y del judge del GoldStandard, que pasa
+    # por resolve_grader). Vacío = el modelo de chat activo. Con gpt-5.6-luna
+    # como chat, cada pregunta hacía 3 llamadas al modelo con razonamiento
+    # (HyDE + respuesta + juez); el juez en gpt-4.1-mini recorta una de ellas
+    # sin cambiar la respuesta que ve el usuario. Anotar en la tesis qué juez
+    # se usó en cada corrida del banco patrón.
+    openai_grader_model: str | None = None
 
     # Answer cache: sirve respuestas completas ya generadas para preguntas con
     # significado similar (no solo texto exacto), saltándose RAG + LLM por

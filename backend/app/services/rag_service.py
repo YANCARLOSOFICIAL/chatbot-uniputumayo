@@ -133,7 +133,15 @@ class RAGService:
         try:
             provider_name = provider_name or runtime_config.default_llm_provider
             provider = ProviderFactory.get_provider(provider_name)
-            model = runtime_config.resolve_model(provider_name)
+            # The hypothetical document is throwaway text for the embedding —
+            # it never reaches the user — so it runs on the cheap model, not
+            # the chat model. With gpt-5.6-luna (reasoning) as chat model this
+            # single 150-token call took 3 s alone and 14-18 s with 8
+            # concurrent users (measured 2026-10-17 via /rag/search).
+            model = (
+                settings.openai_condensation_model if provider_name == "openai"
+                else runtime_config.resolve_model(provider_name)
+            )
 
             result = await provider.generate(
                 messages=[{
