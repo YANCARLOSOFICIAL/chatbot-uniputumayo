@@ -180,7 +180,16 @@ services:
       # verificado en vivo en este hardware específico todavía — si los
       # tiempos de OpenAI (que sí lo usa) suben de forma notoria, poner en
       # "false" aquí lo apaga por completo sin tocar código.
-      RAG_RERANKER_ENABLED: "true"
+      # 2026-10-17: desactivado tras medir la saturación en producción. El
+      # cross-encoder (fastembed/ONNX) usa todos los núcleos de un Xeon sin
+      # AVX2 y compite con Ollama por la CPU: con 6 búsquedas simultáneas el
+      # embedding de la consulta pasó de 2-3 s a 14 s de mediana (26 s máx) y
+      # el reranker añadió 2,4-7,9 s más por petición; con 12 usuarios la
+      # p95 del chat fue 54-65 s aun con el presupuesto de OpenAI corregido.
+      # La fusión RRF (vector + FTS) sigue activa. Volver a "true" solo si el
+      # GoldStandard muestra una pérdida de precisión que lo justifique y el
+      # servidor tiene CPU de sobra (o el reranker se mueve a otra máquina).
+      RAG_RERANKER_ENABLED: "false"
       # Subido a "2" el 2026-08-19: el smoke test de GoldStandard confirmó
       # tiempo de generación de Ollama ya en ~615s/consulta con 1 intento
       # (generate + grade), sin margen real bajo el timeout de 600s de
