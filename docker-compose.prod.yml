@@ -58,6 +58,10 @@ services:
       # Sin esto, Ollama usa su default de 2048 tokens para TODO el prompt
       # (system + contexto RAG + historial) y trunca el resto en silencio.
       OLLAMA_NUM_CTX: "8192"
+      # Embeddings de consulta y de caché de respuestas pasan por aquí en cada
+      # mensaje; con el default se atienden de uno en uno y varios usuarios
+      # simultáneos se encolan (prueba de carga 2026-10-17).
+      OLLAMA_NUM_PARALLEL: "4"
     ports:
       - "11434:11434"
     volumes:
@@ -100,13 +104,17 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_DEFAULT_MODEL: gpt-5.4-mini
       OPENAI_EMBEDDING_MODEL: text-embedding-3-small
-      # Presupuesto propio de tokens/minuto contra OpenAI, por debajo del techo
-      # real de la org (30000 TPM observado) — chat generation + grading de
-      # verificación (AMBOS proveedores, ver resolve_grader) + el judge del
-      # eval GoldStandard comparten este mismo presupuesto. Ver
-      # OpenAIProvider._TokenRateLimiter. Subir solo si se confirma un upgrade
-      # de tier en la cuenta de OpenAI.
-      OPENAI_TPM_LIMIT: "27000"
+      # Presupuesto propio de tokens/minuto contra OpenAI (por modelo, ver
+      # OpenAIProvider._limiter_for). El valor anterior (27000) venía del
+      # techo observado en agosto, cuando la org estaba en tier bajo; en la
+      # evaluación formal (13-15/10/2026) fue EL cuello de botella: ~6k tokens
+      # por pregunta -> 3-4 preguntas/minuto en todo el sistema, y una prueba
+      # de carga posterior falló 6/8 peticiones con 8 usuarios simultáneos
+      # (524 de Cloudflare tras 100 s de espera en esta cola). Verificado en
+      # platform.openai.com -> Limits el 2026-10-17: nivel "Build",
+      # 2.000.000 TPM / 5000 RPM en gpt-5.6-luna y gpt-4.1-mini. Se deja al
+      # 75 % por la imprecisión del estimador de tokens (chars/4).
+      OPENAI_TPM_LIMIT: "1500000"
       DEFAULT_LLM_PROVIDER: ollama
       DEFAULT_TEMPERATURE: "0.05"
       # 768 causaba respuestas cortadas a media palabra en preguntas que
@@ -183,7 +191,15 @@ services:
       # aceptar la limitante de Ollama tal cual, documentándola en la
       # tesis en vez de perseguirla más en este hardware.
       VERIFICATION_LOOP_ENABLED: "true"
-      VERIFICATION_MAX_ATTEMPTS: "2"
+      # Bajado a "1" el 2026-10-17: el segundo intento duplicaba la generación
+      # en los casos lentos (40-50 s por respuesta medidos en producción) y,
+      # con varios usuarios a la vez, alimentaba la saturación. Se sigue
+      # verificando cada borrador; si el grader lo rechaza, se sirve el
+      # rechazo fijo en vez de regenerar.
+      VERIFICATION_MAX_ATTEMPTS: "1"
+      # 2 reformulaciones en vez de 3 en el reintento multi-query: menos
+      # embeddings y búsquedas por pregunta rescatada, sin perder la idea.
+      RAG_MULTIQUERY_VARIANTS: "2"
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_DIMENSIONS: "768"
       CORS_ORIGINS: "*"

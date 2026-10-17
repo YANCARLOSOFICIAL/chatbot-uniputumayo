@@ -166,6 +166,12 @@ class Settings(BaseSettings):
     # espera proactiva (OpenAIProvider) en vez de reactiva (retry tras 429),
     # que es más barata y no genera ruido en logs. Margen del 10% por
     # imprecisión en la estimación de tokens (chars/4, sin tokenizer real).
+    # 2026-10-17: el default de 27000 (techo observado en agosto, tier bajo)
+    # quedó obsoleto — la org está en nivel "Build" con 2.000.000 TPM por
+    # modelo, y mantenerlo fue el cuello de botella de la evaluación formal
+    # (3-4 preguntas/minuto en todo el sistema). Producción lo fija en
+    # docker-compose.prod.yml (OPENAI_TPM_LIMIT); este default solo aplica
+    # a desarrollo local.
     openai_tpm_limit: int = 27000
     # Espera máxima en la cola del presupuesto OpenAI antes de devolver 429
     # ("sistema ocupado, reintenta") en vez de colgar el spinner minutos con
