@@ -24,7 +24,8 @@ def thresholds(monkeypatch):
     monkeypatch.setattr(settings, "faq_enabled", True)
     monkeypatch.setattr(settings, "faq_similarity_threshold", 0.90)
     monkeypatch.setattr(settings, "faq_suggest_threshold", 0.80)
-    monkeypatch.setattr(settings, "faq_judge_threshold", 0.70)
+    monkeypatch.setattr(settings, "faq_judge_threshold", 0.50)
+    monkeypatch.setattr(settings, "faq_lexical_threshold", 0.45)
     monkeypatch.setattr(settings, "faq_judge_enabled", True)
     monkeypatch.setattr(runtime_config, "openai_api_key", "sk-test")
 
@@ -35,6 +36,12 @@ class TestLexicalSubset:
         assert FaqService._lexical_subset(e, "cuánto cuesta la inscripción")
         assert FaqService._lexical_subset(e, "cuánto vale la inscripción")
 
+    def test_filler_words_are_ignored_on_both_sides(self):
+        # Measured live at 0.660 similarity — the words are the same once
+        # "de 2026-II" is dropped.
+        e = _entry("¿Cuándo empiezan las clases de 2026-II?")
+        assert FaqService._lexical_subset(e, "cuándo empiezan las clases?")
+
     def test_new_word_breaks_subset(self):
         e = _entry("¿Cuánto cuesta la inscripción en Uniputumayo?")
         assert not FaqService._lexical_subset(e, "cuánto cuesta la matrícula")
@@ -42,6 +49,13 @@ class TestLexicalSubset:
     def test_single_word_is_not_enough(self):
         e = _entry("¿Cuánto cuesta la inscripción en Uniputumayo?")
         assert not FaqService._lexical_subset(e, "inscripción")
+        # "tienen" is filler, so this is effectively one word too
+        assert not FaqService._lexical_subset(_entry("¿Qué especializaciones o posgrados ofrece Uniputumayo?"), "qué especializaciones tienen?")
+
+    def test_low_coverage_is_ambiguous_and_rejected(self):
+        # "cuánto cuesta" fits every cost FAQ — only 2 of 3 core words.
+        e = _entry("¿Cuánto cuesta la inscripción en Uniputumayo?")
+        assert not FaqService._lexical_subset(e, "cuánto cuesta")
 
 
 class TestConfirmParaphrase:
@@ -67,6 +81,22 @@ class TestConfirmParaphrase:
         assert out is not None and out.entry is e
         assert calls == []
 
+    async def test_lexical_subset_works_below_judge_threshold(self):
+        calls = []
+        svc = self._service(judge_choice=None, calls=calls)
+        e = _entry("¿Cuándo empiezan las clases de 2026-II?")
+        out = await svc._confirm_paraphrase([(e, 0.48)], "cuándo empiezan las clases?", None)
+        assert out is not None and out.entry is e
+        assert calls == []
+
+    async def test_short_question_goes_to_judge_from_050(self):
+        calls = []
+        svc = self._service(judge_choice=0, calls=calls)
+        e = _entry("¿Qué especializaciones o posgrados ofrece Uniputumayo?")
+        out = await svc._confirm_paraphrase([(e, 0.517)], "qué especializaciones tienen?", None)
+        assert out is not None and out.entry is e
+        assert calls == [[e.question]]
+
     async def test_judge_confirms_paraphrase(self):
         calls = []
         svc = self._service(judge_choice=0, calls=calls)
@@ -85,7 +115,7 @@ class TestConfirmParaphrase:
         calls = []
         svc = self._service(judge_choice=0, calls=calls)
         e = _entry("¿Cuánto cuesta la inscripción en Uniputumayo?")
-        out = await svc._confirm_paraphrase([(e, 0.60)], "qué hay de almuerzo", None)
+        out = await svc._confirm_paraphrase([(e, 0.40)], "qué hay de almuerzo", None)
         assert out is None and calls == []
 
     async def test_guarded_out_candidates_are_excluded(self):

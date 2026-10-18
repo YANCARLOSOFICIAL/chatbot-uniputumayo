@@ -50,6 +50,19 @@ logger = logging.getLogger(__name__)
 # suggestion can come from a different entry than the one the guard rejected.
 _MATCH_CANDIDATES = 3
 
+# Words that appear in FAQ questions for completeness but carry no topic:
+# a student's "qué especializaciones tienen?" and the FAQ's "¿Qué
+# especializaciones o posgrados ofrece Uniputumayo?" differ only in these.
+# Stripped before the lexical comparison (see _lexical_subset).
+_FILLER_WORDS: frozenset[str] = frozenset({
+    "uniputumayo", "universidad", "institucion", "institucional", "ofrece",
+    "ofrecen", "tiene", "tienen", "existe", "existen", "2025", "2026", "2027",
+    "periodo",
+})
+# Minimum share of the FAQ's core words the query must cover for the free
+# lexical confirmation (see _lexical_subset).
+_LEXICAL_COVERAGE = 0.75
+
 _JUDGE_PROMPT = (
     "Pregunta de un usuario a un chatbot universitario:\n«{question}»\n\n"
     "Preguntas frecuentes candidatas:\n{candidates}\n\n"
@@ -257,18 +270,28 @@ class FaqService:
             and AsyncAnswerCache._semester_guard_passes(as_cache_entry, query_text)
         )
 
-    @staticmethod
-    def _lexical_subset(entry: FaqEntry, query_text: str) -> bool:
-        """Free confirmation for the medium band: every significant word of
-        the user's question already appears in the FAQ question ("cuánto
-        cuesta la inscripción" ⊂ "¿Cuánto cuesta la inscripción en
-        Uniputumayo?"). Price synonyms are canonicalized on both sides
-        (valor/precio -> costo), same as the answer cache. Needs at least
-        two words so a one-word question ("inscripción") can't claim any
-        FAQ that mentions it."""
-        query_words = canonicalize_price_words(_significant_words(query_text))
-        faq_words = canonicalize_price_words(_significant_words(entry.question))
-        return len(query_words) >= 2 and query_words <= faq_words
+    @classmethod
+    def _core_words(cls, text: str) -> set[str]:
+        return canonicalize_price_words(_significant_words(text)) - _FILLER_WORDS
+
+    @classmethod
+    def _lexical_subset(cls, entry: FaqEntry, query_text: str) -> bool:
+        """Free confirmation: the user's question is, word for word, a
+        shorter way of asking the FAQ question ("cuánto cuesta la
+        inscripción" ⊂ "¿Cuánto cuesta la inscripción en Uniputumayo?",
+        "cuándo empiezan las clases" ⊂ "...de 2026-II?").
+
+        Both sides drop filler (_FILLER_WORDS) and canonicalize price
+        synonyms (valor/precio -> costo), same as the answer cache. Then:
+        at least two query words, all of them in the FAQ, and covering at
+        least _LEXICAL_COVERAGE of the FAQ's own words — so "cuánto cuesta"
+        alone (2 of the 3 words of "cuánto cuesta la inscripción") is NOT
+        enough: it fits several cost FAQs and must go to the judge."""
+        query_words = cls._core_words(query_text)
+        faq_words = cls._core_words(entry.question)
+        if len(query_words) < 2 or not faq_words or not query_words <= faq_words:
+            return False
+        return len(query_words) / len(faq_words) >= _LEXICAL_COVERAGE
 
     # ── Matching ──────────────────────────────────────────────────────────
 
@@ -358,23 +381,25 @@ class FaqService:
         aliases: dict[str, str] | None,
         trace: FaqTrace | None = None,
     ) -> FaqMatch | None:
-        """Medium band (faq_judge_threshold <= s < faq_similarity_threshold):
-        confirm a paraphrase for free (lexical subset) or with one minimal
-        auxiliary-model call. Guards apply exactly as for a direct hit."""
-        band = [
+        """Below faq_similarity_threshold: confirm a paraphrase for free
+        (lexical subset, from faq_lexical_threshold up) or with one minimal
+        auxiliary-model call (from faq_judge_threshold up). Guards apply
+        exactly as for a direct hit."""
+        eligible = [
             (entry, sim) for entry, sim in candidates
-            if settings.faq_judge_threshold <= sim < settings.faq_similarity_threshold
+            if sim < settings.faq_similarity_threshold
             and self._guards_pass(entry, query_text, aliases)
         ]
-        if not band:
-            return None
-        for entry, sim in band:
-            if self._lexical_subset(entry, query_text):
+        for entry, sim in eligible:
+            if sim >= settings.faq_lexical_threshold and self._lexical_subset(entry, query_text):
                 logger.info(
                     "FAQ hit (lexical subset) | faq=%s | similarity=%.3f | q=%r",
                     entry.id, sim, query_text[:80],
                 )
                 return FaqMatch(entry, sim)
+        band = [(entry, sim) for entry, sim in eligible if sim >= settings.faq_judge_threshold]
+        if not band:
+            return None
         # runtime_config, not settings: the OpenAI key can be set from the
         # admin panel after startup.
         if not settings.faq_judge_enabled or not runtime_config.openai_api_key:

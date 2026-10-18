@@ -281,9 +281,21 @@ class Settings(BaseSettings):
     # mínima al modelo auxiliar (≈150 tokens, ~1 s) que decide si piden
     # exactamente el mismo dato. Sigue siendo ~40 veces más barato que una
     # respuesta RAG completa (~6.000 tokens).
-    faq_judge_threshold: float = 0.70
+    # Segunda medición en producción (probador de /admin/faq, 2026-10-17):
+    # "cuándo empiezan las clases?" vs "¿Cuándo empiezan las clases de
+    # 2026-II?" = 0.660 y "qué especializaciones tienen?" vs "¿Qué
+    # especializaciones o posgrados ofrece Uniputumayo?" = 0.517. Las
+    # preguntas cortas de un estudiante puntúan bajo frente a FAQ largas
+    # con "en Uniputumayo"/"de 2026-II", así que el juez arranca en 0.50:
+    # por debajo de eso ya no aparecen parafraseos reales, solo otros temas.
+    faq_judge_threshold: float = 0.50
     faq_judge_enabled: bool = True
     faq_judge_timeout_seconds: float = 6.0
+    # Piso de similitud para la confirmación léxica gratuita (las palabras
+    # de la pregunta, quitando relleno como "uniputumayo"/"ofrece"/"2026",
+    # cubren ≥ 75 % de las de la FAQ). Más bajo que el juez porque la
+    # coincidencia de palabras ya es evidencia fuerte por sí sola.
+    faq_lexical_threshold: float = 0.45
 
     # Program/faculty disambiguation: for topics confirmed to genuinely differ
     # by program or faculty (pensum, créditos, misión, etc. — see
