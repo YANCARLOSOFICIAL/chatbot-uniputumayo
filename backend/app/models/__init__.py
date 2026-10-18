@@ -11,8 +11,10 @@ from app.models.program import Program
 from app.models.document_type import DocumentType
 from app.models.rag_eval_run import RagEvalRun
 from app.models.gold_eval_run import GoldEvalRun
+from app.models.faq_entry import FaqEntry
 
 __all__ = [
+    "FaqEntry",
     "User",
     "Conversation",
     "Message",

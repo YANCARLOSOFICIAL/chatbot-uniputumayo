@@ -32,7 +32,7 @@ export function ChatContainer() {
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
   const {
-    conversations, activeConversationId, messages, sources,
+    conversations, activeConversationId, messages, sources, faqSuggestion,
     isLoading, avatarState, error,
     loadConversations, createConversation, selectConversation,
     sendMessage, cancelActiveStream, deleteConversation, renameConversation, dispatch,
@@ -342,6 +342,7 @@ export function ChatContainer() {
         <MessageList
           messages={messages}
           sources={sources}
+          faqSuggestion={faqSuggestion}
           isLoading={isLoading}
           onQuickReply={(msg) => handleSend(msg, "text")}
           onRegenerate={handleRegenerate}

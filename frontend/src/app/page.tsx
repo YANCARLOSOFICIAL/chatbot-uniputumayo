@@ -98,6 +98,9 @@ export default function LandingPage() {
                 {label}
               </a>
             ))}
+            <Link href="/faq" style={{ fontSize: 13, color: "rgba(255,255,255,0.72)", textDecoration: "none" }} className="hover:text-white transition-colors">
+              Preguntas frecuentes
+            </Link>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

@@ -150,6 +150,36 @@ async def analytics_overview(
             "created_at": m.created_at.isoformat(),
         })
 
+    # ── Preguntas frecuentes (FAQ curadas, see app/services/faq_service.py) ─
+    # answer_source is only set on assistant messages stored after the FAQ
+    # feature shipped; older rows are NULL and excluded from the rate.
+    classified_total = (await db.execute(
+        select(func.count(Message.id))
+        .where(Message.role == "assistant")
+        .where(Message.answer_source.isnot(None))
+    )).scalar() or 0
+
+    faq_total = (await db.execute(
+        select(func.count(Message.id)).where(Message.answer_source == "faq")
+    )).scalar() or 0
+
+    cache_total = (await db.execute(
+        select(func.count(Message.id)).where(Message.answer_source == "cache")
+    )).scalar() or 0
+
+    no_llm_total = faq_total + cache_total
+    faq_rate = round(faq_total / classified_total * 100, 1) if classified_total else 0.0
+    no_llm_rate = round(no_llm_total / classified_total * 100, 1) if classified_total else 0.0
+
+    top_faq_rows = (await db.execute(text("""
+        SELECT question, hit_count
+        FROM faq_entries
+        WHERE hit_count > 0
+        ORDER BY hit_count DESC, question
+        LIMIT 5
+    """))).fetchall()
+    top_faq = [{"label": r.question, "count": int(r.hit_count)} for r in top_faq_rows]
+
     return {
         "total_conversations": total_conv,
         "total_messages": total_msg,
@@ -166,5 +196,13 @@ async def analytics_overview(
             "retry_rate": retry_rate,
             "never_approved_total": never_approved_total,
             "recent_corrected": recent_corrected,
+        },
+        "faq": {
+            "classified_total": classified_total,
+            "faq_total": faq_total,
+            "cache_total": cache_total,
+            "faq_rate": faq_rate,
+            "no_llm_rate": no_llm_rate,
+            "top_faq": top_faq,
         },
     }

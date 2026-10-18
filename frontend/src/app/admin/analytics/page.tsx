@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { BarChart3, TrendingUp, TrendingDown, MessageSquare, Users, Activity, Clock, Minus, RefreshCw, ShieldCheck, RotateCcw, AlertTriangle } from "lucide-react";
+import { BarChart3, TrendingUp, TrendingDown, MessageSquare, Users, Activity, Clock, Minus, RefreshCw, ShieldCheck, RotateCcw, AlertTriangle, HelpCircle, BookmarkCheck, Zap } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { toast } from "@/components/ui/Toast";
@@ -206,6 +206,62 @@ export default function AnalyticsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Preguntas frecuentes — answers served from the curated FAQ
+                (and the answer cache) without any LLM call. See backend
+                app/services/faq_service.py. */}
+            {data.faq && (
+              <div className="card" style={{ padding: 24, marginTop: 24 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+                  <div>
+                    <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 800, margin: "0 0 2px", color: "var(--text-1)", letterSpacing: "-0.02em" }}>
+                      Preguntas frecuentes
+                    </h3>
+                    <div style={{ fontSize: 12, color: "var(--text-3)" }}>
+                      Respuestas servidas desde las preguntas frecuentes curadas, sin llamar al modelo de lenguaje
+                    </div>
+                  </div>
+                  <HelpCircle size={18} style={{ color: "var(--brand-primary)", flexShrink: 0 }} />
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: data.faq.top_faq.length ? 20 : 4 }}>
+                  {[
+                    { label: "Respondidas por FAQ", value: data.faq.faq_total, icon: BookmarkCheck, color: "var(--brand-primary)" },
+                    { label: "Tasa FAQ", value: `${data.faq.faq_rate}%`, icon: HelpCircle, color: "var(--brand-primary)" },
+                    { label: "Sin usar el modelo (FAQ + caché)", value: `${data.faq.no_llm_rate}%`, icon: Zap, color: "var(--success)" },
+                    { label: "Respuestas clasificadas", value: data.faq.classified_total, icon: MessageSquare, color: "var(--text-3)" },
+                  ].map(({ label, value, icon: Icon, color }) => (
+                    <div key={label} style={{ flex: "1 1 160px", padding: "12px 14px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                        <Icon size={12} style={{ color }} />
+                        <span style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</span>
+                      </div>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 800, color: "var(--text-1)" }}>{value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {data.faq.top_faq.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "16px 0 4px", color: "var(--text-3)", fontSize: 13 }}>
+                    Ninguna pregunta frecuente ha respondido todavía — agréguelas en la sección Preguntas frecuentes.
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 10 }}>
+                      Preguntas frecuentes más usadas
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {data.faq.top_faq.map((q) => (
+                        <div key={q.label} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)" }}>
+                          <span style={{ flex: 1, fontSize: 13, color: "var(--text-1)" }}>{q.label}</span>
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--brand-primary)" }}>{q.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Verification loop (LangGraph self-correction) — see
                 app/services/verification_graph.py. Only messages that went

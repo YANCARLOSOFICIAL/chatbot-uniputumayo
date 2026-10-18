@@ -18,7 +18,54 @@ export interface Message {
   llm_provider: string | null;
   llm_model: string | null;
   response_time_ms: number | null;
+  // How the assistant answer was produced ("faq" | "cache" | "rag" |
+  // "refusal" | "clarification" | "greeting"); absent on user messages and
+  // on answers stored before the FAQ feature.
+  answer_source?: string | null;
+  faq_entry_id?: string | null;
   created_at: string;
+}
+
+/* ── Preguntas frecuentes (FAQ) ── */
+export interface FaqPublic {
+  id: string;
+  question: string;
+  answer: string;
+  category: string | null;
+  source_document: string | null;
+  valid_period: string | null;
+  sort_order: number;
+}
+
+export interface FaqAdmin extends FaqPublic {
+  program: string | null;
+  faculty: string | null;
+  is_enabled: boolean;
+  hit_count: number;
+  indexed: boolean;
+  embedding_model: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FaqInput {
+  question: string;
+  answer: string;
+  category?: string | null;
+  source_document?: string | null;
+  valid_period?: string | null;
+  program?: string | null;
+  faculty?: string | null;
+  is_enabled?: boolean;
+  sort_order?: number;
+}
+
+// Related FAQ offered after an answer when the question was close to a
+// curated one but not confidently the same.
+export interface FaqSuggestion {
+  id: string;
+  question: string;
+  similarity: number;
 }
 
 export interface SourceInfo {
@@ -35,6 +82,7 @@ export interface ChatResponse {
   user_message: Message;
   assistant_message: Message;
   sources: SourceInfo[];
+  faq_suggestion?: FaqSuggestion | null;
 }
 
 export interface ProviderOption {

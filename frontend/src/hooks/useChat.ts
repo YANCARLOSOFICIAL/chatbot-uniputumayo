@@ -155,6 +155,7 @@ export function useChat() {
       dispatch({ type: "SET_LOADING", payload: true });
       dispatch({ type: "AVATAR_EVENT", payload: "REQUEST_SENT" });
       dispatch({ type: "SET_ERROR", payload: null });
+      dispatch({ type: "SET_FAQ_SUGGESTION", payload: null });
 
       // Optimistically add user message
       const tempUserId = `temp-user-${Date.now()}`;
@@ -204,6 +205,7 @@ export function useChat() {
               content?: string;
               user_message?: unknown;
               assistant_message?: unknown;
+              faq_suggestion?: { id: string; question: string; similarity: number } | null;
               message?: string;
             };
 
@@ -247,6 +249,9 @@ export function useChat() {
                   e.assistant_message as unknown as Message,
                 ],
               });
+              if (e.faq_suggestion) {
+                dispatch({ type: "SET_FAQ_SUGGESTION", payload: e.faq_suggestion });
+              }
               if (voice) {
                 // Avatar stays "thinking" until the queued TTS audio actually
                 // starts playing (see useVoicePlayback onPlaybackStarted).

@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import random
@@ -22,7 +21,9 @@ from app.schemas.chat import (
     MessageResponse,
     SourceInfo,
 )
+from app.schemas.faq import FaqSuggestion
 from app.services.rag_service import RAGService
+from app.services.faq_service import FaqService, FaqLookup
 from app.services.llm_service import LLMService
 from app.services.verification_graph import generate_verified
 from app.schemas.rag import SearchRequest, SearchFilters
@@ -36,6 +37,7 @@ from app.utils.query_utils import (
     mentions_entity,
 )
 from app.utils.cache import answer_cache, suggestion_cache, program_list_cache, program_alias_cache
+from app.utils.question_embedding import embed_question
 from app.runtime_config import runtime_config
 from app.config import settings
 from app.providers.provider_factory import ProviderFactory
@@ -604,39 +606,74 @@ class ChatService:
         `answer_cache_embed_timeout_seconds` (short) rather than the 120s
         client timeout `OllamaProvider.embed()` uses for bulk document
         ingestion — see that setting's docstring for why.
-        """
-        try:
-            provider = ProviderFactory.get_provider("ollama")
-            result = await asyncio.wait_for(
-                provider.embed([query], model=settings.answer_cache_embedding_model),
-                timeout=settings.answer_cache_embed_timeout_seconds,
-            )
-            return result["embeddings"][0]
-        except Exception as e:
-            logger.warning(
-                "Answer-cache embedding unavailable, skipping cache lookup: %s: %s",
-                type(e).__name__, e,
-            )
-            return None
 
-    async def _check_answer_cache(self, query: str) -> tuple[list[float] | None, dict | None]:
-        """Look up a semantically similar cached answer, if the cache is enabled.
-
-        Returns (embedding, cached_entry_or_None). The embedding is returned
-        even on a miss so the caller can reuse it as the cache key when
-        storing the freshly generated answer, without embedding twice. Both
-        are None when the cache is disabled or the embedding call failed
-        (e.g. Ollama unreachable) — callers must skip `answer_cache.store`
-        in that case.
+        The actual call lives in app/utils/question_embedding.py so the
+        curated FAQ (faq_service.py) embeds its questions with exactly the
+        same model — both compare against this embedding.
         """
-        if not settings.answer_cache_enabled:
-            return None, None
+        return await embed_question(query)
+
+    async def _check_faq_and_cache(
+        self, query: str,
+    ) -> tuple[list[float] | None, dict | None, FaqLookup]:
+        """One embedding call, two lookups: curated FAQ first, answer cache
+        second.
+
+        Returns (embedding, cached_entry_or_None, faq_lookup). The embedding
+        is returned even on a miss so the caller can reuse it as the cache
+        key when storing the freshly generated answer, without embedding
+        twice. Embedding and cache are None when both features are disabled
+        or the embedding call failed (e.g. Ollama unreachable) — callers
+        must skip `answer_cache.store` in that case.
+
+        FAQ beats cache on purpose: a FAQ answer was written by a person and
+        is the institution's official wording; a cache entry is whatever the
+        LLM said last time (see faq_service.py module docstring).
+        """
+        if not (settings.answer_cache_enabled or settings.faq_enabled):
+            return None, None, FaqLookup()
         embedding = await self._embed_query(query)
         if embedding is None:
-            return None, None
+            return None, None, FaqLookup()
         aliases = await self._get_program_aliases()
-        cached = await answer_cache.find_similar(embedding, query_text=query, aliases=aliases)
-        return embedding, cached
+
+        faq_lookup = FaqLookup()
+        if settings.faq_enabled and self.db is not None:
+            faq_lookup = await FaqService(self.db).match(embedding, query, aliases)
+            if faq_lookup.hit is not None:
+                return embedding, None, faq_lookup
+
+        cached = None
+        if settings.answer_cache_enabled:
+            cached = await answer_cache.find_similar(embedding, query_text=query, aliases=aliases)
+        return embedding, cached, faq_lookup
+
+    @staticmethod
+    def _faq_suggestion_payload(lookup: FaqLookup) -> FaqSuggestion | None:
+        if lookup.suggestion is None:
+            return None
+        return FaqSuggestion(
+            id=lookup.suggestion.entry.id,
+            question=lookup.suggestion.entry.question,
+            similarity=round(lookup.suggestion.similarity, 3),
+        )
+
+    @staticmethod
+    def _classify_answer_source(
+        *, faq_hit: bool, cached: bool, clarification: bool, greeting: bool, content: str,
+    ) -> str:
+        """Value for messages.answer_source — how this answer was produced."""
+        if faq_hit:
+            return "faq"
+        if cached:
+            return "cache"
+        if clarification:
+            return "clarification"
+        if greeting:
+            return "greeting"
+        if REFUSAL_MARKER in content:
+            return "refusal"
+        return "rag"
 
     _AMBIGUITY_SCORE_MARGIN = 0.15
 
@@ -1209,12 +1246,27 @@ class ChatService:
         self.db.add(user_message)
         await self.db.flush()
 
-        query_embedding, cached = await self._check_answer_cache(data.content)
+        query_embedding, cached, faq_lookup = await self._check_faq_and_cache(data.content)
         verification_attempts: int | None = None
         verification_approved: bool | None = None
         ambiguity: tuple[str, list[str]] | None = None
+        greeting = False
+        faq_entry_id: UUID | None = None
 
-        if cached is not None:
+        if faq_lookup.hit is not None:
+            # Curated FAQ hit — the official answer, no RAG, no LLM, no cache
+            # (see faq_service.py). Provider/model are None: nothing generated
+            # this text.
+            faq_entry = faq_lookup.hit.entry
+            faq_entry_id = faq_entry.id
+            content = faq_entry.answer
+            provider_name = runtime_config.default_llm_provider
+            model_name = None
+            quality = "faq"
+            sources_payload, source_infos = [], []
+            tokens_used = None
+            await FaqService(self.db).record_hit(faq_entry.id)
+        elif cached is not None:
             content = cached["answer"]
             provider_name = cached["llm_provider"]
             model_name = cached["llm_model"]
@@ -1413,23 +1465,29 @@ class ChatService:
 
         response_time = int((time.time() - t0) * 1000)
 
+        answer_source = self._classify_answer_source(
+            faq_hit=faq_entry_id is not None, cached=cached is not None,
+            clarification=ambiguity is not None, greeting=greeting, content=content,
+        )
         assistant_message = Message(
             conversation_id=conversation_id,
             role="assistant",
             content=content,
             input_type="text",
             tokens_used=tokens_used,
-            llm_provider=provider_name,
+            llm_provider=None if faq_entry_id is not None else provider_name,
             llm_model=model_name,
             response_time_ms=response_time,
             verification_attempts=verification_attempts,
             verification_approved=verification_approved,
+            answer_source=answer_source,
+            faq_entry_id=faq_entry_id,
         )
         self.db.add(assistant_message)
 
         await self._maybe_set_title(
             conversation_id, data.content, content, provider_name,
-            use_llm_title=(cached is None and ambiguity is None),
+            use_llm_title=(cached is None and ambiguity is None and faq_entry_id is None),
         )
         if provider_name != "ollama":
             await self._refresh_context_summary(conversation_id)
@@ -1447,6 +1505,7 @@ class ChatService:
             user_message=MessageResponse.model_validate(user_message),
             assistant_message=MessageResponse.model_validate(assistant_message),
             sources=source_infos or [],
+            faq_suggestion=self._faq_suggestion_payload(faq_lookup),
         )
 
     # ── Streaming ────────────────────────────────────────────────────────────
@@ -1472,12 +1531,31 @@ class ChatService:
             # so Cloudflare/nginx don't close the connection thinking it's idle.
             yield ": thinking\n\n"
 
-            query_embedding, cached = await self._check_answer_cache(data.content)
+            query_embedding, cached, faq_lookup = await self._check_faq_and_cache(data.content)
             verification_attempts: int | None = None
             verification_approved: bool | None = None
             ambiguity: tuple[str, list[str]] | None = None
+            greeting = False
+            faq_entry_id: UUID | None = None
 
-            if cached is not None:
+            if faq_lookup.hit is not None:
+                # Curated FAQ hit — official answer, no RAG/LLM/cache (see
+                # faq_service.py). The 'faq' event lets the UI label the
+                # answer and link to the FAQ page.
+                faq_entry = faq_lookup.hit.entry
+                faq_entry_id = faq_entry.id
+                full_content = faq_entry.answer
+                provider_name = runtime_config.default_llm_provider
+                model = None
+                quality = "faq"
+                sources_payload = []
+                rag_count = 0
+                await FaqService(self.db).record_hit(faq_entry.id)
+
+                yield f"data: {json.dumps({'type': 'faq', 'id': str(faq_entry.id), 'question': faq_entry.question, 'source_document': faq_entry.source_document, 'valid_period': faq_entry.valid_period})}\n\n"
+                yield f"data: {json.dumps({'type': 'sources', 'sources': []})}\n\n"
+                yield f"data: {json.dumps({'type': 'token', 'content': full_content})}\n\n"
+            elif cached is not None:
                 # Semantic cache hit — skip RAG + LLM entirely. See AsyncAnswerCache
                 # docstring: matches paraphrased questions, not just exact text.
                 sources_payload = cached["sources"]
@@ -1690,22 +1768,28 @@ class ChatService:
 
             response_time = int((time.time() - t0) * 1000)
 
+            answer_source = self._classify_answer_source(
+                faq_hit=faq_entry_id is not None, cached=cached is not None,
+                clarification=ambiguity is not None, greeting=greeting, content=full_content,
+            )
             assistant_message = Message(
                 conversation_id=conversation_id,
                 role="assistant",
                 content=full_content,
                 input_type="text",
-                llm_provider=provider_name,
+                llm_provider=None if faq_entry_id is not None else provider_name,
                 llm_model=model,
                 response_time_ms=response_time,
                 verification_attempts=verification_attempts,
                 verification_approved=verification_approved,
+                answer_source=answer_source,
+                faq_entry_id=faq_entry_id,
             )
             self.db.add(assistant_message)
 
             await self._maybe_set_title(
                 conversation_id, data.content, full_content, provider_name,
-                use_llm_title=(cached is None and ambiguity is None),
+                use_llm_title=(cached is None and ambiguity is None and faq_entry_id is None),
             )
             if provider_name != "ollama":
                 await self._refresh_context_summary(conversation_id)
@@ -1741,12 +1825,17 @@ class ChatService:
                     "content": full_content,
                     "input_type": "text",
                     "tokens_used": None,
-                    "llm_provider": provider_name,
+                    "llm_provider": assistant_message.llm_provider,
                     "llm_model": model,
                     "response_time_ms": response_time,
+                    "answer_source": answer_source,
+                    "faq_entry_id": str(faq_entry_id) if faq_entry_id else None,
                     "created_at": assistant_message.created_at.isoformat(),
                 },
             }
+            faq_suggestion = self._faq_suggestion_payload(faq_lookup)
+            if faq_suggestion is not None:
+                done_payload["faq_suggestion"] = faq_suggestion.model_dump(mode="json")
             yield f"data: {json.dumps(done_payload)}\n\n"
 
         except Exception as e:

@@ -13,7 +13,7 @@ from sqlalchemy import select, delete as sql_delete
 
 from app.config import settings
 from app.providers.openai_provider import TokenBudgetExhausted
-from app.routers import health, chat, rag, llm, documents, config, auth, audio, analytics, taxonomy, rag_eval, goldstandard_eval
+from app.routers import health, chat, rag, llm, documents, config, auth, audio, analytics, taxonomy, rag_eval, goldstandard_eval, faq
 from app.middleware.error_handler import global_exception_handler
 from app.utils.rate_limit import limiter
 
@@ -377,6 +377,7 @@ app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytic
 app.include_router(taxonomy.router, prefix="/api/v1/taxonomy", tags=["taxonomy"])
 app.include_router(rag_eval.router, prefix="/api/v1/rag-eval", tags=["rag-eval"])
 app.include_router(goldstandard_eval.router, prefix="/api/v1/goldstandard-eval", tags=["goldstandard-eval"])
+app.include_router(faq.router, prefix="/api/v1/faq", tags=["faq"])
 
 
 @app.get("/")

@@ -7,7 +7,7 @@ import {
   type ReactNode,
   type Dispatch,
 } from "react";
-import type { Conversation, Message, SourceInfo } from "@/types/chat";
+import type { Conversation, Message, SourceInfo, FaqSuggestion } from "@/types/chat";
 import type { AvatarState } from "@/types/avatar";
 import { nextAvatarState, type AvatarEvent } from "@/lib/avatarMachine";
 
@@ -16,6 +16,8 @@ interface ChatState {
   activeConversationId: string | null;
   messages: Message[];
   sources: SourceInfo[];
+  // Related curated FAQ for the latest turn only (see backend faq_service.py)
+  faqSuggestion: FaqSuggestion | null;
   isLoading: boolean;
   avatarState: AvatarState;
   inputMode: "text" | "voice";
@@ -29,6 +31,7 @@ type ChatAction =
   | { type: "ADD_MESSAGE"; payload: Message }
   | { type: "UPDATE_MESSAGE_CONTENT"; payload: { id: string; append: string } }
   | { type: "SET_SOURCES"; payload: SourceInfo[] }
+  | { type: "SET_FAQ_SUGGESTION"; payload: FaqSuggestion | null }
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "AVATAR_EVENT"; payload: AvatarEvent }
   | { type: "SET_INPUT_MODE"; payload: "text" | "voice" }
@@ -42,6 +45,7 @@ const initialState: ChatState = {
   activeConversationId: null,
   messages: [],
   sources: [],
+  faqSuggestion: null,
   isLoading: false,
   avatarState: "idle",
   inputMode: "text",
@@ -53,7 +57,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case "SET_CONVERSATIONS":
       return { ...state, conversations: action.payload };
     case "SET_ACTIVE_CONVERSATION":
-      return { ...state, activeConversationId: action.payload, messages: [], sources: [] };
+      return { ...state, activeConversationId: action.payload, messages: [], sources: [], faqSuggestion: null };
     case "SET_MESSAGES":
       return { ...state, messages: action.payload };
     case "ADD_MESSAGE":
@@ -69,6 +73,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
     case "SET_SOURCES":
       return { ...state, sources: action.payload };
+    case "SET_FAQ_SUGGESTION":
+      return { ...state, faqSuggestion: action.payload };
     case "SET_LOADING":
       return { ...state, isLoading: action.payload };
     case "AVATAR_EVENT":
@@ -87,6 +93,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         activeConversationId: isActive ? null : state.activeConversationId,
         messages: isActive ? [] : state.messages,
         sources: isActive ? [] : state.sources,
+        faqSuggestion: isActive ? null : state.faqSuggestion,
       };
     }
     case "RENAME_CONVERSATION":

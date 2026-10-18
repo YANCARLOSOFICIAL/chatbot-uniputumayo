@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, memo } from "react";
 import dynamic from "next/dynamic";
-import { Check, Copy, Mic, Clock, Zap, RotateCcw } from "lucide-react";
+import Link from "next/link";
+import { Check, Copy, Mic, Clock, Zap, RotateCcw, BookmarkCheck } from "lucide-react";
 import type { Message } from "@/types/chat";
 import { GuacamayaAvatar } from "./GuacamayaAvatar";
 
@@ -83,6 +84,22 @@ function BotMessage({ message, isLast, onRegenerate, onCitationClick }: { messag
       </div>
 
       <div style={{ flex: 1, minWidth: 0, maxWidth: "82%" }}>
+        {/* Curated FAQ answer — written by the institution, not generated.
+            Persisted via answer_source so it survives reloads. */}
+        {message.answer_source === "faq" && (
+          <Link
+            href={message.faq_entry_id ? `/faq?id=${message.faq_entry_id}` : "/faq"}
+            title="Esta respuesta viene de las Preguntas frecuentes revisadas por la institución"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 5, marginBottom: 6,
+              padding: "3px 9px", borderRadius: 9999, fontSize: 10.5, fontWeight: 600,
+              background: "var(--brand-dim)", border: "1px solid var(--brand-light)",
+              color: "var(--brand-primary)", textDecoration: "none",
+            }}
+          >
+            <BookmarkCheck size={10} strokeWidth={2} /> Pregunta frecuente · respuesta oficial
+          </Link>
+        )}
         {/* Flat message — editorial newspaper column style */}
         <div
           className="msg-bot-flat prose-chat"

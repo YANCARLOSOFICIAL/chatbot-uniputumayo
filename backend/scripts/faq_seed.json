@@ -1,0 +1,210 @@
+{
+  "_comentario": "Semilla inicial de Preguntas frecuentes para Guaca. Las respuestas se redactaron a partir del Tríptico de oferta académica 2026-2 (documento ya indexado). REVISAR cada respuesta antes de importar desde Admin > Preguntas frecuentes > Importar JSON. Las preguntas sobre el Estatuto Estudiantil (requisitos de grado, pérdida de materias, reingreso, opciones de grado) se dejaron fuera a propósito: deben redactarse citando el artículo exacto del Estatuto.",
+  "skip_duplicates": true,
+  "entries": [
+    {
+      "question": "¿Cuánto cuesta la inscripción en Uniputumayo?",
+      "answer": "El derecho de inscripción para el periodo 2026-II cuesta **$88.000 pesos**. Lo paga todo aspirante, en cualquier programa, ciclo o nivel (técnico profesional, tecnológico o profesional).",
+      "category": "Costos",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 1
+    },
+    {
+      "question": "¿Cuánto cuesta la matrícula del ciclo tecnológico?",
+      "answer": "La matrícula del ciclo tecnológico para 2026-II cuesta **$1.429.000 pesos por semestre**. Aplica a todas las tecnologías de Uniputumayo (Gestión Empresarial y de la Innovación, Desarrollo de Software, Saneamiento Ambiental, Recursos Forestales, Gestión Contable, Obras Civiles, Gestión de Comercio Internacional, Gestión Gastronómica, Producción Agropecuaria y Procesos Industriales). Además se paga la inscripción de $88.000.",
+      "category": "Costos",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 2
+    },
+    {
+      "question": "¿Cuánto cuesta la matrícula del nivel técnico profesional?",
+      "answer": "La matrícula del nivel técnico profesional para 2026-II cuesta **$1.134.000 pesos por semestre**. Aplica a los programas Técnico Profesional en Producción Gráfica y Multimedia y Técnico Profesional en Establecimiento y Aprovechamiento de Plantaciones Forestales. Además se paga la inscripción de $88.000.",
+      "category": "Costos",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 3
+    },
+    {
+      "question": "¿Cuánto cuesta el semestre del ciclo profesional (ingenierías, administración, contaduría)?",
+      "answer": "El tríptico 2026-2 **no publica** el valor del semestre del ciclo profesional (semestres 7 a 10) ni de los posgrados. Los primeros seis semestres de esas carreras corresponden al ciclo tecnológico y cuestan $1.429.000 por semestre. Para el valor del ciclo profesional consulta la Oficina de Atención al Usuario (celular 313 805 2807, correo atencionalusuario@itp.edu.co) o la resolución de derechos pecuniarios vigente.",
+      "category": "Costos",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 4
+    },
+    {
+      "question": "¿Puedo estudiar gratis en Uniputumayo? ¿Cómo funciona la política de gratuidad?",
+      "answer": "Sí. Uniputumayo es una institución pública y sus estudiantes pueden estudiar gratis gracias a la **política de gratuidad del Gobierno Nacional** (aplican términos y condiciones). Más información: Oficina de Atención al Usuario, celular 313 805 2807, correo atencionalusuario@itp.edu.co, y el documento del Ministerio de Educación: https://www.mineducacion.gov.co/1780/articles-419388_recurso_2.pdf",
+      "category": "Costos",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 5
+    },
+    {
+      "question": "¿Cuáles son los medios de pago de la matrícula?",
+      "answer": "Puedes pagar **en línea por PSE**, o de forma presencial en **SuperGIROS** o en **Bancolombia (convenio 62467)**. Enlace de pagos financieros: https://bit.ly/3ImNGGt",
+      "category": "Costos",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 6
+    },
+    {
+      "question": "¿Cuándo son las inscripciones para 2026-II?",
+      "answer": "Las inscripciones de aspirantes a primer semestre para 2026-II van del **11 de mayo al 15 de julio de 2026**. La selección y admisión de estudiantes nuevos se realiza el 16 y 17 de julio de 2026, y la publicación de admitidos es el 21 de julio de 2026.",
+      "category": "Calendario",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 1
+    },
+    {
+      "question": "¿Cuándo son las matrículas para 2026-II?",
+      "answer": "La **matrícula ordinaria** va del 26 de junio al 27 de julio de 2026. La **matrícula extraordinaria** es el 28 y 29 de julio de 2026.",
+      "category": "Calendario",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 2
+    },
+    {
+      "question": "¿Cuándo empiezan las clases de 2026-II?",
+      "answer": "El inicio de clases de 2026-II es el **3 de agosto de 2026**. La inducción a estudiantes nuevos (en sedes y ampliaciones) se realiza del 3 al 6 de agosto de 2026.",
+      "category": "Calendario",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 3
+    },
+    {
+      "question": "¿Cómo me inscribo en Uniputumayo?",
+      "answer": "Todo el proceso de inscripción se realiza **en línea** en la plataforma SIGEDIN (www.sigedin.itp.edu.co, enlace https://bit.ly/3pz3OKd) y a través de www.itp.edu.co. Debes diligenciar el formulario, pagar el derecho de inscripción ($88.000) y adjuntar los documentos requeridos.",
+      "category": "Admisiones",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 1
+    },
+    {
+      "question": "¿Cuáles son los requisitos de inscripción para aspirantes nuevos?",
+      "answer": "Para inscribirte a primer semestre necesitas:\n1. Formulario de inscripción diligenciado en www.sigedin.itp.edu.co.\n2. Comprobante de pago del derecho de inscripción.\n3. Fotocopia del documento de identidad.\n4. Copia del título de bachiller o del acta de grado.\n5. Copia de los resultados de las pruebas ICFES (Saber 11).",
+      "category": "Admisiones",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 2
+    },
+    {
+      "question": "¿Qué requisitos piden para ingresar al ciclo profesional (séptimo semestre)?",
+      "answer": "Los tecnólogos que continúan al ciclo profesional (ingreso a séptimo semestre) deben presentar: formulario de inscripción, copia del título o del acta de grado de tecnólogo, y copia del Sisbén.",
+      "category": "Admisiones",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 3
+    },
+    {
+      "question": "¿Qué requisitos piden para la matrícula de estudiantes nuevos?",
+      "answer": "Para la matrícula de estudiantes nuevos se requiere el **recibo de pago por derechos complementarios** y un **certificado médico** de buen estado de salud y aptitud para vivir en comunidad.",
+      "category": "Admisiones",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 4
+    },
+    {
+      "question": "¿Qué programas académicos ofrece Uniputumayo?",
+      "answer": "Para 2026-II Uniputumayo ofrece:\n\n**Ciclo profesional (10 semestres):** Administración de Empresas, Ingeniería de Sistemas, Ingeniería Ambiental, Ingeniería Forestal, Contaduría Pública, Ingeniería Civil, Administración de Negocios Internacionales, Gastronomía, Ingeniería Agropecuaria e Ingeniería Industrial.\n\n**Ciclo tecnológico (6 semestres):** Gestión Empresarial y de la Innovación, Desarrollo de Software, Saneamiento Ambiental, Recursos Forestales, Gestión Contable, Obras Civiles, Gestión de Comercio Internacional, Gestión Gastronómica, Producción Agropecuaria y Procesos Industriales.\n\n**Técnico profesional (4 semestres):** Producción Gráfica y Multimedia; Establecimiento y Aprovechamiento de Plantaciones Forestales.\n\n**Posgrados (2 semestres):** Especialización en Gerencia del Talento Humano y Especialización en Gestión Ambiental.",
+      "category": "Oferta académica",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 1
+    },
+    {
+      "question": "¿Qué son los ciclos propedéuticos y cuánto duran los programas?",
+      "answer": "Las carreras profesionales de Uniputumayo se cursan **por ciclos propedéuticos**: los primeros **6 semestres** corresponden al ciclo tecnológico (por ejemplo, Tecnología en Desarrollo de Software para Ingeniería de Sistemas) y los **4 semestres siguientes** al ciclo profesional, para un total de 10 semestres. Los programas técnicos profesionales duran 4 semestres y los posgrados 2 semestres (jornada de fin de semana).",
+      "category": "Oferta académica",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 2
+    },
+    {
+      "question": "¿Qué especializaciones o posgrados ofrece Uniputumayo?",
+      "answer": "Para 2026-II Uniputumayo ofrece dos posgrados, de 2 semestres en jornada de fin de semana: **Especialización en Gerencia del Talento Humano** y **Especialización en Gestión Ambiental**.",
+      "category": "Oferta académica",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 3
+    },
+    {
+      "question": "¿Qué programas técnicos profesionales ofrece Uniputumayo?",
+      "answer": "El nivel técnico profesional dura 4 semestres. Para 2026-II se ofrecen: **Técnico Profesional en Producción Gráfica y Multimedia** (jornada diurna y nocturna, sede Mocoa) y **Técnico Profesional en Establecimiento y Aprovechamiento de Plantaciones Forestales** (jornada diurna y nocturna, sedes Mocoa y Colón).",
+      "category": "Oferta académica",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 4
+    },
+    {
+      "question": "¿En qué sedes y jornadas se ofrece Ingeniería de Sistemas?",
+      "answer": "Ingeniería de Sistemas (ciclo profesional) se ofrece en **jornada diurna y nocturna** en las sedes **Mocoa y Colón**. Su ciclo tecnológico es la Tecnología en Desarrollo de Software, también en jornada diurna y nocturna en Mocoa y Colón.",
+      "category": "Oferta académica",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "program": "ingenieria de sistemas",
+      "sort_order": 5
+    },
+    {
+      "question": "¿En qué sedes y jornadas se ofrece Ingeniería Ambiental?",
+      "answer": "Ingeniería Ambiental (ciclo profesional) se ofrece en **jornada diurna** en las sedes **Mocoa y Colón**. Su ciclo tecnológico es la Tecnología en Saneamiento Ambiental, jornada diurna, sedes Mocoa y Colón.",
+      "category": "Oferta académica",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "program": "ingenieria ambiental",
+      "sort_order": 6
+    },
+    {
+      "question": "¿En qué sedes y jornadas se ofrece Administración de Empresas?",
+      "answer": "Administración de Empresas (ciclo profesional) se ofrece en **jornada nocturna** en las sedes **Mocoa, Colón y Valle del Guamuez**. Su ciclo tecnológico es la Tecnología en Gestión Empresarial y de la Innovación, jornada nocturna, en las mismas sedes.",
+      "category": "Oferta académica",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "program": "administracion de empresas",
+      "sort_order": 7
+    },
+    {
+      "question": "¿En qué sedes y jornadas se ofrece Contaduría Pública?",
+      "answer": "Contaduría Pública (ciclo profesional) se ofrece en **jornada nocturna** en las sedes **Mocoa, Colón y Valle del Guamuez**. Su ciclo tecnológico es la Tecnología en Gestión Contable, jornada nocturna, en las mismas sedes.",
+      "category": "Oferta académica",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "program": "contaduria publica",
+      "sort_order": 8
+    },
+    {
+      "question": "¿Qué programas se ofrecen en la ampliación Valle del Guamuez?",
+      "answer": "Nueva oferta 2026-II en la ampliación **Valle del Guamuez** (por ciclos propedéuticos): **Administración de Empresas** y **Contaduría Pública**, con sus respectivos ciclos tecnológicos (Tecnología en Gestión Empresarial y de la Innovación y Tecnología en Gestión Contable), en jornada nocturna.",
+      "category": "Sedes",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 1
+    },
+    {
+      "question": "¿Cuáles son las sedes de Uniputumayo y cómo contactarlas?",
+      "answer": "**Sede principal Mocoa:** Calle 17 Carrera 17, Sede Aire Libre, barrio Luis Carlos Galán, Mocoa (Putumayo). Celulares 313 805 2807 y 310 331 0083. Oficina de Atención al Usuario: 313 805 2807, atencionalusuario@itp.edu.co.\n\n**Subsede Sibundoy y sede administrativa de la ampliación Colón:** Escuela Nazaret, Colón. Celular 310 243 4689, atencionalusuariocolon@itp.edu.co.\n\n**Ampliación Valle del Guamuez:** nueva oferta 2026-II.\n\nPágina web: https://itp.edu.co/ITP2022/",
+      "category": "Sedes",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 2
+    },
+    {
+      "question": "¿Qué subsidios o incentivos hay para estudiantes?",
+      "answer": "Los estudiantes de Uniputumayo pueden acceder a la **política de gratuidad**, al programa **Renta Joven** de Prosperidad Social (Resolución 00137 de 2024) y a créditos del **Icetex**. Las asesorías sobre estos beneficios las da la Oficina de Bienestar Universitario: correos ilineiro@itp.edu.co, eysambony@itp.edu.co y eduardo.estrada@itp.edu, WhatsApp 311 734 1844.",
+      "category": "Bienestar",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 1
+    },
+    {
+      "question": "¿Cómo contacto a la Oficina de Atención al Usuario?",
+      "answer": "Oficina de Atención al Usuario de Uniputumayo: celular **313 805 2807**, correo **atencionalusuario@itp.edu.co**. En la ampliación Colón: celular 310 243 4689, correo atencionalusuariocolon@itp.edu.co.",
+      "category": "Contacto",
+      "source_document": "Tríptico oferta académica 2026-2",
+      "valid_period": "2026-II",
+      "sort_order": 1
+    }
+  ]
+}

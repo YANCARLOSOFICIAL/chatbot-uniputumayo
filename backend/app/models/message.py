@@ -31,6 +31,17 @@ class Message(Base):
     # messages, where the loop never runs.
     verification_attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)
     verification_approved: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # How an assistant answer was produced: "faq" (curated FAQ entry),
+    # "cache" (answer cache), "rag" (retrieval + LLM), "refusal",
+    # "clarification" or "greeting". NULL for user messages and for answers
+    # stored before this column existed. Lets analytics measure how many
+    # questions the FAQ resolved without any LLM call.
+    answer_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    faq_entry_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("faq_entries.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

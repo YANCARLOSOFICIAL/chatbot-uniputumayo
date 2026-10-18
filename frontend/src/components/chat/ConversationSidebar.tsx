@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import {
   MessageSquare, Trash2, Search, LogOut, Settings,
-  Home, Plus, Pencil, Check, X, LogIn, UserPlus,
+  Home, Plus, Pencil, Check, X, LogIn, UserPlus, HelpCircle,
 } from "lucide-react";
 import { isAuthenticated, getUser, logout, type AuthUser } from "@/lib/auth";
 import type { Conversation } from "@/types/chat";
@@ -324,6 +324,9 @@ export const ConversationSidebar = memo(function ConversationSidebar({
       <div style={{ padding: "8px 8px 10px", borderTop: "1px solid rgba(255,255,255,0.07)", flexShrink: 0, display: "flex", flexDirection: "column", gap: 2 }}>
         <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 7, color: "rgba(255,255,255,0.4)", textDecoration: "none", fontSize: 12, transition: "color 0.12s", fontWeight: 500 }} className="hover:text-white/70">
           <Home size={12} strokeWidth={1.5} /> Inicio
+        </Link>
+        <Link href="/faq" style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 7, color: "rgba(255,255,255,0.4)", textDecoration: "none", fontSize: 12, transition: "color 0.12s", fontWeight: 500 }} className="hover:text-white/70">
+          <HelpCircle size={12} strokeWidth={1.5} /> Preguntas frecuentes
         </Link>
 
         {user?.role === "admin" && (

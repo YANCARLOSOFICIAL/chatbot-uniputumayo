@@ -2,6 +2,8 @@ from pydantic import BaseModel, field_validator
 from datetime import datetime
 from uuid import UUID
 
+from app.schemas.faq import FaqSuggestion
+
 _MAX_MESSAGE_LEN = 4_000   # chars — prevents token abuse
 _VALID_INPUT_TYPES = {"text", "voice"}
 
@@ -60,6 +62,10 @@ class MessageResponse(BaseModel):
     llm_provider: str | None
     llm_model: str | None
     response_time_ms: int | None
+    # "faq" | "cache" | "rag" | "refusal" | "clarification" | "greeting" —
+    # see models/message.py. None for user messages and legacy rows.
+    answer_source: str | None = None
+    faq_entry_id: UUID | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -95,6 +101,9 @@ class ChatResponse(BaseModel):
     user_message: MessageResponse
     assistant_message: MessageResponse
     sources: list[SourceInfo]
+    # Related curated FAQ offered when the question was close to one but
+    # not confidently the same (see faq_service.py). None most of the time.
+    faq_suggestion: FaqSuggestion | None = None
 
 
 class SuggestedQuestion(BaseModel):

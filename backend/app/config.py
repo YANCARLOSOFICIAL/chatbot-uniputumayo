@@ -247,6 +247,27 @@ class Settings(BaseSettings):
     # normal), así que no hay razón para esperar más que unos segundos.
     answer_cache_embed_timeout_seconds: float = 8.0
 
+    # Preguntas frecuentes (FAQ) curadas por el administrador. A diferencia
+    # de la answer cache (volátil, llena el propio LLM, se vacía al subir
+    # documentos), las FAQ viven en Postgres, las escribe una persona y no
+    # caducan: son la respuesta oficial a las preguntas que más se repiten.
+    # Se comparan contra la pregunta del usuario con el MISMO embedding que
+    # ya se calcula para la answer cache (embeddinggemma), así un acierto de
+    # FAQ no cuesta ninguna llamada extra a Ollama ni a OpenAI.
+    faq_enabled: bool = True
+    # Dimensión del embedding de la pregunta de cada FAQ (embeddinggemma = 768).
+    # Si se cambia `answer_cache_embedding_model` por uno de otra dimensión,
+    # hay que migrar la columna `faq_entries.embedding` y reindexar las FAQ.
+    faq_embedding_dimensions: int = 768
+    # Mismo umbral que la answer cache y por la misma razón (ver arriba):
+    # por debajo de 0.90 aparecen colisiones "mismo tema, hecho distinto".
+    faq_similarity_threshold: float = 0.90
+    # Entre este valor y `faq_similarity_threshold` NO se responde con la FAQ:
+    # se sigue el flujo normal (RAG + LLM) y se le sugiere al usuario la
+    # pregunta frecuente relacionada ("¿Te refieres a…?") para que la abra
+    # con un clic si era eso lo que buscaba.
+    faq_suggest_threshold: float = 0.80
+
     # Program/faculty disambiguation: for topics confirmed to genuinely differ
     # by program or faculty (pensum, créditos, misión, etc. — see
     # query_utils.is_varying_topic_query), if the RAG search matches several

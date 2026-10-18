@@ -76,6 +76,7 @@ async function requestPaginated<T>(
 }
 
 import type { AuthUser } from "@/lib/auth";
+import type { FaqAdmin, FaqInput, FaqPublic } from "@/types/chat";
 export type { AuthUser };
 
 export interface AuthResponse {
@@ -299,6 +300,29 @@ export const apiClient = {
       `/api/v1/chat/conversations/${conversationId}/messages?limit=${limit}&offset=${offset}`
     ),
 
+  // ── Preguntas frecuentes (FAQ) ──
+  // Public list (guests too) — see backend app/routers/faq.py.
+  getFaq: () => request<FaqPublic[]>("/api/v1/faq"),
+
+  // Admin CRUD
+  getFaqAdmin: () => request<FaqAdmin[]>("/api/v1/faq/admin"),
+  createFaq: (data: FaqInput) =>
+    request<FaqAdmin>("/api/v1/faq/admin", { method: "POST", body: JSON.stringify(data) }),
+  updateFaq: (id: string, data: Partial<FaqInput>) =>
+    request<FaqAdmin>(`/api/v1/faq/admin/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteFaq: (id: string) =>
+    request<{ success: boolean }>(`/api/v1/faq/admin/${id}`, { method: "DELETE" }),
+  reindexFaq: (id?: string) =>
+    request<{ indexed: number; failed: number }>(
+      id ? `/api/v1/faq/admin/${id}/reindex` : "/api/v1/faq/admin/reindex",
+      { method: "POST" },
+    ),
+  importFaq: (entries: FaqInput[], skipDuplicates = true) =>
+    request<{ created: number; skipped: number; not_indexed: number }>(
+      "/api/v1/faq/admin/import",
+      { method: "POST", body: JSON.stringify({ entries, skip_duplicates: skipDuplicates }) },
+    ),
+
   // ── Documents (Admin) ──
   uploadDocument: (formData: FormData) =>
     request<{ document_id: string; status: string; message: string }>(
@@ -510,6 +534,14 @@ export const apiClient = {
           approved: boolean;
           created_at: string;
         }>;
+      };
+      faq: {
+        classified_total: number;
+        faq_total: number;
+        cache_total: number;
+        faq_rate: number;
+        no_llm_rate: number;
+        top_faq: Array<{ label: string; count: number }>;
       };
     }>("/api/v1/analytics/overview"),
 

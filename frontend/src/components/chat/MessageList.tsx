@@ -1,24 +1,52 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   ChevronDown, GraduationCap, BookOpen,
-  Clock, FileText, Mic, Globe, ArrowRight
+  Clock, FileText, Mic, Globe, ArrowRight, HelpCircle, BookmarkCheck
 } from "lucide-react";
 import { MessageBubble } from "./MessageBubble";
 import { TypingIndicator } from "./TypingIndicator";
 import { SourceCard } from "./SourceCard";
 import { GuacamayaAvatar } from "./GuacamayaAvatar";
 import { apiClient } from "@/lib/api/client";
-import type { Message, SourceInfo } from "@/types/chat";
+import type { Message, SourceInfo, FaqSuggestion } from "@/types/chat";
 import type { LucideIcon } from "lucide-react";
 
 interface MessageListProps {
   messages: Message[];
   sources: SourceInfo[];
+  faqSuggestion?: FaqSuggestion | null;
   isLoading: boolean;
   onQuickReply?: (text: string) => void;
   onRegenerate?: () => void;
+}
+
+/* ── "¿Te refieres a…?" — related curated FAQ for the latest turn ── */
+function FaqSuggestionChip({ suggestion, onSelect }: { suggestion: FaqSuggestion; onSelect?: (q: string) => void }) {
+  return (
+    <div className="pl-8 animate-fade-up" style={{ animationFillMode: "both" }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+        padding: "9px 12px", borderRadius: 10,
+        background: "var(--brand-dim)", border: "1px solid var(--brand-light)", fontSize: 12,
+      }}>
+        <BookmarkCheck size={13} style={{ color: "var(--brand-primary)", flexShrink: 0 }} />
+        <span style={{ color: "var(--text-2)", flex: 1, minWidth: 180 }}>
+          ¿Te refieres a <strong style={{ color: "var(--text-1)", fontWeight: 600 }}>«{suggestion.question}»</strong>?
+          Hay una respuesta oficial en Preguntas frecuentes.
+        </span>
+        <button
+          onClick={() => onSelect?.(suggestion.question)}
+          className="btn btn-primary btn-sm"
+          style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}
+        >
+          Ver respuesta <ArrowRight size={11} />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 interface SuggestionCard {
@@ -158,12 +186,21 @@ function WelcomeState({ onSend }: { onSend?: (q: string) => void }) {
           </div>
         ))}
       </div>
+
+      {/* Curated FAQ — official answers without waiting for the model */}
+      <Link
+        href="/faq"
+        className="animate-fade-up hover:text-[var(--brand-primary)] transition-colors"
+        style={{ animationDelay: "0.2s", display: "flex", alignItems: "center", gap: 5, marginTop: 14, fontSize: 12, color: "var(--text-3)", textDecoration: "none" }}
+      >
+        <HelpCircle size={12} strokeWidth={1.75} /> Ver las preguntas frecuentes
+      </Link>
     </div>
   );
 }
 
 /* ── Main ── */
-export function MessageList({ messages, sources, isLoading, onQuickReply, onRegenerate }: MessageListProps) {
+export function MessageList({ messages, sources, faqSuggestion, isLoading, onQuickReply, onRegenerate }: MessageListProps) {
   const scrollRef       = useRef<HTMLDivElement>(null);
   const [showBtn, setShowBtn] = useState(false);
   const isAtBottomRef   = useRef(true);
@@ -252,6 +289,10 @@ export function MessageList({ messages, sources, isLoading, onQuickReply, onRege
                   highlightedIndex={highlightedSource}
                 />
               </div>
+            )}
+
+            {!isLoading && faqSuggestion && (
+              <FaqSuggestionChip suggestion={faqSuggestion} onSelect={onQuickReply} />
             )}
 
             {isLoading && <TypingIndicator />}
