@@ -267,6 +267,23 @@ class Settings(BaseSettings):
     # pregunta frecuente relacionada ("¿Te refieres a…?") para que la abra
     # con un clic si era eso lo que buscaba.
     faq_suggest_threshold: float = 0.80
+    # Medido en producción el 2026-10-17 con embeddinggemma: "cuánto cuesta
+    # la inscripción" contra la FAQ "¿Cuánto cuesta la inscripción en
+    # Uniputumayo?" quedó POR DEBAJO de 0.80, y "cómo puedo pagar la
+    # matrícula" contra "¿Cuáles son los medios de pago de la matrícula?"
+    # dio 0.875 — es decir, los parafraseos normales de un estudiante caen
+    # en la franja 0.70-0.90, la misma donde la caché registró colisiones
+    # ("costo" vs "créditos" 0.72, "primer" vs "segundo semestre" 0.78).
+    # La similitud coseno sola no separa esas dos cosas, así que en esa
+    # franja la FAQ se CONFIRMA antes de responder: primero con una
+    # comprobación léxica gratuita (todas las palabras significativas de
+    # la pregunta están en la FAQ) y, si no alcanza, con una llamada
+    # mínima al modelo auxiliar (≈150 tokens, ~1 s) que decide si piden
+    # exactamente el mismo dato. Sigue siendo ~40 veces más barato que una
+    # respuesta RAG completa (~6.000 tokens).
+    faq_judge_threshold: float = 0.70
+    faq_judge_enabled: bool = True
+    faq_judge_timeout_seconds: float = 6.0
 
     # Program/faculty disambiguation: for topics confirmed to genuinely differ
     # by program or faculty (pensum, créditos, misión, etc. — see

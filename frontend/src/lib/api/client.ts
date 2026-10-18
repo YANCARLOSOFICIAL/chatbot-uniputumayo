@@ -76,7 +76,7 @@ async function requestPaginated<T>(
 }
 
 import type { AuthUser } from "@/lib/auth";
-import type { FaqAdmin, FaqInput, FaqPublic } from "@/types/chat";
+import type { FaqAdmin, FaqInput, FaqMatchTest, FaqPublic } from "@/types/chat";
 export type { AuthUser };
 
 export interface AuthResponse {
@@ -317,6 +317,8 @@ export const apiClient = {
       id ? `/api/v1/faq/admin/${id}/reindex` : "/api/v1/faq/admin/reindex",
       { method: "POST" },
     ),
+  testFaqMatch: (q: string) =>
+    request<FaqMatchTest>(`/api/v1/faq/admin/match?q=${encodeURIComponent(q)}`),
   importFaq: (entries: FaqInput[], skipDuplicates = true) =>
     request<{ created: number; skipped: number; not_indexed: number }>(
       "/api/v1/faq/admin/import",

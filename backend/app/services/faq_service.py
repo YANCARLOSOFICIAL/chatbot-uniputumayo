@@ -14,15 +14,21 @@ FAQ vs answer cache:
     invalidated on every upload, invisible to users.
 A FAQ hit therefore wins over a cache hit.
 
-Match outcome, by similarity `s` against the best enabled, indexed FAQ:
-  - s >= faq_similarity_threshold and the guards pass → answer with the FAQ.
-  - faq_suggest_threshold <= s < faq_similarity_threshold (or a guard
-    rejected a high match) → normal flow, plus a "¿Te refieres a…?" hint
-    the UI shows as a clickable chip.
+Match outcome, by similarity `s` against the enabled, indexed FAQs
+(thresholds in config.py, measured in production 2026-10-17):
+  - s >= faq_similarity_threshold (0.90) and the guards pass → hit.
+  - faq_judge_threshold (0.70) <= s < 0.90 → "confirm" step: a hit if every
+    significant word of the user's question appears in the FAQ question
+    (free), else if the auxiliary model says both ask for exactly the same
+    fact (~150 tokens). Otherwise falls through to:
+  - faq_suggest_threshold (0.80) <= s → normal flow plus a "¿Te refieres
+    a…?" hint the UI shows as a clickable chip.
   - otherwise → normal flow, no hint.
 """
+import asyncio
 import logging
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from uuid import UUID
 
 from sqlalchemy import select, update, func
@@ -30,9 +36,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.faq_entry import FaqEntry
+from app.providers.provider_factory import ProviderFactory
 from app.schemas.faq import FaqCreate, FaqUpdate, FaqImportItem
-from app.utils.cache import AsyncAnswerCache, _significant_words
-from app.utils.query_utils import mentions_entity
+from app.runtime_config import runtime_config
+from app.utils.cache import AsyncAnswerCache
+from app.utils.query_utils import _significant_words, canonicalize_price_words, mentions_entity
 from app.utils.question_embedding import embed_question
 
 logger = logging.getLogger(__name__)
@@ -41,6 +49,17 @@ logger = logging.getLogger(__name__)
 # guard-rejected best match can fall back to the next candidate, and so the
 # suggestion can come from a different entry than the one the guard rejected.
 _MATCH_CANDIDATES = 3
+
+_JUDGE_PROMPT = (
+    "Pregunta de un usuario a un chatbot universitario:\n«{question}»\n\n"
+    "Preguntas frecuentes candidatas:\n{candidates}\n\n"
+    "¿Alguna candidata pide EXACTAMENTE la misma información que el usuario? "
+    "Cuenta como la misma solo si piden el mismo dato (no basta el mismo tema: "
+    "costo ≠ créditos, inscripción ≠ matrícula, primer semestre ≠ segundo "
+    "semestre, un programa ≠ otro programa). Si el usuario pide algo más "
+    "específico o distinto, no es la misma.\n"
+    "Responde SOLO con el número de la candidata, o 0 si ninguna."
+)
 
 
 @dataclass(frozen=True)
@@ -54,6 +73,16 @@ class FaqLookup:
     """Result of matching one user question against the FAQ table."""
     hit: FaqMatch | None = None          # answer with this entry, no LLM
     suggestion: FaqMatch | None = None   # related entry to offer the user
+
+
+@dataclass
+class FaqTrace:
+    """Step-by-step record of one lookup — for the admin "probar
+    coincidencia" tool (see routers/faq.py), never used by chat itself."""
+    candidates: list[dict] = field(default_factory=list)
+    judge_used: bool = False
+    judge_choice: int | None = None
+    judge_error: str | None = None
 
 
 class FaqService:
@@ -110,8 +139,8 @@ class FaqService:
             return None
         changes = data.model_dump(exclude_unset=True)
         question_changed = "question" in changes and changes["question"] != entry.question
-        for field, value in changes.items():
-            setattr(entry, field, value)
+        for field_name, value in changes.items():
+            setattr(entry, field_name, value)
         # Only the question is embedded (question-vs-question matching), so
         # editing the answer alone must not cost an embedding call.
         if question_changed or entry.embedding is None:
@@ -184,7 +213,7 @@ class FaqService:
             select(func.count(FaqEntry.id)).where(FaqEntry.is_enabled.is_(True))
         )).scalar() or 0
 
-    # ── Matching ──────────────────────────────────────────────────────────
+    # ── Guards ────────────────────────────────────────────────────────────
 
     @staticmethod
     def _names_program(query_text: str, program: str, aliases: dict[str, str] | None) -> bool:
@@ -228,11 +257,27 @@ class FaqService:
             and AsyncAnswerCache._semester_guard_passes(as_cache_entry, query_text)
         )
 
+    @staticmethod
+    def _lexical_subset(entry: FaqEntry, query_text: str) -> bool:
+        """Free confirmation for the medium band: every significant word of
+        the user's question already appears in the FAQ question ("cuánto
+        cuesta la inscripción" ⊂ "¿Cuánto cuesta la inscripción en
+        Uniputumayo?"). Price synonyms are canonicalized on both sides
+        (valor/precio -> costo), same as the answer cache. Needs at least
+        two words so a one-word question ("inscripción") can't claim any
+        FAQ that mentions it."""
+        query_words = canonicalize_price_words(_significant_words(query_text))
+        faq_words = canonicalize_price_words(_significant_words(entry.question))
+        return len(query_words) >= 2 and query_words <= faq_words
+
+    # ── Matching ──────────────────────────────────────────────────────────
+
     async def match(
         self,
         embedding: list[float],
         query_text: str,
         aliases: dict[str, str] | None = None,
+        trace: FaqTrace | None = None,
     ) -> FaqLookup:
         """Match a user question (already embedded with embed_question)
         against the enabled, indexed FAQs. Never raises: any DB error is
@@ -252,9 +297,24 @@ class FaqService:
         except Exception as e:
             logger.warning("FAQ lookup failed, continuing without FAQ: %s: %s", type(e).__name__, e)
             return FaqLookup()
-        return self.pick(
-            [(entry, 1.0 - float(dist)) for entry, dist in rows], query_text, aliases,
-        )
+        candidates = [(entry, 1.0 - float(dist)) for entry, dist in rows]
+        if trace is not None:
+            trace.candidates = [
+                {
+                    "id": str(entry.id),
+                    "question": entry.question,
+                    "similarity": round(sim, 3),
+                    "guards_pass": self._guards_pass(entry, query_text, aliases),
+                    "lexical_subset": self._lexical_subset(entry, query_text),
+                }
+                for entry, sim in candidates
+            ]
+        lookup = self.pick(candidates, query_text, aliases)
+        if lookup.hit is None:
+            confirmed = await self._confirm_paraphrase(candidates, query_text, aliases, trace)
+            if confirmed is not None:
+                return FaqLookup(hit=confirmed)
+        return lookup
 
     @classmethod
     def pick(
@@ -264,7 +324,9 @@ class FaqService:
         aliases: dict[str, str] | None = None,
     ) -> FaqLookup:
         """Pure decision step (unit-testable without a DB): given candidates
-        sorted by descending similarity, decide hit / suggestion / nothing."""
+        sorted by descending similarity, decide hit / suggestion / nothing
+        from similarity alone. The medium-band confirmation lives in
+        `_confirm_paraphrase`."""
         suggestion: FaqMatch | None = None
         for entry, similarity in candidates:
             if similarity < settings.faq_suggest_threshold:
@@ -288,3 +350,73 @@ class FaqService:
                 suggestion.entry.id, suggestion.similarity, query_text[:80],
             )
         return FaqLookup(suggestion=suggestion)
+
+    async def _confirm_paraphrase(
+        self,
+        candidates: list[tuple[FaqEntry, float]],
+        query_text: str,
+        aliases: dict[str, str] | None,
+        trace: FaqTrace | None = None,
+    ) -> FaqMatch | None:
+        """Medium band (faq_judge_threshold <= s < faq_similarity_threshold):
+        confirm a paraphrase for free (lexical subset) or with one minimal
+        auxiliary-model call. Guards apply exactly as for a direct hit."""
+        band = [
+            (entry, sim) for entry, sim in candidates
+            if settings.faq_judge_threshold <= sim < settings.faq_similarity_threshold
+            and self._guards_pass(entry, query_text, aliases)
+        ]
+        if not band:
+            return None
+        for entry, sim in band:
+            if self._lexical_subset(entry, query_text):
+                logger.info(
+                    "FAQ hit (lexical subset) | faq=%s | similarity=%.3f | q=%r",
+                    entry.id, sim, query_text[:80],
+                )
+                return FaqMatch(entry, sim)
+        # runtime_config, not settings: the OpenAI key can be set from the
+        # admin panel after startup.
+        if not settings.faq_judge_enabled or not runtime_config.openai_api_key:
+            return None
+        if trace is not None:
+            trace.judge_used = True
+        choice = await self._judge(query_text, [entry for entry, _ in band], trace)
+        if choice is None:
+            return None
+        entry, sim = band[choice]
+        logger.info(
+            "FAQ hit (judge confirmed) | faq=%s | similarity=%.3f | q=%r",
+            entry.id, sim, query_text[:80],
+        )
+        return FaqMatch(entry, sim)
+
+    async def _judge(
+        self, query_text: str, entries: list[FaqEntry], trace: FaqTrace | None = None,
+    ) -> int | None:
+        """Ask the auxiliary model which candidate (if any) asks for exactly
+        the same fact. Returns the 0-based index or None. Best-effort: any
+        failure means "not confirmed", never an error for the user."""
+        numbered = "\n".join(f"{i + 1}. {e.question}" for i, e in enumerate(entries))
+        prompt = _JUDGE_PROMPT.format(question=query_text.strip(), candidates=numbered)
+        try:
+            provider = ProviderFactory.get_provider("openai")
+            result = await asyncio.wait_for(
+                provider.generate(
+                    messages=[{"role": "user", "content": prompt}],
+                    model=settings.openai_condensation_model, temperature=0.0, max_tokens=5,
+                ),
+                timeout=settings.faq_judge_timeout_seconds,
+            )
+        except Exception as e:
+            logger.warning("FAQ judge unavailable, not confirming: %s: %s", type(e).__name__, e)
+            if trace is not None:
+                trace.judge_error = f"{type(e).__name__}: {e}"
+            return None
+        match = re.search(r"\d+", result.get("content", "") or "")
+        number = int(match.group()) if match else 0
+        if trace is not None:
+            trace.judge_choice = number
+        if 1 <= number <= len(entries):
+            return number - 1
+        return None

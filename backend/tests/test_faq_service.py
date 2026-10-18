@@ -4,6 +4,7 @@ import pytest
 
 from app.config import settings
 from app.models.faq_entry import FaqEntry
+from app.runtime_config import runtime_config
 from app.services.faq_service import FaqService
 
 # The FAQ decision step (FaqService.pick) is pure: given candidates sorted by
@@ -23,6 +24,103 @@ def thresholds(monkeypatch):
     monkeypatch.setattr(settings, "faq_enabled", True)
     monkeypatch.setattr(settings, "faq_similarity_threshold", 0.90)
     monkeypatch.setattr(settings, "faq_suggest_threshold", 0.80)
+    monkeypatch.setattr(settings, "faq_judge_threshold", 0.70)
+    monkeypatch.setattr(settings, "faq_judge_enabled", True)
+    monkeypatch.setattr(runtime_config, "openai_api_key", "sk-test")
+
+
+class TestLexicalSubset:
+    def test_subset_with_price_synonyms(self):
+        e = _entry("¿Cuánto cuesta la inscripción en Uniputumayo?")
+        assert FaqService._lexical_subset(e, "cuánto cuesta la inscripción")
+        assert FaqService._lexical_subset(e, "cuánto vale la inscripción")
+
+    def test_new_word_breaks_subset(self):
+        e = _entry("¿Cuánto cuesta la inscripción en Uniputumayo?")
+        assert not FaqService._lexical_subset(e, "cuánto cuesta la matrícula")
+
+    def test_single_word_is_not_enough(self):
+        e = _entry("¿Cuánto cuesta la inscripción en Uniputumayo?")
+        assert not FaqService._lexical_subset(e, "inscripción")
+
+
+class TestConfirmParaphrase:
+    """Medium band (0.70-0.90): free lexical confirmation first, then the
+    auxiliary-model judge; guards and thresholds still apply."""
+
+    def _service(self, judge_choice=None, calls=None):
+        svc = FaqService(db=None)
+
+        async def fake_judge(query_text, entries, trace=None):
+            if calls is not None:
+                calls.append([e.question for e in entries])
+            return judge_choice
+
+        svc._judge = fake_judge
+        return svc
+
+    async def test_lexical_subset_confirms_without_judge(self):
+        calls = []
+        svc = self._service(judge_choice=None, calls=calls)
+        e = _entry("¿Cuánto cuesta la inscripción en Uniputumayo?")
+        out = await svc._confirm_paraphrase([(e, 0.78)], "cuánto cuesta la inscripción", None)
+        assert out is not None and out.entry is e
+        assert calls == []
+
+    async def test_judge_confirms_paraphrase(self):
+        calls = []
+        svc = self._service(judge_choice=0, calls=calls)
+        e = _entry("¿Cuáles son los medios de pago de la matrícula?")
+        out = await svc._confirm_paraphrase([(e, 0.875)], "cómo puedo pagar la matrícula", None)
+        assert out is not None and out.entry is e
+        assert calls == [[e.question]]
+
+    async def test_judge_rejects(self):
+        svc = self._service(judge_choice=None)
+        e = _entry("¿Cuánto cuesta la matrícula del ciclo tecnológico?")
+        out = await svc._confirm_paraphrase([(e, 0.75)], "cuántos créditos tiene el ciclo tecnológico", None)
+        assert out is None
+
+    async def test_below_judge_threshold_is_never_sent_to_judge(self):
+        calls = []
+        svc = self._service(judge_choice=0, calls=calls)
+        e = _entry("¿Cuánto cuesta la inscripción en Uniputumayo?")
+        out = await svc._confirm_paraphrase([(e, 0.60)], "qué hay de almuerzo", None)
+        assert out is None and calls == []
+
+    async def test_guarded_out_candidates_are_excluded(self):
+        calls = []
+        svc = self._service(judge_choice=0, calls=calls)
+        e = _entry("¿Cuántos créditos tiene Ingeniería de Sistemas?", program="ingenieria de sistemas")
+        out = await svc._confirm_paraphrase([(e, 0.85)], "cuántos créditos tiene ingeniería ambiental", None)
+        assert out is None and calls == []
+
+    async def test_judge_disabled_or_no_key(self, monkeypatch):
+        calls = []
+        svc = self._service(judge_choice=0, calls=calls)
+        e = _entry("¿Cuáles son los medios de pago de la matrícula?")
+        monkeypatch.setattr(settings, "faq_judge_enabled", False)
+        assert await svc._confirm_paraphrase([(e, 0.85)], "cómo puedo pagar la matrícula", None) is None
+        monkeypatch.setattr(settings, "faq_judge_enabled", True)
+        monkeypatch.setattr(runtime_config, "openai_api_key", None)
+        assert await svc._confirm_paraphrase([(e, 0.85)], "cómo puedo pagar la matrícula", None) is None
+        assert calls == []
+
+    async def test_judge_parses_number_and_ignores_out_of_range(self, monkeypatch):
+        svc = FaqService(db=None)
+        answers = iter(["2", "0", "7", "La número 1."])
+
+        class FakeProvider:
+            async def generate(self, messages, model, temperature, max_tokens):
+                return {"content": next(answers)}
+
+        from app.services import faq_service as module
+        monkeypatch.setattr(module.ProviderFactory, "get_provider", staticmethod(lambda name: FakeProvider()))
+        entries = [_entry("¿Pregunta uno?"), _entry("¿Pregunta dos?")]
+        assert await svc._judge("q", entries) == 1
+        assert await svc._judge("q", entries) is None
+        assert await svc._judge("q", entries) is None
+        assert await svc._judge("q", entries) == 0
 
 
 class TestPick:

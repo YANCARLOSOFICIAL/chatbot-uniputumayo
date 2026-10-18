@@ -60,6 +60,21 @@ export interface FaqInput {
   sort_order?: number;
 }
 
+// Admin dry run of the chat's FAQ step (GET /api/v1/faq/admin/match).
+export interface FaqMatchTest {
+  query: string;
+  embedding_ok: boolean;
+  decision: "hit" | "suggestion" | "none";
+  matched_id: string | null;
+  matched_question: string | null;
+  similarity: number | null;
+  candidates: Array<{ id: string; question: string; similarity: number; guards_pass: boolean; lexical_subset: boolean }>;
+  judge_used: boolean;
+  judge_choice: number | null;
+  judge_error: string | null;
+  thresholds: { hit: number; judge: number; suggest: number };
+}
+
 // Related FAQ offered after an answer when the question was close to a
 // curated one but not confidently the same.
 export interface FaqSuggestion {

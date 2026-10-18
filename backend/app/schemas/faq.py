@@ -115,6 +115,29 @@ class FaqReindexResult(BaseModel):
     failed: int
 
 
+class FaqMatchCandidate(BaseModel):
+    id: UUID
+    question: str
+    similarity: float
+    guards_pass: bool
+    lexical_subset: bool
+
+
+class FaqMatchTest(BaseModel):
+    """What the chat would do with this question — admin tuning tool."""
+    query: str
+    embedding_ok: bool
+    decision: str                     # "hit" | "suggestion" | "none"
+    matched_id: UUID | None = None
+    matched_question: str | None = None
+    similarity: float | None = None
+    candidates: list[FaqMatchCandidate]
+    judge_used: bool
+    judge_choice: int | None = None
+    judge_error: str | None = None
+    thresholds: dict[str, float]
+
+
 class FaqSuggestion(BaseModel):
     """A related FAQ offered to the user when their question was close to,
     but not confidently the same as, a curated one (see

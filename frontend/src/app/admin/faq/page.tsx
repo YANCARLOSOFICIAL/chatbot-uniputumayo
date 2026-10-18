@@ -1,11 +1,90 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Plus, Pencil, Trash2, RefreshCw, Upload, Eye, EyeOff, Search, X, HelpCircle, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw, Upload, Eye, EyeOff, Search, X, HelpCircle, AlertTriangle, CheckCircle2, FlaskConical } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "@/components/ui/Toast";
 import { AdminHeader } from "@/components/admin/AdminHeader";
-import type { FaqAdmin, FaqInput } from "@/types/chat";
+import type { FaqAdmin, FaqInput, FaqMatchTest } from "@/types/chat";
+
+/* ── "Probar coincidencia": dry run of what the chat would do ── */
+function MatchTester() {
+  const [q, setQ] = useState("");
+  const [result, setResult] = useState<FaqMatchTest | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const run = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (q.trim().length < 3) return;
+    setBusy(true);
+    try { setResult(await apiClient.testFaqMatch(q.trim())); }
+    catch (err) { toast.error(err instanceof Error ? err.message : "Error probando la pregunta"); }
+    finally { setBusy(false); }
+  };
+
+  const decisionLabel = result
+    ? result.decision === "hit" ? "Respondería con la FAQ (sin usar el modelo)"
+    : result.decision === "suggestion" ? "Flujo normal + sugerencia «¿Te refieres a…?»"
+    : "Flujo normal (RAG), sin FAQ"
+    : "";
+  const decisionColor = result?.decision === "hit" ? "var(--success)" : result?.decision === "suggestion" ? "var(--warning)" : "var(--text-3)";
+
+  return (
+    <div className="card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <FlaskConical size={13} style={{ color: "var(--brand-primary)" }} />
+        <span style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>Probar coincidencia</span>
+        <span style={{ fontSize: 11, color: "var(--text-3)" }}>— escriba una pregunta como la haría un estudiante y vea qué haría el chat (no cuenta como respuesta)</span>
+      </div>
+      <form onSubmit={run} style={{ display: "flex", gap: 6 }}>
+        <input value={q} onChange={(e) => setQ(e.target.value)} className="input" placeholder="cuánto vale inscribirme?" style={{ flex: 1, boxSizing: "border-box" }} />
+        <button type="submit" className="btn btn-secondary btn-sm" disabled={busy || q.trim().length < 3}>{busy ? "Probando..." : "Probar"}</button>
+      </form>
+      {result && (
+        <div style={{ fontSize: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+          {!result.embedding_ok ? (
+            <div style={{ color: "var(--danger)" }}>No se pudo calcular el embedding (Ollama no disponible): el chat tampoco consultaría la FAQ.</div>
+          ) : (
+            <>
+              <div style={{ fontWeight: 700, color: decisionColor }}>
+                {decisionLabel}
+                {result.matched_question && <span style={{ fontWeight: 400, color: "var(--text-2)" }}> · «{result.matched_question}» ({result.similarity})</span>}
+              </div>
+              {result.candidates.length === 0 ? (
+                <div style={{ color: "var(--text-3)" }}>No hay preguntas frecuentes indexadas.</div>
+              ) : (
+                <table style={{ borderCollapse: "collapse", width: "100%" }}>
+                  <thead>
+                    <tr style={{ color: "var(--text-3)", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      <th style={{ textAlign: "left", padding: "4px 6px" }}>Candidata</th>
+                      <th style={{ textAlign: "right", padding: "4px 6px" }}>Similitud</th>
+                      <th style={{ textAlign: "center", padding: "4px 6px" }}>Guardas</th>
+                      <th style={{ textAlign: "center", padding: "4px 6px" }}>Léxica</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.candidates.map((c) => (
+                      <tr key={c.id} style={{ borderTop: "1px solid var(--border)", background: c.id === result.matched_id ? "var(--brand-dim)" : "transparent" }}>
+                        <td style={{ padding: "5px 6px", color: "var(--text-1)" }}>{c.question}</td>
+                        <td style={{ padding: "5px 6px", textAlign: "right", fontFamily: "var(--font-mono)", color: c.similarity >= result.thresholds.hit ? "var(--success)" : c.similarity >= result.thresholds.judge ? "var(--warning)" : "var(--text-3)" }}>{c.similarity.toFixed(3)}</td>
+                        <td style={{ padding: "5px 6px", textAlign: "center" }}>{c.guards_pass ? "✓" : "✗"}</td>
+                        <td style={{ padding: "5px 6px", textAlign: "center" }}>{c.lexical_subset ? "✓" : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <div style={{ color: "var(--text-3)" }}>
+                Umbrales: responde ≥ {result.thresholds.hit} · confirma entre {result.thresholds.judge} y {result.thresholds.hit} (léxica o juez) · sugiere ≥ {result.thresholds.suggest}
+                {result.judge_used && <> · juez consultado: {result.judge_error ? `error (${result.judge_error})` : result.judge_choice ? `eligió la candidata ${result.judge_choice}` : "ninguna"}</>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const EMPTY: FaqInput = {
   question: "", answer: "", category: "", source_document: "", valid_period: "",
@@ -226,6 +305,8 @@ export default function FaqAdminPage() {
             </div>
           ))}
         </div>
+
+        <MatchTester />
 
         {mode !== "idle" && (
           <FaqForm

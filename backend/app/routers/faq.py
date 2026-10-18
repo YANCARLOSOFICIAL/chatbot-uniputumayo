@@ -1,9 +1,10 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_admin
+from app.config import settings
 from app.database import get_db
 from app.models.faq_entry import FaqEntry
 from app.models.user import User
@@ -12,11 +13,15 @@ from app.schemas.faq import (
     FaqCreate,
     FaqImportRequest,
     FaqImportResult,
+    FaqMatchCandidate,
+    FaqMatchTest,
     FaqPublic,
     FaqReindexResult,
     FaqUpdate,
 )
-from app.services.faq_service import FaqService
+from app.services.chat_service import ChatService
+from app.services.faq_service import FaqService, FaqTrace
+from app.utils.question_embedding import embed_question
 from app.utils.rate_limit import limiter
 
 router = APIRouter()
@@ -65,6 +70,45 @@ async def create_faq(
     data: FaqCreate, db: AsyncSession = Depends(get_db), admin: User = Depends(require_admin),
 ):
     return _admin_view(await FaqService(db).create(data))
+
+
+@router.get("/admin/match", response_model=FaqMatchTest)
+async def test_faq_match(
+    q: str = Query(..., min_length=3, max_length=500),
+    db: AsyncSession = Depends(get_db), admin: User = Depends(require_admin),
+):
+    """Dry run of the chat's FAQ step for one question: candidates with
+    their similarity, guard results and the final decision. Does not record
+    a hit. Lets admins see why a paraphrase did or didn't match and tune
+    the FAQ wording (or the thresholds in config)."""
+    thresholds = {
+        "hit": settings.faq_similarity_threshold,
+        "judge": settings.faq_judge_threshold,
+        "suggest": settings.faq_suggest_threshold,
+    }
+    embedding = await embed_question(q)
+    if embedding is None:
+        return FaqMatchTest(
+            query=q, embedding_ok=False, decision="none", candidates=[],
+            judge_used=False, thresholds=thresholds,
+        )
+    aliases = await ChatService(db)._get_program_aliases()
+    trace = FaqTrace()
+    lookup = await FaqService(db).match(embedding, q, aliases, trace=trace)
+    matched = lookup.hit or lookup.suggestion
+    return FaqMatchTest(
+        query=q,
+        embedding_ok=True,
+        decision="hit" if lookup.hit else "suggestion" if lookup.suggestion else "none",
+        matched_id=matched.entry.id if matched else None,
+        matched_question=matched.entry.question if matched else None,
+        similarity=round(matched.similarity, 3) if matched else None,
+        candidates=[FaqMatchCandidate(**c) for c in trace.candidates],
+        judge_used=trace.judge_used,
+        judge_choice=trace.judge_choice,
+        judge_error=trace.judge_error,
+        thresholds=thresholds,
+    )
 
 
 @router.post("/admin/import", response_model=FaqImportResult)
