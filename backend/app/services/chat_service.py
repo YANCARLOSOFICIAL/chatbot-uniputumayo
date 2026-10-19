@@ -481,6 +481,11 @@ class ChatService:
             # were taking 4-6 of the top-10 slots on every phrasing tested.
             filters = filters or SearchFilters()
             filters.exclude_document_type = "pensum"
+            # No program named → the answer is institution-wide: rank the
+            # untagged documents (Estatuto, Tríptico, FICB024) ahead of any
+            # program document that merely contains the same words. See
+            # SearchFilters.prefer_institutional.
+            filters.prefer_institutional = filters.program is None
         search_results = await rag_service.search(
             SearchRequest(
                 query=query, filters=filters, hyde_provider_override=hyde_provider_override,

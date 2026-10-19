@@ -15,6 +15,13 @@ class SearchFilters(BaseModel):
     # SEMESTRE ===" boilerplate (all document_type='pensum') just for
     # sharing the word "semestre" — see ChatService._is_administrative_query.
     exclude_document_type: str | None = None
+    # Institution-wide questions that name no program ("¿cuáles son los
+    # requisitos de grado?"): rank chunks from documents with no program
+    # tag (Estatuto, Tríptico, FICB024...) ahead of program-scoped ones in
+    # the keyword leg. Added 2026-10-18 after the all-terms tier let a
+    # Gastronomía document's "Requisitos de grado" line beat the Estatuto —
+    # a correct phrase match, wrong scope. See ChatService._run_rag.
+    prefer_institutional: bool = False
 
 
 class SearchRequest(BaseModel):

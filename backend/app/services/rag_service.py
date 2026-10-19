@@ -210,6 +210,7 @@ class RAGService:
         base_params: dict,
         exclude_ids: set,
         limit: int,
+        prefer_institutional: bool = False,
     ) -> list[SearchResultItem]:
         """Postgres full-text search over chunk content.
 
@@ -248,6 +249,15 @@ class RAGService:
         stripped by `content_terms`, so AND no longer demands "cuántas" or
         "tiene" to appear in a source document) now sort first; the OR
         ranking still orders everything else and fills the list.
+
+        `prefer_institutional` (see SearchFilters): within each tier, chunks
+        from documents with no program tag come first. An institution-wide
+        question that names no program ("¿cuáles son los requisitos de
+        grado?") must be answered from the Estatuto, not from the one
+        program document that happens to contain the same phrase
+        (confirmed live 2026-10-18: Gastronomía's "Requisitos de grado:
+        Deporte Formativo e Inglés" won the all-terms tier and the answer
+        came out program-specific).
         """
         params = {k: v for k, v in base_params.items() if k not in ("embedding", "top_k")}
         params["query_text"] = query
@@ -255,6 +265,7 @@ class RAGService:
         # `where_clause`; its words must not be demanded of every chunk.
         params["and_text"] = content_terms(query, exclude_entity=base_params.get("program"))
         params["limit"] = limit
+        params["prefer_institutional"] = bool(prefer_institutional)
 
         sql = text(f"""
             WITH parsed AS (
@@ -278,6 +289,9 @@ class RAGService:
             ORDER BY
                 (CASE WHEN parsed.q_and::text != ''
                        AND to_tsvector('spanish', dc.content) @@ parsed.q_and
+                      THEN 1 ELSE 0 END) DESC,
+                (CASE WHEN CAST(:prefer_institutional AS boolean)
+                       AND (d.program IS NULL OR d.program = '')
                       THEN 1 ELSE 0 END) DESC,
                 ts_rank_cd(to_tsvector('spanish', dc.content), parsed.q) DESC
             LIMIT :limit
@@ -695,6 +709,7 @@ class RAGService:
                 lists.append(await self._keyword_search(
                     expand_cost_synonyms(variant), where_clause, params,
                     exclude_ids=set(), limit=request.top_k,
+                    prefer_institutional=bool(request.filters and request.filters.prefer_institutional),
                 ))
             except Exception as e:
                 logger.debug("Multi-query keyword search skipped (%.40s…): %s", variant, e)
@@ -851,6 +866,7 @@ class RAGService:
             fts_candidates = await self._keyword_search(
                 expand_cost_synonyms(request.query), where_clause, params, exclude_ids=seen_chunk_ids,
                 limit=request.top_k,
+                prefer_institutional=bool(request.filters and request.filters.prefer_institutional),
             )
         except Exception as e:
             logger.debug("Full-text keyword search skipped: %s", e)
