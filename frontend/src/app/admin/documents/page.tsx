@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Upload, FileText, AlertCircle, Trash2, X, ArrowUp, RefreshCw, Pencil, Check, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Upload, FileText, AlertCircle, Trash2, X, ArrowUp, RefreshCw, Pencil, Check, ChevronLeft, ChevronRight, Plus, Layers } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "@/components/ui/Toast";
 import { AdminHeader } from "@/components/admin/AdminHeader";
@@ -56,16 +56,33 @@ function TaxonomyTag({ value }: { value: string | null }) {
   );
 }
 
-function DocRowActions({ doc, reindexingId, confirmDeleteId, onReindex, onDelete, onEdit }: {
+function DocRowActions({ doc, reindexingId, confirmDeleteId, onReindex, onDelete, onEdit, onViewChunks }: {
   doc: DocumentItem;
   reindexingId: string | null;
   confirmDeleteId: string | null;
   onReindex: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   onEdit: (doc: DocumentItem) => void;
+  onViewChunks: (doc: DocumentItem) => void;
 }) {
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <button
+        onClick={() => onViewChunks(doc)}
+        disabled={doc.ingestion_status !== "completed"}
+        title="Ver los fragmentos tal como quedaron indexados"
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11,
+          padding: "3px 8px", borderRadius: 6, border: "none", cursor: "pointer",
+          background: "transparent", color: "var(--text-3)", transition: "all 0.1s",
+          opacity: doc.ingestion_status !== "completed" ? 0.5 : 1,
+        }}
+        onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "var(--brand-dim)"; b.style.color = "var(--brand-primary)"; }}
+        onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.background = "transparent"; b.style.color = "var(--text-3)"; }}
+      >
+        <Layers size={11} />
+        Fragmentos
+      </button>
       <button
         onClick={() => onEdit(doc)}
         title="Editar facultad, programa y tipo"
@@ -137,6 +154,18 @@ export default function DocumentsPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [reindexingId, setReindexingId] = useState<string | null>(null);
   const [editingDoc, setEditingDoc]     = useState<DocumentItem | null>(null);
+  // "Fragmentos" viewer — chunk texts exactly as stored/embedded.
+  const [chunksDoc, setChunksDoc]       = useState<DocumentItem | null>(null);
+  const [chunks, setChunks]             = useState<Array<{ id: string; chunk_index: number; content: string; token_count: number | null }>>([]);
+  const [chunksLoading, setChunksLoading] = useState(false);
+  const [chunkFilter, setChunkFilter]   = useState("");
+
+  const handleViewChunks = async (doc: DocumentItem) => {
+    setChunksDoc(doc); setChunks([]); setChunkFilter(""); setChunksLoading(true);
+    try { setChunks(await apiClient.getDocumentChunks(doc.id, 1, 100)); }
+    catch (e) { toast.error(e instanceof Error ? e.message : "Error cargando fragmentos"); }
+    finally { setChunksLoading(false); }
+  };
   const [editFaculty, setEditFaculty]   = useState("");
   const [editProgram, setEditProgram]   = useState("");
   const [editDocType, setEditDocType]   = useState("");
@@ -454,7 +483,7 @@ export default function DocumentsPage() {
                           {new Date(doc.created_at).toLocaleDateString("es-CO")}
                         </td>
                         <td style={{ padding: "13px 16px", textAlign: "right" }}>
-                          <DocRowActions doc={doc} reindexingId={reindexingId} confirmDeleteId={confirmDeleteId} onReindex={handleReindex} onDelete={handleDeleteClick} onEdit={handleEditOpen} />
+                          <DocRowActions doc={doc} reindexingId={reindexingId} confirmDeleteId={confirmDeleteId} onReindex={handleReindex} onDelete={handleDeleteClick} onEdit={handleEditOpen} onViewChunks={handleViewChunks} />
                         </td>
                       </tr>
                     ))}
@@ -485,7 +514,7 @@ export default function DocumentsPage() {
                       <span>{new Date(doc.created_at).toLocaleDateString("es-CO")}</span>
                     </div>
                     <div className="admin-row-card-actions">
-                      <DocRowActions doc={doc} reindexingId={reindexingId} confirmDeleteId={confirmDeleteId} onReindex={handleReindex} onDelete={handleDeleteClick} onEdit={handleEditOpen} />
+                      <DocRowActions doc={doc} reindexingId={reindexingId} confirmDeleteId={confirmDeleteId} onReindex={handleReindex} onDelete={handleDeleteClick} onEdit={handleEditOpen} onViewChunks={handleViewChunks} />
                     </div>
                   </div>
                 ))}
@@ -528,6 +557,53 @@ export default function DocumentsPage() {
           )}
         </div>
       </div>
+
+      {/* Chunk viewer */}
+      {chunksDoc && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}
+          onClick={() => setChunksDoc(null)}
+          onKeyDown={(e) => { if (e.key === "Escape") setChunksDoc(null); }}
+          role="dialog" aria-modal="true" aria-label="Fragmentos del documento"
+        >
+          <div className="card" style={{ maxWidth: 820, width: "100%", maxHeight: "88vh", display: "flex", flexDirection: "column", padding: 0, overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", borderBottom: "1px solid var(--border)" }}>
+              <Layers size={14} style={{ color: "var(--brand-primary)", flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chunksDoc.title}</div>
+                <div style={{ fontSize: 11, color: "var(--text-3)" }}>
+                  {chunksLoading ? "Cargando..." : `${chunks.length} de ${chunksDoc.total_chunks} fragmentos · así los ve la búsqueda`}
+                </div>
+              </div>
+              <input
+                value={chunkFilter}
+                onChange={(e) => setChunkFilter(e.target.value)}
+                placeholder="Filtrar por texto..."
+                className="input"
+                style={{ width: 220, boxSizing: "border-box" }}
+              />
+              <button onClick={() => setChunksDoc(null)} aria-label="Cerrar" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", display: "flex", padding: 4 }}>
+                <X size={15} />
+              </button>
+            </div>
+            <div style={{ overflowY: "auto", padding: "8px 18px 18px" }}>
+              {chunks
+                .filter((c) => !chunkFilter.trim() || c.content.toLowerCase().includes(chunkFilter.trim().toLowerCase()))
+                .map((c) => (
+                  <div key={c.id} style={{ padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--text-3)", marginBottom: 4 }}>
+                      fragmento {c.chunk_index}{c.token_count != null && ` · ${c.token_count} tokens`} · {c.content.length} caracteres
+                    </div>
+                    <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap", color: "var(--text-1)", fontFamily: "inherit" }}>{c.content}</pre>
+                  </div>
+                ))}
+              {!chunksLoading && chunks.length > 0 && chunkFilter.trim() && chunks.every((c) => !c.content.toLowerCase().includes(chunkFilter.trim().toLowerCase())) && (
+                <div style={{ padding: 24, textAlign: "center", color: "var(--text-3)", fontSize: 12 }}>Ningún fragmento contiene «{chunkFilter}»</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Upload modal */}
       {uploadModalOpen && (

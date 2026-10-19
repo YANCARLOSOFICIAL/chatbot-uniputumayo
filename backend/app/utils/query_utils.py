@@ -438,14 +438,26 @@ _QUESTION_SCAFFOLD_RE = re.compile(
 )
 
 
-def content_terms(query: str) -> str:
+def content_terms(query: str, exclude_entity: str | None = None) -> str:
     """The question with its scaffolding words removed — what is left is the
     topic itself ("¿cuántas horas de trabajo independiente tiene Aplicación
     de las Matemáticas y Física?" -> "horas de trabajo independiente
     Aplicación de las Matemáticas y Física"). Articles/prepositions are
-    left in: Postgres' spanish config drops them as stopwords anyway."""
+    left in: Postgres' spanish config drops them as stopwords anyway.
+
+    `exclude_entity`: a program/faculty name the retrieval is ALREADY
+    filtered to (see RAGService.search filters). Its words are dropped too:
+    the program name appears in a document's header chunk, not in every
+    chunk, so demanding "ingeniería de sistemas" from the chunk that holds
+    the course line would exclude exactly the chunk the question is about
+    (confirmed live 2026-10-18 with the admin retrieval tool)."""
     cleaned = _QUESTION_SCAFFOLD_RE.sub(" ", query)
     cleaned = re.sub(r"[¿?¡!,;:.]", " ", cleaned)
+    if exclude_entity:
+        entity_words = _significant_words(exclude_entity)
+        cleaned = " ".join(
+            w for w in cleaned.split() if _normalize(w) not in entity_words
+        )
     return re.sub(r"\s+", " ", cleaned).strip()
 
 

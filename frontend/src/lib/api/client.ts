@@ -356,6 +356,13 @@ export const apiClient = {
       `/api/v1/documents/${id}`
     ),
 
+  // Chunk texts as stored/embedded — lets an admin see where a document was
+  // split (a fact sitting on a chunk boundary is a retrieval blind spot).
+  getDocumentChunks: (id: string, page = 1, perPage = 100) =>
+    request<Array<{ id: string; chunk_index: number; content: string; token_count: number | null }>>(
+      `/api/v1/documents/${id}/chunks?page=${page}&per_page=${perPage}`
+    ),
+
   deleteDocument: (id: string) =>
     request<{ success: boolean }>(`/api/v1/documents/${id}`, {
       method: "DELETE",

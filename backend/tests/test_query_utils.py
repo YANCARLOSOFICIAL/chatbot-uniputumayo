@@ -319,3 +319,11 @@ class TestContentTerms:
 
     def test_only_scaffolding_gives_empty(self):
         assert content_terms("¿qué tiene?") == ""
+
+    def test_excludes_the_filtered_program_words(self):
+        out = content_terms(
+            "Cuántos créditos tiene Aplicación de las Matemáticas y Física en ingeniería de sistemas",
+            exclude_entity="ingenieria de sistemas",
+        )
+        assert out == "créditos Aplicación de las Matemáticas y Física en de"
+        assert "sistemas" not in out and "ingeniería" not in out

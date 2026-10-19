@@ -251,7 +251,9 @@ class RAGService:
         """
         params = {k: v for k, v in base_params.items() if k not in ("embedding", "top_k")}
         params["query_text"] = query
-        params["and_text"] = content_terms(query)
+        # The program filter (when the question named one) is already in
+        # `where_clause`; its words must not be demanded of every chunk.
+        params["and_text"] = content_terms(query, exclude_entity=base_params.get("program"))
         params["limit"] = limit
 
         sql = text(f"""
