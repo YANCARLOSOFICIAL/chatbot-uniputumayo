@@ -247,6 +247,17 @@ class Settings(BaseSettings):
     # normal), así que no hay razón para esperar más que unos segundos.
     answer_cache_embed_timeout_seconds: float = 8.0
 
+    # Voz (modo de voz del chat). edge-tts es gratuito pero usa un endpoint no
+    # oficial de Microsoft que a veces responde 403 a todo (confirmado en
+    # producción el 2026-10-18: el chat transcribía pero nunca hablaba). Al
+    # primer fallo se pasa a OpenAI TTS (misma clave del chat) durante
+    # `tts_edge_cooldown_seconds`. Ver app/services/tts_service.py.
+    tts_fallback_enabled: bool = True
+    tts_edge_timeout_seconds: float = 8.0
+    tts_edge_cooldown_seconds: int = 600
+    openai_tts_model: str = "gpt-4o-mini-tts"
+    openai_tts_voice: str = "nova"
+
     # Preguntas frecuentes (FAQ) curadas por el administrador. A diferencia
     # de la answer cache (volátil, llena el propio LLM, se vacía al subir
     # documentos), las FAQ viven en Postgres, las escribe una persona y no

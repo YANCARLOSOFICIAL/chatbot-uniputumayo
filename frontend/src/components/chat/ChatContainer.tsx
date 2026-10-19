@@ -170,10 +170,13 @@ export function ChatContainer() {
 
   const handleVoiceStart = useCallback(() => {
     setVoiceError(null);
+    // Inside the user's tap: unlock audio playback for browsers that block
+    // programmatic play() outside a gesture (see useVoicePlayback.unlock).
+    voicePlayback.unlock();
     setVoiceOverlayOpen(true);
     dispatchAvatarEvent("MIC_STARTED");
     startListening();
-  }, [dispatchAvatarEvent, startListening]);
+  }, [dispatchAvatarEvent, startListening, voicePlayback]);
 
   const handleVoiceCancel = useCallback(() => {
     stopListening();
@@ -191,6 +194,7 @@ export function ChatContainer() {
   // backend keeps burning tokens on an answer nobody will hear.
   const handleBargeIn = useCallback(() => {
     voicePlayback.stop();
+    voicePlayback.unlock();
     cancelActiveStream();
     setVoiceError(null);
     dispatchAvatarEvent("MIC_STARTED");

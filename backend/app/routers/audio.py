@@ -7,6 +7,7 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, field_validator
 
+from app.services import tts_service
 from app.utils.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
@@ -46,37 +47,20 @@ class TTSRequest(BaseModel):
 
 
 @router.post("/tts", response_class=Response)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 async def text_to_speech(request: Request, body: TTSRequest):
-    """Generate speech audio from text using Microsoft Edge TTS neural voices."""
+    """Generate speech audio from text — Edge neural voices with an OpenAI
+    TTS fallback (see app/services/tts_service.py). The `X-TTS-Engine`
+    header says which one answered."""
     try:
-        import edge_tts
-    except ImportError:
-        raise HTTPException(
-            status_code=503,
-            detail="Servicio TTS no disponible. Instala edge-tts.",
-        )
-
-    try:
-        communicate = edge_tts.Communicate(body.text, voice=body.voice)
-        audio_data = b""
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                audio_data += chunk["data"]
-
-        if not audio_data:
-            raise HTTPException(status_code=500, detail="No se generó audio")
-
-        return Response(
-            content=audio_data,
-            media_type="audio/mpeg",
-            headers={"Cache-Control": "no-cache"},
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error en TTS: {e}")
-        raise HTTPException(status_code=500, detail=f"Error generando audio: {str(e)}")
+        audio_data, engine = await tts_service.synthesize(body.text, body.voice)
+    except tts_service.TTSUnavailable as e:
+        raise HTTPException(status_code=503, detail=f"Servicio de voz no disponible: {e}")
+    return Response(
+        content=audio_data,
+        media_type="audio/mpeg",
+        headers={"Cache-Control": "no-cache", "X-TTS-Engine": engine},
+    )
 
 
 def _get_whisper_model():

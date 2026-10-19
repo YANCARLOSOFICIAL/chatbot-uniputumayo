@@ -44,7 +44,9 @@ slowapi>=0.1.9
 redis[asyncio]>=5.0.0     # Optional Redis backend for RAG cache
 
 # Audio - TTS / STT
-edge-tts>=6.1.9
+# >=7.3: older releases get 403 from Microsoft's endpoint once its anti-abuse
+# token changes (production was failing every TTS call on 2026-10-18).
+edge-tts>=7.3.1
 faster-whisper>=1.0.3
 
 # Reranking — cross-encoder reranker for RAG, ONNX runtime (no torch), same

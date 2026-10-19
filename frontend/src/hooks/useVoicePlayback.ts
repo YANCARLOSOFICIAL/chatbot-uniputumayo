@@ -14,7 +14,47 @@ const TTS_VOICE = "es-CO-SalomeNeural";
 const BATCH_MIN_CHARS = 110;
 
 interface QueueItem {
+  /** Server-synthesized audio; null when the server could not produce it. */
   blobPromise: Promise<Blob | null>;
+  /** The sentence itself — spoken with the browser's own voice
+   *  (speechSynthesis) when the server audio is unavailable, so voice mode
+   *  degrades to a local voice instead of going silent. */
+  text: string;
+}
+
+/** Pick a Spanish voice for the browser fallback, preferring Colombian /
+ *  Latin American ones; null when the browser has no Spanish voice at all. */
+function pickSpanishVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === "undefined" || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  const score = (v: SpeechSynthesisVoice) => {
+    const l = v.lang.toLowerCase();
+    if (l === "es-co") return 5;
+    if (l === "es-mx" || l === "es-us" || l === "es-419") return 4;
+    if (l.startsWith("es")) return 3;
+    return 0;
+  };
+  const best = voices.filter((v) => score(v) > 0).sort((a, b) => score(b) - score(a))[0];
+  return best ?? null;
+}
+
+/** A few milliseconds of silence as a WAV data URL — played inside the user's
+ *  tap on the mic to "unlock" audio playback on browsers that block
+ *  programmatic play() until the element has played once from a gesture
+ *  (Safari/iOS, Brave with its default autoplay shield, some Android
+ *  browsers). Without it the first real TTS chunk, which arrives seconds
+ *  later outside any gesture, is rejected silently and voice mode stays mute. */
+function silentWavUrl(): string {
+  const sampleRate = 8000;
+  const samples = 80; // 10 ms
+  const buffer = new ArrayBuffer(44 + samples * 2);
+  const v = new DataView(buffer);
+  const str = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, "RIFF"); v.setUint32(4, 36 + samples * 2, true); str(8, "WAVE");
+  str(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, "data"); v.setUint32(40, samples * 2, true);
+  return URL.createObjectURL(new Blob([buffer], { type: "audio/wav" }));
 }
 
 interface UseVoicePlaybackOptions {
@@ -42,6 +82,9 @@ interface UseVoicePlaybackReturn {
   flush: () => void;
   /** Cancel everything immediately (new voice turn started, or user backed out). */
   stop: () => void;
+  /** Call from inside a user gesture (the mic tap) so later programmatic
+   *  playback is allowed by autoplay-restricting browsers. */
+  unlock: () => void;
 }
 
 export function useVoicePlayback(
@@ -74,6 +117,9 @@ export function useVoicePlayback(
   // stop() was called (e.g. user hit "Detener" mid-response) — without this,
   // enqueueDelta would keep queuing new TTS chunks and "revive" playback.
   const activeRef = useRef(false);
+  // One "server voice unavailable" notice per response, not one per sentence.
+  const serverFailedNotifiedRef = useRef(false);
+  const unlockedRef = useRef(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -177,10 +223,49 @@ export function useVoicePlayback(
         cleanup();
         resolve();
       };
-      audio.play().catch(() => {
+      audio.play().catch((err: unknown) => {
+        // NotAllowedError = autoplay blocked (no user gesture "unlocked" the
+        // element). Say so instead of failing silently — this was invisible
+        // before: the overlay just closed with no audio and no message.
+        const name = err instanceof Error ? err.name : "";
+        if (name === "NotAllowedError") {
+          onErrorRef.current?.("El navegador bloqueó la reproducción de voz. Toca el micrófono de nuevo para activarla.");
+        }
         cleanup();
         resolve();
       });
+    }), []);
+
+  /** Browser-voice fallback for one sentence (speechSynthesis). */
+  const speakWithBrowser = useCallback((text: string, myGen: number): Promise<void> =>
+    new Promise((resolve) => {
+      if (typeof window === "undefined" || !window.speechSynthesis || myGen !== genRef.current) {
+        resolve();
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(text);
+      const voice = pickSpanishVoice();
+      if (voice) utterance.voice = voice;
+      utterance.lang = voice?.lang ?? "es-CO";
+      utterance.rate = 1.0;
+      let settled = false;
+      const done = () => { if (!settled) { settled = true; resolve(); } };
+      utterance.onstart = () => {
+        setIsSpeaking(true);
+        if (!hasFiredStartRef.current) {
+          hasFiredStartRef.current = true;
+          onPlaybackStartedRef.current();
+        }
+      };
+      utterance.onend = done;
+      utterance.onerror = done;
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        done();
+      }
+      // Safety net: some engines never fire onend for a cancelled utterance.
+      setTimeout(done, 1000 + text.length * 120);
     }), []);
 
   const advance = useCallback(() => {
@@ -194,6 +279,7 @@ export function useVoicePlayback(
         const blob = await item.blobPromise;
         if (myGen !== genRef.current) break;
         if (blob) await playItem(blob, myGen);
+        else await speakWithBrowser(item.text, myGen);
       }
       advancingRef.current = false;
       if (myGen === genRef.current && streamEndedRef.current && queueRef.current.length === 0) {
@@ -207,23 +293,38 @@ export function useVoicePlayback(
         }
       }
     })();
-  }, [playItem]);
+  }, [playItem, speakWithBrowser]);
 
   const enqueueSentence = useCallback(
     (text: string) => {
       if (!activeRef.current) return;
+      const notifyServerFailure = () => {
+        if (serverFailedNotifiedRef.current) return;
+        serverFailedNotifiedRef.current = true;
+        onErrorRef.current?.(
+          typeof window !== "undefined" && window.speechSynthesis
+            ? "La voz del servidor no está disponible; usando la voz del navegador."
+            : "Error generando audio de voz."
+        );
+      };
       const blobPromise = fetch(`${API_BASE}/api/v1/audio/tts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, voice: TTS_VOICE }),
       })
-        .then((r) => (r.ok ? r.blob() : null))
+        .then((r) => {
+          // A 5xx used to be swallowed here (r.ok false → null → nothing
+          // played, no message). Now it is reported once and the sentence
+          // falls back to the browser voice.
+          if (!r.ok) { notifyServerFailure(); return null; }
+          return r.blob();
+        })
         .catch(() => {
-          onErrorRef.current?.("Error generando audio de voz.");
+          notifyServerFailure();
           return null;
         });
 
-      queueRef.current.push({ blobPromise });
+      queueRef.current.push({ blobPromise, text });
       advance();
     },
     [advance]
@@ -262,6 +363,29 @@ export function useVoicePlayback(
     hasFiredStartRef.current = false;
     pendingRef.current = [];
     firstChunkSentRef.current = false;
+    serverFailedNotifiedRef.current = false;
+  }, []);
+
+  const unlock = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (!unlockedRef.current) {
+      try {
+        const url = silentWavUrl();
+        audio.src = url;
+        audio.play()
+          .then(() => { audio.pause(); unlockedRef.current = true; })
+          .catch(() => {})
+          .finally(() => URL.revokeObjectURL(url));
+      } catch {
+        // ignore — playback will simply be attempted later as before
+      }
+    }
+    audioCtxRef.current?.resume().catch(() => {});
+    // Warm the voice list: Chrome/Android return [] until voices are loaded.
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.getVoices();
+    }
   }, []);
 
   const enqueueDelta = useCallback(
@@ -304,9 +428,12 @@ export function useVoicePlayback(
       currentUrlRef.current = null;
     }
     audioRef.current?.pause();
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      try { window.speechSynthesis.cancel(); } catch { /* ignore */ }
+    }
     stopAmplitudeLoop();
     setIsSpeaking(false);
   }, []);
 
-  return { isSpeaking, amplitude, beginResponse, enqueueDelta, flush, stop };
+  return { isSpeaking, amplitude, beginResponse, enqueueDelta, flush, stop, unlock };
 }
