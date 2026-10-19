@@ -211,7 +211,6 @@ class RAGService:
         exclude_ids: set,
         limit: int,
         prefer_institutional: bool = False,
-        query_embedding: list[float] | None = None,
     ) -> list[SearchResultItem]:
         """Postgres full-text search over chunk content.
 
@@ -260,17 +259,15 @@ class RAGService:
         Deporte Formativo e Inglés" won the all-terms tier and the answer
         came out program-specific).
 
-        Within a tier, the order is the chunk's cosine similarity to the
-        query embedding (when given), NOT ts_rank_cd. ts_rank_cd counts
-        occurrences, so any question whose content words are generic
-        ("¿cuántos créditos tiene Ingeniería Ambiental?" → just "créditos"
-        once the program is filtered) was won by course-list chunks that
-        repeat "Créditos:" ten times, while the header chunk that states
-        "Total de créditos del programa: 162" ranked ~8th and never reached
-        the model — confirmed live 2026-10-18, three verification refusals
-        in a row. The lexical match decides WHICH chunks qualify; the
-        embedding decides which of them are about the question. ts_rank_cd
-        remains the fallback order when no embedding is available.
+        Within a tier the order stays ts_rank_cd. Ordering by cosine
+        similarity instead was tried live on 2026-10-18 and reverted the
+        same day: with `exclude_ids` removing everything the vector leg
+        already found, an embedding-ordered keyword leg just returns the
+        vector leg's next candidates and loses the lexically-strong chunks
+        the vector leg missed — "materias del primer semestre de Ingeniería
+        Civil" went from answered to refused. Questions whose only content
+        word is generic ("créditos") are handled by `_program_header_chunks`
+        instead.
         """
         params = {k: v for k, v in base_params.items() if k not in ("embedding", "top_k")}
         params["query_text"] = query
@@ -279,11 +276,6 @@ class RAGService:
         params["and_text"] = content_terms(query, exclude_entity=base_params.get("program"))
         params["limit"] = limit
         params["prefer_institutional"] = bool(prefer_institutional)
-        if query_embedding is not None:
-            params["embedding"] = "[" + ",".join(map(str, query_embedding)) + "]"
-            within_tier_order = "dc.embedding <=> CAST(:embedding AS vector) ASC"
-        else:
-            within_tier_order = "ts_rank_cd(to_tsvector('spanish', dc.content), parsed.q) DESC"
 
         sql = text(f"""
             WITH parsed AS (
@@ -311,7 +303,6 @@ class RAGService:
                 (CASE WHEN CAST(:prefer_institutional AS boolean)
                        AND (d.program IS NULL OR d.program = '')
                       THEN 1 ELSE 0 END) DESC,
-                {within_tier_order},
                 ts_rank_cd(to_tsvector('spanish', dc.content), parsed.q) DESC
             LIMIT :limit
         """)
@@ -331,6 +322,60 @@ class RAGService:
                 metadata=row.metadata,
             ))
         return items
+
+    async def _program_header_chunks(
+        self, program: str, exclude_document_type: str | None = None,
+    ) -> list[SearchResultItem]:
+        """The first chunk of every document tagged with `program` — its
+        "Datos generales" header: título, duración, total de créditos,
+        acuerdo de aprobación, ciclos.
+
+        Program-level facts live there and nowhere else, but nothing in a
+        question like "¿cuántos créditos tiene Ingeniería Ambiental?" can
+        single that chunk out: once the program is filtered the only content
+        word is "créditos", which every course-list chunk repeats ten times
+        (keyword leg), and the embedding of a header full of numbers sits
+        below several untagged documents (vector leg). Confirmed live
+        2026-10-18: "Total de créditos del programa: 162" never reached the
+        model and the question was refused three times in a row, while the
+        same question for Contaduría/Sistemas happened to work. Injecting
+        the header as its own ranked list (RRF rank 1) makes the program's
+        summary always available when the question names the program —
+        cheap (one indexed query, ≤5 rows) and deterministic.
+
+        Respects `exclude_document_type` (procedural questions drop
+        'pensum' documents on purpose — see ChatService._run_rag).
+        """
+        sql = text("""
+            SELECT
+                dc.id          AS chunk_id,
+                dc.content,
+                d.title        AS document_title,
+                d.program,
+                d.faculty,
+                dc.metadata
+            FROM document_chunks dc
+            JOIN documents d ON dc.document_id = d.id
+            WHERE d.program = :program
+              AND dc.chunk_index = 0
+              AND dc.embedding IS NOT NULL
+              AND (d.document_type IS DISTINCT FROM :exclude_doc_type)
+            ORDER BY d.created_at DESC
+            LIMIT 5
+        """)
+        result = await self.db.execute(sql, {"program": program, "exclude_doc_type": exclude_document_type})
+        return [
+            SearchResultItem(
+                chunk_id=row.chunk_id,
+                content=row.content,
+                score=settings.rag_score_threshold,
+                document_title=row.document_title,
+                program=row.program,
+                faculty=row.faculty,
+                metadata=row.metadata,
+            )
+            for row in result.fetchall()
+        ]
 
     # ── Fusion + re-ranking ──────────────────────────────────────────────────
 
@@ -729,7 +774,6 @@ class RAGService:
                     expand_cost_synonyms(variant), where_clause, params,
                     exclude_ids=set(), limit=request.top_k,
                     prefer_institutional=bool(request.filters and request.filters.prefer_institutional),
-                    query_embedding=embedding,
                 ))
             except Exception as e:
                 logger.debug("Multi-query keyword search skipped (%.40s…): %s", variant, e)
@@ -887,14 +931,25 @@ class RAGService:
                 expand_cost_synonyms(request.query), where_clause, params, exclude_ids=seen_chunk_ids,
                 limit=request.top_k,
                 prefer_institutional=bool(request.filters and request.filters.prefer_institutional),
-                query_embedding=query_embedding,
             )
         except Exception as e:
             logger.debug("Full-text keyword search skipped: %s", e)
 
+        # 3c. Program header chunks — see _program_header_chunks.
+        header_candidates: list[SearchResultItem] = []
+        if request.filters and request.filters.program:
+            try:
+                header_candidates = await self._program_header_chunks(
+                    request.filters.program, request.filters.exclude_document_type,
+                )
+            except Exception as e:
+                logger.debug("Program header lookup skipped: %s", e)
+
         # 4–7. Fuse (RRF), rerank, dedupe, cap untagged share, diversity cut,
         # last-semester boost — see _finalize_candidates.
         ranked_lists = [vector_candidates, fts_candidates]
+        if header_candidates:
+            ranked_lists.append(header_candidates)
         final_results = await self._finalize_candidates(request, ranked_lists, answering_provider)
         quality = self.evaluate_context_quality(final_results)
 
