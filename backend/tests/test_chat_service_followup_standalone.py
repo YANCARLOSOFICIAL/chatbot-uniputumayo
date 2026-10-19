@@ -66,6 +66,34 @@ class TestStandaloneProgramMessage:
         assert calls["condense"] == 1
         assert query.startswith("¿Cuáles son las competencias")
 
+    async def test_complete_institutional_question_skips_condensation(self, service):
+        # Formal-evaluation task T3 asked right after T2 (Gastronomía).
+        calls = _wire(service, None)
+        history = [
+            LLMMessage(role="user", content="Qué materias se ven en el primer semestre del programa de Gastronomía?"),
+            LLMMessage(role="assistant", content="Higiene y manipulación de alimentos, ..."),
+        ]
+        is_followup, query = await service._resolve_followup_query(
+            history, "Cuáles son los requisitos para obtener el grado?", "openai", uuid.uuid4(),
+        )
+        assert is_followup is False
+        assert query == "Cuáles son los requisitos para obtener el grado?"
+        assert calls["condense"] == 0
+
+    async def test_anaphoric_institutional_question_still_condenses(self, service):
+        calls = _wire(service, None)
+        is_followup, _ = await service._resolve_followup_query(
+            _history(), "y cuánto cuesta la matrícula de ese programa?", "openai", uuid.uuid4(),
+        )
+        assert is_followup is True and calls["condense"] == 1
+
+    def test_is_standalone_institutional(self):
+        assert ChatService._is_standalone_institutional("¿Cómo solicito un reingreso?")
+        assert ChatService._is_standalone_institutional("cuánto cuesta la inscripción?")
+        assert not ChatService._is_standalone_institutional("y cómo solicito el reingreso?")
+        assert not ChatService._is_standalone_institutional("cuánto cuesta la matrícula de esa carrera?")
+        assert not ChatService._is_standalone_institutional("qué materias tiene el segundo semestre?")
+
     async def test_clarification_reply_still_wins(self, service):
         from app.utils.prompts import CLARIFICATION_MARKER
         calls = _wire(service, "ingenieria de sistemas")

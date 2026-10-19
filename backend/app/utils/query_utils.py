@@ -139,7 +139,12 @@ _PROCEDURAL_TOPIC_PATTERNS = re.compile(
     # the one grading them got in, and the model refused. Specific phrases
     # only — bare "grado" stays out, as noted above.
     r"opci[oó]n(?:es)? de grado|modalidad(?:es)? de grado|trabajo de grado|"
-    r"requisitos? de grado|derechos? de grado"
+    r"requisitos? de grado|derechos? de grado|"
+    # 2026-10-18: the formal evaluation's own task wording ("requisitos para
+    # obtener el grado") and the colloquial "para graduarme" never matched —
+    # same Estatuto answer (Artículo 58), so same treatment.
+    r"requisitos? (?:de|para) (?:obtener el |optar (?:al|por el) |el )?(?:grado|t[ií]tulo)|"
+    r"graduar(?:se|me|te|nos)|graduaci[oó]n"
     r")\b",
     re.IGNORECASE,
 )

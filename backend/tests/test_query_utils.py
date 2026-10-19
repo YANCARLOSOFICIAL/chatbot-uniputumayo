@@ -299,6 +299,17 @@ class TestProceduralGradoOptions:
         assert not is_procedural_query("¿qué título de grado otorga ingeniería de sistemas?")
 
 
+class TestProceduralGradoPhrasings:
+    def test_formal_evaluation_wording_is_procedural(self):
+        assert is_procedural_query("Cuáles son los requisitos para obtener el grado?")
+        assert is_procedural_query("cuáles son los requisitos para el título?")
+        assert is_procedural_query("qué necesito para graduarme?")
+        assert is_procedural_query("cómo es el proceso de graduación")
+
+    def test_bare_grado_still_not_procedural(self):
+        assert not is_procedural_query("qué materias tiene el tercer grado de primaria")
+
+
 class TestContentTerms:
     """Scaffolding words are stripped so the AND tier of the full-text search
     only demands the topic words (see RAGService._keyword_search)."""

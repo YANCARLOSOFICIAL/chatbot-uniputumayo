@@ -60,10 +60,29 @@ class TestProgramHeaderInjection:
     async def test_exclude_document_type_is_passed_through(self, service, monkeypatch):
         calls = _wire(service, monkeypatch, [make_item("x", score=0.8)], [])
         await service.search(SearchRequest(
-            query="¿cuáles son los requisitos de grado en ingeniería ambiental?",
+            query="¿cuántos créditos de requisitos de grado tiene ingeniería ambiental?",
             filters=SearchFilters(program="ingenieria ambiental", exclude_document_type="pensum"),
         ))
         assert calls["header"] == [("ingenieria ambiental", "pensum")]
+
+    async def test_not_consulted_for_non_numeric_program_questions(self, service, monkeypatch):
+        # "competencias específicas" is answered by the untagged profiles
+        # document — the pensum header must not crowd it out.
+        calls = _wire(service, monkeypatch, [make_item("x", score=0.8)], [make_item("header")])
+        resp = await service.search(SearchRequest(
+            query="competencias específicas ingeniería de sistemas",
+            filters=SearchFilters(program="ingenieria de sistemas"),
+        ))
+        assert calls["header"] == []
+        assert len(resp.results) == 1
+
+    async def test_duration_question_consults_header(self, service, monkeypatch):
+        calls = _wire(service, monkeypatch, [make_item("x", score=0.8)], [])
+        await service.search(SearchRequest(
+            query="¿cuánto dura ingeniería civil?",
+            filters=SearchFilters(program="ingenieria civil"),
+        ))
+        assert calls["header"] == [("ingenieria civil", None)]
 
     async def test_not_consulted_without_a_program_filter(self, service, monkeypatch):
         calls = _wire(service, monkeypatch, [make_item("x", score=0.8)], [make_item("header")])

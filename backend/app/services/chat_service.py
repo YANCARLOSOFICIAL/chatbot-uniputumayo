@@ -34,7 +34,7 @@ from app.utils.prompts import (
 )
 from app.utils.query_utils import (
     detect_temperature, is_greeting, is_varying_topic_query, is_procedural_query, is_pecuniary_query,
-    mentions_entity,
+    mentions_entity, _significant_words,
 )
 from app.utils.cache import answer_cache, suggestion_cache, program_list_cache, program_alias_cache
 from app.utils.question_embedding import embed_question
@@ -881,6 +881,16 @@ class ChatService:
         if await self._detect_program_filter(current_content) is not None:
             return False, await self._distill_query(current_content, provider_name)
 
+        # Same for a complete institution-wide question (procedure or costs)
+        # that carries no reference to earlier turns — "¿Cuáles son los
+        # requisitos para obtener el grado?" asked right after a question
+        # about Gastronomía was rewritten as Gastronomía's requirements and
+        # refused (formal-evaluation task T3 replayed in one chat,
+        # 2026-10-18). Anaphora ("y ...", "ese programa", "ahí") still goes
+        # through the condenser.
+        if self._is_standalone_institutional(current_content):
+            return False, await self._distill_query(current_content, provider_name)
+
         if provider_name != "ollama":
             condensed = await self._condense_followup_query(
                 history, current_content, conversation_id,
@@ -896,6 +906,31 @@ class ChatService:
         return is_followup, resolved
 
     _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$")
+
+    # Words that tie a message to the previous turn. A message starting with
+    # "y"/"también"/"ahora", or pointing at "ese/esa/eso", "el mismo", "ahí",
+    # "esa materia", "ese programa" needs the condenser; a message without any
+    # of them and with a recognizable institution-wide topic does not.
+    _ANAPHORA_RE = re.compile(
+        r"^\s*¿?\s*(?:y|e|tambi[eé]n|adem[aá]s|entonces|ahora|luego)\b"
+        r"|\b(?:es[eao]s?|est[eao]s?|aquel(?:la|los|las)?|mism[oa]s?|dich[oa]s?|anterior(?:es)?|"
+        r"ah[ií]|all[ií]|all[aá]|él|ella|ellos|ellas|lo mismo|"
+        r"la materia|la asignatura|el programa|la carrera|el semestre|la especializaci[oó]n)\b",
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def _is_standalone_institutional(cls, content: str) -> bool:
+        """True for a complete, institution-wide question (procedure or
+        costs — see is_procedural_query / is_pecuniary_query) with no
+        reference to earlier turns. Such a message means the same thing in
+        any conversation, so condensing it only risks attaching the previous
+        topic to it."""
+        if cls._ANAPHORA_RE.search(content):
+            return False
+        if not (is_procedural_query(content) or is_pecuniary_query(content)):
+            return False
+        return len(_significant_words(content)) >= 2
 
     async def _condense_followup_query(
         self, history: list[LLMMessage], current_content: str, conversation_id: UUID,

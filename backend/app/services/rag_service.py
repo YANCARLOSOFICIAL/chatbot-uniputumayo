@@ -23,6 +23,15 @@ logger = logging.getLogger(__name__)
 # not a retrieval-quality knob worth exposing as a setting.
 _RRF_K = 60
 
+# Questions whose answer is a program-level figure kept in the document
+# header ("Datos generales"): total credits, duration, number of semesters,
+# cycle structure, approval act. See search() step 3c / _program_header_chunks.
+_PROGRAM_FACT_RE = re.compile(
+    r"cr[eé]ditos?|duraci[oó]n|cu[aá]nto\s+dura|cu[aá]ntos\s+semestres|"
+    r"ciclos?\s+(?:propedéutic|propedeutic|tecnol|profesion)|acuerdo|aprobaci[oó]n|registro\s+calificado",
+    re.IGNORECASE,
+)
+
 # "SEMESTRE VII", "Semestre 8", etc. — matches both the Roman-numeral labels
 # used in the "RESUMEN DE MATERIAS POR SEMESTRE" block and plain Arabic
 # numerals, wherever they appear in a chunk's content. See
@@ -955,9 +964,13 @@ class RAGService:
         except Exception as e:
             logger.debug("Full-text keyword search skipped: %s", e)
 
-        # 3c. Program header chunks — see _program_header_chunks.
+        # 3c. Program header chunks — see _program_header_chunks. Only for
+        # program-level NUMERIC facts: injecting the pensum header for every
+        # program-scoped question let it crowd out the untagged document
+        # that actually answers "competencias específicas de Ingeniería de
+        # Sistemas" (Pregrados_Perfiles_Titulos), confirmed live 2026-10-18.
         header_candidates: list[SearchResultItem] = []
-        if request.filters and request.filters.program:
+        if request.filters and request.filters.program and _PROGRAM_FACT_RE.search(request.query):
             try:
                 header_candidates = await self._program_header_chunks(
                     request.filters.program, request.filters.exclude_document_type,
