@@ -211,6 +211,7 @@ class RAGService:
         exclude_ids: set,
         limit: int,
         prefer_institutional: bool = False,
+        query_embedding: list[float] | None = None,
     ) -> list[SearchResultItem]:
         """Postgres full-text search over chunk content.
 
@@ -258,6 +259,18 @@ class RAGService:
         (confirmed live 2026-10-18: Gastronomía's "Requisitos de grado:
         Deporte Formativo e Inglés" won the all-terms tier and the answer
         came out program-specific).
+
+        Within a tier, the order is the chunk's cosine similarity to the
+        query embedding (when given), NOT ts_rank_cd. ts_rank_cd counts
+        occurrences, so any question whose content words are generic
+        ("¿cuántos créditos tiene Ingeniería Ambiental?" → just "créditos"
+        once the program is filtered) was won by course-list chunks that
+        repeat "Créditos:" ten times, while the header chunk that states
+        "Total de créditos del programa: 162" ranked ~8th and never reached
+        the model — confirmed live 2026-10-18, three verification refusals
+        in a row. The lexical match decides WHICH chunks qualify; the
+        embedding decides which of them are about the question. ts_rank_cd
+        remains the fallback order when no embedding is available.
         """
         params = {k: v for k, v in base_params.items() if k not in ("embedding", "top_k")}
         params["query_text"] = query
@@ -266,6 +279,11 @@ class RAGService:
         params["and_text"] = content_terms(query, exclude_entity=base_params.get("program"))
         params["limit"] = limit
         params["prefer_institutional"] = bool(prefer_institutional)
+        if query_embedding is not None:
+            params["embedding"] = "[" + ",".join(map(str, query_embedding)) + "]"
+            within_tier_order = "dc.embedding <=> CAST(:embedding AS vector) ASC"
+        else:
+            within_tier_order = "ts_rank_cd(to_tsvector('spanish', dc.content), parsed.q) DESC"
 
         sql = text(f"""
             WITH parsed AS (
@@ -293,6 +311,7 @@ class RAGService:
                 (CASE WHEN CAST(:prefer_institutional AS boolean)
                        AND (d.program IS NULL OR d.program = '')
                       THEN 1 ELSE 0 END) DESC,
+                {within_tier_order},
                 ts_rank_cd(to_tsvector('spanish', dc.content), parsed.q) DESC
             LIMIT :limit
         """)
@@ -710,6 +729,7 @@ class RAGService:
                     expand_cost_synonyms(variant), where_clause, params,
                     exclude_ids=set(), limit=request.top_k,
                     prefer_institutional=bool(request.filters and request.filters.prefer_institutional),
+                    query_embedding=embedding,
                 ))
             except Exception as e:
                 logger.debug("Multi-query keyword search skipped (%.40s…): %s", variant, e)
@@ -867,6 +887,7 @@ class RAGService:
                 expand_cost_synonyms(request.query), where_clause, params, exclude_ids=seen_chunk_ids,
                 limit=request.top_k,
                 prefer_institutional=bool(request.filters and request.filters.prefer_institutional),
+                query_embedding=query_embedding,
             )
         except Exception as e:
             logger.debug("Full-text keyword search skipped: %s", e)
