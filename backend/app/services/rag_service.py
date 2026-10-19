@@ -14,7 +14,7 @@ from app.models.retrieval_log import RetrievalLog
 from app.providers.provider_factory import ProviderFactory
 from app.runtime_config import runtime_config
 from app.utils.cache import rag_cache
-from app.utils.query_utils import is_last_semester_query, expand_cost_synonyms
+from app.utils.query_utils import is_last_semester_query, expand_cost_synonyms, content_terms
 
 logger = logging.getLogger(__name__)
 
@@ -236,14 +236,29 @@ class RAGService:
         turning the "keyword search" leg of RRF into a no-op for real
         traffic. OR lets ts_rank_cd do its job ranking by how many terms
         match instead of requiring all of them.
+
+        Two-tier ordering (added 2026-10-18): OR alone ranks by how OFTEN
+        terms repeat, so a question about one course ("¿cuántas horas de
+        trabajo independiente tiene Aplicación de las Matemáticas y
+        Física?") was won by curriculum chunks that repeat "horas de trabajo
+        independiente" thirty times for a different program, while the one
+        chunk naming that course never made the candidate pool — confirmed
+        live with the admin "Probar búsqueda" tool. Chunks matching EVERY
+        content term (the question with its interrogative/generic words
+        stripped by `content_terms`, so AND no longer demands "cuántas" or
+        "tiene" to appear in a source document) now sort first; the OR
+        ranking still orders everything else and fills the list.
         """
         params = {k: v for k, v in base_params.items() if k not in ("embedding", "top_k")}
         params["query_text"] = query
+        params["and_text"] = content_terms(query)
         params["limit"] = limit
 
         sql = text(f"""
             WITH parsed AS (
-                SELECT to_tsquery('spanish', replace(plainto_tsquery('spanish', :query_text)::text, ' & ', ' | ')) AS q
+                SELECT
+                    to_tsquery('spanish', replace(plainto_tsquery('spanish', :query_text)::text, ' & ', ' | ')) AS q,
+                    plainto_tsquery('spanish', :and_text) AS q_and
             )
             SELECT
                 dc.id          AS chunk_id,
@@ -258,7 +273,11 @@ class RAGService:
               AND {where_clause}
               AND parsed.q::text != ''
               AND to_tsvector('spanish', dc.content) @@ parsed.q
-            ORDER BY ts_rank_cd(to_tsvector('spanish', dc.content), parsed.q) DESC
+            ORDER BY
+                (CASE WHEN parsed.q_and::text != ''
+                       AND to_tsvector('spanish', dc.content) @@ parsed.q_and
+                      THEN 1 ELSE 0 END) DESC,
+                ts_rank_cd(to_tsvector('spanish', dc.content), parsed.q) DESC
             LIMIT :limit
         """)
         result = await self.db.execute(sql, params)

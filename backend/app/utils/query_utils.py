@@ -419,6 +419,36 @@ def canonicalize_price_words(words: set[str]) -> set[str]:
     }
 
 
+# Words a question carries that a formal source document never does:
+# interrogatives, "tiene"/"hay"-style scaffolding, politeness. Stripped before
+# building the all-terms (AND) full-text query in RAGService._keyword_search —
+# Spanish stemming turns "cuántas"/"cómo" into real lexemes ('cuant', 'com')
+# that would otherwise have to appear in the chunk for it to match.
+_QUESTION_SCAFFOLD_RE = re.compile(
+    r"\b(?:"
+    r"cu[aá]nt[oa]s?|cu[aá]l(?:es)?|c[oó]mo|qu[eé]|qui[eé]n(?:es)?|d[oó]nde|cu[aá]ndo|"
+    r"por\s+qu[eé]|para\s+qu[eé]|"
+    r"tiene[ns]?|tengo|tenemos|hay|existe[n]?|"
+    r"pued[oe]s?n?|podr[ií]a[ns]?|deb[oe]s?n?|necesit[oa]s?n?|quier[oe]s?n?|quisiera|"
+    r"saber|conocer|decir|dime|dame|digame|d[ií]game|explica(?:me)?|expl[ií]came|cu[eé]ntame|"
+    r"informaci[oó]n|sobre|acerca|respecto|favor|hola|buenas|gracias|"
+    r"me|te|le|nos|se|yo|ustedes|usted"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def content_terms(query: str) -> str:
+    """The question with its scaffolding words removed — what is left is the
+    topic itself ("¿cuántas horas de trabajo independiente tiene Aplicación
+    de las Matemáticas y Física?" -> "horas de trabajo independiente
+    Aplicación de las Matemáticas y Física"). Articles/prepositions are
+    left in: Postgres' spanish config drops them as stopwords anyway."""
+    cleaned = _QUESTION_SCAFFOLD_RE.sub(" ", query)
+    cleaned = re.sub(r"[¿?¡!,;:.]", " ", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
 def keyword_score(query: str, text: str) -> float:
     """Simple TF-style keyword overlap score [0, 1] between query and chunk text.
 

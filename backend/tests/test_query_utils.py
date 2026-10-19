@@ -1,4 +1,5 @@
 from app.utils.query_utils import (
+    content_terms,
     is_procedural_query,
     is_pecuniary_query,
     detect_temperature, is_greeting, keyword_score,
@@ -296,3 +297,25 @@ class TestProceduralGradoOptions:
 
     def test_bare_grado_is_not_procedural(self):
         assert not is_procedural_query("¿qué título de grado otorga ingeniería de sistemas?")
+
+
+class TestContentTerms:
+    """Scaffolding words are stripped so the AND tier of the full-text search
+    only demands the topic words (see RAGService._keyword_search)."""
+
+    def test_strips_interrogatives_and_tiene(self):
+        out = content_terms("¿cuántas horas de trabajo independiente tiene Aplicación de las Matemáticas y Física?")
+        assert out == "horas de trabajo independiente Aplicación de las Matemáticas y Física"
+
+    def test_strips_politeness_and_wrappers(self):
+        out = content_terms("Hola, me puedes decir cuáles son los requisitos de grado por favor?")
+        assert "requisitos de grado" in out
+        for w in ("Hola", "puedes", "cuáles", "favor", "me"):
+            assert w not in out.split()
+
+    def test_keeps_program_names_and_codes(self):
+        out = content_terms("qué créditos tiene TD102 en ingeniería de sistemas")
+        assert out == "créditos TD102 en ingeniería de sistemas"
+
+    def test_only_scaffolding_gives_empty(self):
+        assert content_terms("¿qué tiene?") == ""
