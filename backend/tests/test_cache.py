@@ -112,6 +112,20 @@ class TestAnswerCacheEntityGuard:
         entry = self._entry([{"program": None, "faculty": "Ingeniería"}])
         assert AsyncAnswerCache._entity_guard_passes(entry, "quiero estudiar salud pública") is False
 
+    def test_faculty_not_demanded_when_program_already_matched(self):
+        # Live 2026-10-18: a byte-identical repeat of "¿qué materias tiene el
+        # primer semestre de contaduría pública?" missed the cache because
+        # the faculty ("ciencias administrativas y economicas") shares no
+        # word with the question — the program check had already passed.
+        entry = self._entry([{"program": "Contaduria Publica", "faculty": "ciencias administrativas y economicas"}])
+        assert AsyncAnswerCache._entity_guard_passes(
+            entry, "¿qué materias tiene el primer semestre de contaduría pública?",
+        ) is True
+
+    def test_faculty_still_checked_when_no_program_on_sources(self):
+        entry = self._entry([{"program": None, "faculty": "ciencias administrativas y economicas"}])
+        assert AsyncAnswerCache._entity_guard_passes(entry, "materias de contaduría") is False
+
     def test_falls_back_to_document_title_when_program_and_faculty_unset(self):
         # Every document currently uploaded has program/faculty empty (both
         # are optional, admin-filled fields) — the guard must still catch a

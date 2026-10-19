@@ -203,12 +203,16 @@ services:
       # aceptar la limitante de Ollama tal cual, documentándola en la
       # tesis en vez de perseguirla más en este hardware.
       VERIFICATION_LOOP_ENABLED: "true"
-      # Bajado a "1" el 2026-10-17: el segundo intento duplicaba la generación
-      # en los casos lentos (40-50 s por respuesta medidos en producción) y,
-      # con varios usuarios a la vez, alimentaba la saturación. Se sigue
-      # verificando cada borrador; si el grader lo rechaza, se sirve el
-      # rechazo fijo en vez de regenerar.
-      VERIFICATION_MAX_ATTEMPTS: "1"
+      # Bajado a "1" el 2026-10-17 cuando el chat corría en gpt-5.6-luna: el
+      # segundo intento duplicaba una generación de 40-50 s y, con varios
+      # usuarios a la vez, alimentaba la saturación. Vuelto a "2" el
+      # 2026-10-18: con gpt-4.1-mini un borrador tarda 3-5 s y el reintento
+      # solo ocurre cuando el juez rechaza (medido en vivo: la misma pregunta
+      # "materias del primer semestre de contaduría pública" respondió una
+      # vez y fue rechazada la siguiente, con el mismo contexto — con un
+      # solo intento esa varianza del borrador se convierte en un rechazo
+      # que el usuario ve). Si se vuelve a un modelo lento, bajar a "1".
+      VERIFICATION_MAX_ATTEMPTS: "2"
       # 2 reformulaciones en vez de 3 en el reintento multi-query: menos
       # embeddings y búsquedas por pregunta rescatada, sin perder la idea.
       RAG_MULTIQUERY_VARIANTS: "2"

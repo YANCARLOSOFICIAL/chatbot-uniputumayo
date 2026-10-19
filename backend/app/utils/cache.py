@@ -379,6 +379,19 @@ class AsyncAnswerCache:
 
         checked_any_field = False
         for field in ("program", "faculty"):
+            if field == "faculty" and checked_any_field:
+                # The program check above already passed, and a program is
+                # the more specific scope. Still demanding a faculty word
+                # rejected byte-identical repeats for every program whose
+                # faculty name shares nothing with the question — confirmed
+                # live 2026-10-18: "¿qué materias tiene el primer semestre
+                # de contaduría pública?" (program "Contaduria Publica",
+                # faculty "ciencias administrativas y economicas") missed
+                # the cache at similarity 1.0 because the question never
+                # says "ciencias"/"administrativas"/"economicas", while the
+                # same question for Ingeniería de Sistemas hit only because
+                # its faculty happens to be called "ingenieria".
+                continue
             values = {s.get(field) for s in sources if s.get(field)}
             if len(values) != 1:
                 continue  # ambiguous/generic — nothing specific to guard
