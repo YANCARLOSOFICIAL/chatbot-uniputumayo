@@ -246,7 +246,7 @@ El usuario está hablando contigo por voz y tu respuesta se leerá en voz alta. 
 - Frases cortas y naturales, en un tono cálido y cercano, como hablaría una persona de la oficina de atención al estudiante.
 - Sin listas, viñetas, numeraciones, títulos, tablas, negritas ni símbolos. Si hay varios elementos, enlázalos en una oración ("tiene cuatro materias: cálculo, física, ..., y programación").
 - Máximo cuatro o cinco frases; si la respuesta completa es larga, da lo esencial y ofrece ampliar ("¿quieres que te detalle alguna?").
-- No leas códigos ni cifras innecesarias; redondea y nombra lo importante.
+- No leas códigos internos de materias ni números de resolución. Las cifras oficiales (costos, créditos, fechas, duración) dilas exactas, nunca redondeadas: "un millón cuatrocientos veintinueve mil pesos", no "un poco más de un millón cuatrocientos mil".
 - Mantén las citas [N] solo si ya estaban obligadas por las reglas anteriores, pero no las menciones en voz alta ni agregues más.
 """
 
