@@ -871,6 +871,16 @@ class ChatService:
         if not history:
             return False, await self._distill_query(current_content, provider_name)
 
+        # A message that names exactly one program AND a program-varying
+        # topic ("Competencias específicas ingeniería de sistemas") is
+        # already standalone — don't let the condenser merge it with the
+        # previous turn. Confirmed live 2026-10-18: asked alone it answered
+        # every time; asked right after two turns about one course of that
+        # program it was refused 2 of 3 times, because the rewrite attached
+        # the earlier course to a question that was about the whole program.
+        if await self._detect_program_filter(current_content) is not None:
+            return False, await self._distill_query(current_content, provider_name)
+
         if provider_name != "ollama":
             condensed = await self._condense_followup_query(
                 history, current_content, conversation_id,
@@ -1344,11 +1354,20 @@ class ChatService:
                         temperature=temperature,
                         max_tokens=runtime_config.default_max_tokens,
                     )
-                    # The model refused with context in hand — try once more
-                    # against a multi-query retrieval before serving that refusal
-                    # (see _retry_with_multiquery). Nothing was sent to the client
+                    # The model refused with context in hand, OR the grader
+                    # rejected every draft — try once more against a
+                    # multi-query retrieval before serving a refusal (see
+                    # _retry_with_multiquery). Nothing was sent to the client
                     # yet, so a successful retry simply replaces the draft.
-                    if verified["approved"] and REFUSAL_MARKER in verified["content"]:
+                    # The grader case was added 2026-10-18: the same question
+                    # ("¿cuántos créditos tiene Aplicación de las Matemáticas y
+                    # Física en Ingeniería de Sistemas?") was refused on one
+                    # phrasing and answered on another with identical keyword
+                    # retrieval — the difference was the HyDE draw on the
+                    # vector leg, which the retrieval cache then pins for 30
+                    # min. A forced multi-query pass fuses fresh candidates
+                    # instead of regenerating from the same context.
+                    if not verified["approved"] or REFUSAL_MARKER in verified["content"]:
                         retry_ctx = await self._retry_with_multiquery(
                             retrieval_query, rag_ctx, provider_name,
                         )
@@ -1649,11 +1668,12 @@ class ChatService:
                             temperature=temperature,
                             max_tokens=runtime_config.default_max_tokens,
                         )
-                        # Same refusal retry as process_message — this path sends the
-                        # whole approved answer as one event (see above), so nothing
-                        # has reached the client yet either. The candidate sources
-                        # already sent are corrected below from the final rag_ctx.
-                        if verified["approved"] and REFUSAL_MARKER in verified["content"]:
+                        # Same refusal / grader-rejection retry as process_message —
+                        # this path sends the whole approved answer as one event (see
+                        # above), so nothing has reached the client yet either. The
+                        # candidate sources already sent are corrected below from the
+                        # final rag_ctx.
+                        if not verified["approved"] or REFUSAL_MARKER in verified["content"]:
                             retry_ctx = await self._retry_with_multiquery(
                                 retrieval_query, rag_ctx, provider_name,
                             )
