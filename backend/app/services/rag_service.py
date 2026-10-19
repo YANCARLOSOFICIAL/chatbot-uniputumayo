@@ -238,17 +238,17 @@ class RAGService:
         traffic. OR lets ts_rank_cd do its job ranking by how many terms
         match instead of requiring all of them.
 
-        Two-tier ordering (added 2026-10-18): OR alone ranks by how OFTEN
-        terms repeat, so a question about one course ("¿cuántas horas de
-        trabajo independiente tiene Aplicación de las Matemáticas y
+        Coverage-first ordering (added 2026-10-18): OR alone ranks by how
+        OFTEN terms repeat, so a question about one course ("¿cuántas horas
+        de trabajo independiente tiene Aplicación de las Matemáticas y
         Física?") was won by curriculum chunks that repeat "horas de trabajo
         independiente" thirty times for a different program, while the one
         chunk naming that course never made the candidate pool — confirmed
-        live with the admin "Probar búsqueda" tool. Chunks matching EVERY
-        content term (the question with its interrogative/generic words
-        stripped by `content_terms`, so AND no longer demands "cuántas" or
-        "tiene" to appear in a source document) now sort first; the OR
-        ranking still orders everything else and fills the list.
+        live with the admin "Probar búsqueda" tool. Chunks are now ordered
+        by how many DISTINCT content terms they contain (the question with
+        its interrogative/generic words stripped by `content_terms`, so
+        "cuántas"/"tiene" are never demanded of a source document), then by
+        the OR ranking, which still fills the list.
 
         `prefer_institutional` (see SearchFilters): within each tier, chunks
         from documents with no program tag come first. An institution-wide
@@ -277,33 +277,49 @@ class RAGService:
         params["limit"] = limit
         params["prefer_institutional"] = bool(prefer_institutional)
 
+        # `coverage` = how many DISTINCT content lexemes of the question the
+        # chunk contains (prefix match on the stemmed lexeme, so nothing is
+        # re-stemmed). It replaces the earlier all-or-nothing AND tier:
+        # that tier dropped the right chunk the moment the question carried
+        # one extra word ("...por semana" — the course line never says
+        # "semana") and then let a chunk matching every word, but about
+        # another program, win on frequency. Ordering by coverage first
+        # keeps the "names the course" signal and degrades gracefully.
         sql = text(f"""
             WITH parsed AS (
                 SELECT
                     to_tsquery('spanish', replace(plainto_tsquery('spanish', :query_text)::text, ' & ', ' | ')) AS q,
-                    plainto_tsquery('spanish', :and_text) AS q_and
+                    tsvector_to_array(to_tsvector('spanish', :and_text)) AS lex
+            ),
+            matched AS (
+                SELECT
+                    dc.id          AS chunk_id,
+                    dc.content,
+                    d.title        AS document_title,
+                    d.program,
+                    d.faculty,
+                    dc.metadata,
+                    (SELECT count(*)
+                       FROM unnest(parsed.lex) AS l
+                      WHERE l ~ '^[a-z0-9áéíóúüñ]+$'
+                        AND to_tsvector('spanish', dc.content) @@ CAST(l || ':*' AS tsquery)
+                    ) AS coverage,
+                    ts_rank_cd(to_tsvector('spanish', dc.content), parsed.q) AS rank
+                FROM document_chunks dc
+                JOIN documents d ON dc.document_id = d.id, parsed
+                WHERE dc.embedding IS NOT NULL
+                  AND {where_clause}
+                  AND parsed.q::text != ''
+                  AND to_tsvector('spanish', dc.content) @@ parsed.q
             )
-            SELECT
-                dc.id          AS chunk_id,
-                dc.content,
-                d.title        AS document_title,
-                d.program,
-                d.faculty,
-                dc.metadata
-            FROM document_chunks dc
-            JOIN documents d ON dc.document_id = d.id, parsed
-            WHERE dc.embedding IS NOT NULL
-              AND {where_clause}
-              AND parsed.q::text != ''
-              AND to_tsvector('spanish', dc.content) @@ parsed.q
+            SELECT chunk_id, content, document_title, program, faculty, metadata
+            FROM matched
             ORDER BY
-                (CASE WHEN parsed.q_and::text != ''
-                       AND to_tsvector('spanish', dc.content) @@ parsed.q_and
-                      THEN 1 ELSE 0 END) DESC,
+                coverage DESC,
                 (CASE WHEN CAST(:prefer_institutional AS boolean)
-                       AND (d.program IS NULL OR d.program = '')
+                       AND (program IS NULL OR program = '')
                       THEN 1 ELSE 0 END) DESC,
-                ts_rank_cd(to_tsvector('spanish', dc.content), parsed.q) DESC
+                rank DESC
             LIMIT :limit
         """)
         result = await self.db.execute(sql, params)
@@ -326,9 +342,13 @@ class RAGService:
     async def _program_header_chunks(
         self, program: str, exclude_document_type: str | None = None,
     ) -> list[SearchResultItem]:
-        """The first chunk of every document tagged with `program` — its
-        "Datos generales" header: título, duración, total de créditos,
-        acuerdo de aprobación, ciclos.
+        """The first two chunks of every document tagged with `program` —
+        the "Datos generales" header: título, duración, total de créditos,
+        acuerdo de aprobación, ciclos. Two, not one: ingestion prepends a
+        generated "=== RESUMEN DE MATERIAS POR SEMESTRE ===" block to
+        curriculum documents (see document_service enrichment), so in
+        production chunk 0 is that summary and the real header is chunk 1
+        (confirmed live 2026-10-18 for 02_Saneamiento_e_IngAmbiental).
 
         Program-level facts live there and nowhere else, but nothing in a
         question like "¿cuántos créditos tiene Ingeniería Ambiental?" can
@@ -357,11 +377,11 @@ class RAGService:
             FROM document_chunks dc
             JOIN documents d ON dc.document_id = d.id
             WHERE d.program = :program
-              AND dc.chunk_index = 0
+              AND dc.chunk_index <= 1
               AND dc.embedding IS NOT NULL
               AND (d.document_type IS DISTINCT FROM :exclude_doc_type)
-            ORDER BY d.created_at DESC
-            LIMIT 5
+            ORDER BY d.created_at DESC, dc.chunk_index
+            LIMIT 10
         """)
         result = await self.db.execute(sql, {"program": program, "exclude_doc_type": exclude_document_type})
         return [
