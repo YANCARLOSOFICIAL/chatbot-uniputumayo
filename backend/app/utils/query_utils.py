@@ -251,7 +251,16 @@ def is_varying_topic_query(query: str) -> bool:
 # answer, with RAG never running at all). A word only belongs in this list
 # if it essentially never opens a question that needs retrieval.
 _CONVERSATIONAL_PATTERNS = re.compile(
-    r"\b(hola|buenas|buenos|saludos|gracias|por favor|interesante|genial)\b",
+    r"\b(hola|buenas|buenos|saludos|gracias|por favor|interesante|genial|"
+    # 2026-10-19, voice mode: Whisper transcribed a spoken greeting as "cómo
+    # estás, cómo te encuentras." — no "hola", so it was not a greeting, went
+    # through retrieval and was refused. Small talk that needs no documents:
+    r"c[oó]mo\s+est[aá]s|c[oó]mo\s+te\s+encuentras|c[oó]mo\s+te\s+va|c[oó]mo\s+va\s+todo|"
+    r"qu[eé]\s+tal|qu[eé]\s+m[aá]s|c[oó]mo\s+te\s+llamas|qui[eé]n\s+eres|"
+    r"qu[eé]\s+puedes\s+hacer|en\s+qu[eé]\s+me\s+puedes\s+ayudar|me\s+escuchas|me\s+oyes|"
+    r"adi[oó]s|chao|hasta\s+luego|nos\s+vemos|mucho\s+gusto|encantad[oa]|"
+    r"muy\s+amable|perfecto|listo|vale|de\s+acuerdo|entendido"
+    r")\b",
     re.IGNORECASE,
 )
 

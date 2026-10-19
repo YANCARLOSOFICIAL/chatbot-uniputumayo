@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import re
 import tempfile
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
@@ -61,6 +62,34 @@ async def text_to_speech(request: Request, body: TTSRequest):
         media_type="audio/mpeg",
         headers={"Cache-Control": "no-cache", "X-TTS-Engine": engine},
     )
+
+
+# Whisper "hallucinates" these on silence/noise/very short clips — they are
+# YouTube-subtitle credits from its training data, not what the user said.
+# A transcript that is only one of them is treated as "no speech", otherwise
+# the chat runs retrieval on it and answers "no tengo esa información" to a
+# user who just said "hola" too quietly.
+_WHISPER_ARTIFACT_RE = re.compile(
+    r"^\W*(?:"
+    r"subt[ií]tulos?\s+(?:realizados?|creados?|hechos?)\s+por.*|"
+    r"subt[ií]tulos?\s+por\s+la\s+comunidad.*|"
+    r".*amara\.org.*|"
+    r"gracias\s+por\s+ver(?:\s+el\s+v[ií]deo)?\.?|"
+    r"suscr[ií]b(?:e|a)te(?:\s+al\s+canal)?\.?|"
+    r"m[uú]sica\.?|\[m[uú]sica\]|\(m[uú]sica\)|"
+    r"transcripci[oó]n\s+por.*|"
+    r"cc\s+por.*"
+    r")\W*$",
+    re.IGNORECASE,
+)
+
+
+def clean_transcript(text: str) -> str:
+    """Drop known Whisper artifacts (see _WHISPER_ARTIFACT_RE)."""
+    text = (text or "").strip()
+    if not text or _WHISPER_ARTIFACT_RE.match(text):
+        return ""
+    return text
 
 
 def _get_whisper_model():
@@ -140,7 +169,10 @@ async def speech_to_text(request: Request, audio: UploadFile = File(...)):
             except OSError:
                 pass
 
-        return {"transcript": transcript.strip()}
+        cleaned = clean_transcript(transcript)
+        if cleaned != transcript.strip():
+            logger.info("STT artifact dropped: %r", transcript[:80])
+        return {"transcript": cleaned}
 
     except HTTPException:
         raise

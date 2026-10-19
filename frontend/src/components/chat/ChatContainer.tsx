@@ -66,7 +66,7 @@ export function ChatContainer() {
     onError: (msg) => toast.error(msg),
   });
 
-  const { interimTranscript, micStatus, startListening, stopListening, error: sttError, isSupported } =
+  const { interimTranscript, micStatus, startListening, stopListening, cancelListening, error: sttError, isSupported } =
     useSpeechRecognition({
       onFinal: (transcript) => {
         dispatchAvatarEvent("SPEECH_FINAL");
@@ -74,7 +74,7 @@ export function ChatContainer() {
       },
       onCancelled: (reason) => {
         dispatchAvatarEvent("CANCEL");
-        if (reason && reason !== "empty-recording" && reason !== "no-speech") {
+        if (reason && reason !== "empty-recording" && reason !== "no-speech" && reason !== "cancelled") {
           toast.error("No se pudo capturar audio. Intenta de nuevo.");
         }
       },
@@ -178,13 +178,16 @@ export function ChatContainer() {
     startListening();
   }, [dispatchAvatarEvent, startListening, voicePlayback]);
 
+  // "Detener" / close: abort the whole voice turn. The recording is
+  // discarded (not transcribed and sent — see cancelListening), audio stops
+  // and any in-flight answer is aborted.
   const handleVoiceCancel = useCallback(() => {
-    stopListening();
+    cancelListening();
     voicePlayback.stop();
     cancelActiveStream();
     dispatchAvatarEvent("CANCEL");
     setVoiceOverlayOpen(false);
-  }, [stopListening, voicePlayback, cancelActiveStream, dispatchAvatarEvent]);
+  }, [cancelListening, voicePlayback, cancelActiveStream, dispatchAvatarEvent]);
 
   // Barge-in: the user starts talking while Guaca is still speaking. Cuts
   // audio immediately and starts listening — a real conversation lets you

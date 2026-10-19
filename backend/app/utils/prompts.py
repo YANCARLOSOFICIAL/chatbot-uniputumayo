@@ -234,6 +234,23 @@ def build_clarification_message(entity_type: str, names: list[str]) -> str:
     )
 
 
+# Appended to the system prompt when the user spoke (input_type == "voice"):
+# the answer is going to be read aloud sentence by sentence, so lists,
+# headings, tables and citation markers come out as noise, and a long
+# enumeration is tiring to listen to. Content rules are unchanged — only the
+# shape of the answer.
+VOICE_STYLE_NOTE = """
+
+━━━ MODO DE VOZ ━━━
+El usuario está hablando contigo por voz y tu respuesta se leerá en voz alta. Responde como en una conversación hablada:
+- Frases cortas y naturales, en un tono cálido y cercano, como hablaría una persona de la oficina de atención al estudiante.
+- Sin listas, viñetas, numeraciones, títulos, tablas, negritas ni símbolos. Si hay varios elementos, enlázalos en una oración ("tiene cuatro materias: cálculo, física, ..., y programación").
+- Máximo cuatro o cinco frases; si la respuesta completa es larga, da lo esencial y ofrece ampliar ("¿quieres que te detalle alguna?").
+- No leas códigos ni cifras innecesarias; redondea y nombra lo importante.
+- Mantén las citas [N] solo si ya estaban obligadas por las reglas anteriores, pero no las menciones en voz alta ni agregues más.
+"""
+
+
 def build_chat_prompt(context: str) -> str:
     """Build the system prompt for a message with grounded context.
 

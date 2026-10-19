@@ -45,8 +45,14 @@ interface UseSpeechRecognitionReturn {
    *  changes; they already handle an empty string as "nothing to show". */
   interimTranscript: string;
   micStatus: MicStatus;
+  /** Finish the turn: stop recording and transcribe/send what was captured. */
   startListening: () => void;
   stopListening: () => void;
+  /** Abort the turn: stop recording and DISCARD it — nothing is transcribed
+   *  or sent. This is what "Detener"/closing voice mode must call; before it
+   *  existed, cancelling still ran Whisper on the partial clip and sent the
+   *  result, with the input bar reading "Escuchando..." in the meantime. */
+  cancelListening: () => void;
   error: string | null;
   isSupported: boolean;
 }
@@ -108,6 +114,8 @@ export function useSpeechRecognition(
   const sessionEndedRef = useRef(true); // guards against double onFinal/onCancelled per session
   const stopVadRef = useRef<(() => void) | null>(null);
   const stopReasonRef = useRef<string | undefined>(undefined);
+  // Set by cancelListening(): the recorder's onstop must drop the clip.
+  const discardRef = useRef(false);
 
   // Keep latest callbacks without re-subscribing anything
   const onFinalRef = useRef(onFinal);
@@ -139,6 +147,7 @@ export function useSpeechRecognition(
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       chunksRef.current = [];
+      discardRef.current = false;
 
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
@@ -156,6 +165,15 @@ export function useSpeechRecognition(
       recorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
         const reason = stopReasonRef.current;
+
+        if (discardRef.current) {
+          discardRef.current = false;
+          chunksRef.current = [];
+          setMicStatus("idle");
+          sessionEndedRef.current = true;
+          onCancelledRef.current("cancelled");
+          return;
+        }
 
         const blob = new Blob(chunksRef.current, { type: mimeType });
         if (blob.size === 0) {
@@ -212,6 +230,25 @@ export function useSpeechRecognition(
     stopRecorder();
   }, [stopRecorder]);
 
+  const cancelListening = useCallback(() => {
+    if (sessionEndedRef.current) return;
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      discardRef.current = true;
+      stopRecorder("cancelled");
+      return;
+    }
+    // Mic permission still pending or recorder never started: tear down
+    // whatever exists and end the session right away.
+    stopVadRef.current?.();
+    stopVadRef.current = null;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setMicStatus("idle");
+    sessionEndedRef.current = true;
+    onCancelledRef.current("cancelled");
+  }, [stopRecorder]);
+
   // Cleanup al desmontar: detener tracks + recorder + VAD aunque quede grabando
   // (evita LED del mic encendido y AudioContext fugados).
   useEffect(() => {
@@ -237,6 +274,7 @@ export function useSpeechRecognition(
     micStatus,
     startListening,
     stopListening,
+    cancelListening,
     error,
     isSupported,
   };

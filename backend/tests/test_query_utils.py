@@ -38,6 +38,18 @@ class TestIsGreeting:
         long_msg = "hola buenas tardes " * 5
         assert is_greeting(long_msg) is False
 
+    def test_spoken_small_talk_without_hola_is_greeting(self):
+        # Live 2026-10-19 (voice mode): Whisper transcript of a spoken greeting.
+        assert is_greeting("cómo estás, cómo te encuentras.") is True
+        assert is_greeting("¿Qué tal?") is True
+        assert is_greeting("¿Cómo te llamas?") is True
+        assert is_greeting("¿Me escuchas?") is True
+        assert is_greeting("Adiós, muchas gracias") is True
+
+    def test_small_talk_with_factual_topic_still_needs_retrieval(self):
+        assert is_greeting("cómo estás, cuántos créditos tiene sistemas?") is False
+        assert is_greeting("qué tal el pensum de ingeniería civil") is False
+
     def test_help_verb_with_real_topic_is_not_greeting(self):
         # Confirmed live before the fix: "ayuda" was in _CONVERSATIONAL_PATTERNS
         # and "carrera" isn't a _FACTUAL_PATTERNS keyword, so this misclassified

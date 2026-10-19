@@ -31,6 +31,7 @@ from app.schemas.llm import GenerateRequest, LLMMessage
 from app.utils.prompts import (
     build_chat_prompt, build_no_context_answer, REFUSAL_MARKER, GREETING_PROMPT,
     CLARIFICATION_MARKER, build_clarification_message, strip_unsolicited_contact_block,
+    VOICE_STYLE_NOTE,
 )
 from app.utils.query_utils import (
     detect_temperature, is_greeting, is_varying_topic_query, is_procedural_query, is_pecuniary_query,
@@ -1194,8 +1195,13 @@ class ChatService:
         user_content: str,
         is_greeting_msg: bool = False,
         provider_name: str = "",
+        voice_mode: bool = False,
     ) -> list[LLMMessage]:
         """Assemble system prompt + history + current user turn.
+
+        `voice_mode` (the user spoke; the answer will be read aloud) appends
+        VOICE_STYLE_NOTE — short spoken sentences, no lists or formatting —
+        without touching the grounding rules.
 
         Uses a stricter no-context system prompt when RAG returned nothing ('none')
         or very low-quality results ('weak') to prevent hallucinations. A pure
@@ -1217,6 +1223,8 @@ class ChatService:
         else:
             context_for_prompt = rag_ctx.context_text if rag_ctx.quality == "good" else ""
             system_prompt = build_chat_prompt(context_for_prompt)
+        if voice_mode:
+            system_prompt += VOICE_STYLE_NOTE
 
         instruction_role = "user" if provider_name == "ollama" else "system"
         messages = [LLMMessage(role=instruction_role, content=system_prompt)]
@@ -1369,6 +1377,7 @@ class ChatService:
             else:
                 messages = self._build_messages(
                     rag_ctx, history, data.content, is_greeting_msg=greeting, provider_name=provider_name,
+                     voice_mode=(data.input_type == "voice"),
                 )
 
                 temperature = detect_temperature(data.content, default=runtime_config.default_temperature)
@@ -1410,6 +1419,7 @@ class ChatService:
                             retry_messages = self._build_messages(
                                 retry_ctx, history, data.content,
                                 is_greeting_msg=greeting, provider_name=provider_name,
+                                 voice_mode=(data.input_type == "voice"),
                             )
                             retried = await generate_verified(
                                 messages=[{"role": m.role, "content": m.content} for m in retry_messages],
@@ -1673,6 +1683,7 @@ class ChatService:
                 else:
                     messages = self._build_messages(
                         rag_ctx, history, data.content, is_greeting_msg=greeting, provider_name=provider_name,
+                         voice_mode=(data.input_type == "voice"),
                     )
 
                     # Send candidate sources immediately so the UI renders them while
@@ -1716,6 +1727,7 @@ class ChatService:
                                 retry_messages = self._build_messages(
                                     retry_ctx, history, data.content,
                                     is_greeting_msg=greeting, provider_name=provider_name,
+                                     voice_mode=(data.input_type == "voice"),
                                 )
                                 retried = await generate_verified(
                                     messages=[{"role": m.role, "content": m.content} for m in retry_messages],

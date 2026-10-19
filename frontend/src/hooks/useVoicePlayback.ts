@@ -11,7 +11,11 @@ const TTS_VOICE = "es-CO-SalomeNeural";
 // chunk, but sounds clipped/robotic sentence after sentence since the neural
 // voice loses cross-sentence prosody. By the time a batch is needed, audio
 // from the previous one is already playing, so the extra wait is hidden.
-const BATCH_MIN_CHARS = 110;
+// Raised from 110 to 200 (2026-10-19): one-or-two-sentence utterances still
+// sounded clipped between chunks; ~200 chars (two to three sentences) keeps
+// prosody across sentences while the next batch synthesizes in the
+// background. The first sentence still ships alone for a fast first word.
+const BATCH_MIN_CHARS = 200;
 
 interface QueueItem {
   /** Server-synthesized audio; null when the server could not produce it. */
