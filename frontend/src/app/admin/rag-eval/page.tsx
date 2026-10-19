@@ -317,6 +317,8 @@ type SearchResult = Awaited<ReturnType<typeof apiClient.searchRag>>;
 
 function SearchTestPanel() {
   const [q, setQ] = useState("");
+  const [program, setProgram] = useState("");
+  const [topK, setTopK] = useState(8);
   const [force, setForce] = useState(false);
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<SearchResult | null>(null);
@@ -327,7 +329,7 @@ function SearchTestPanel() {
     e.preventDefault();
     if (q.trim().length < 3) return;
     setBusy(true);
-    try { setRes(await apiClient.searchRag(q.trim(), 8, force)); setOpen(null); }
+    try { setRes(await apiClient.searchRag(q.trim(), topK, force, program.trim() || null)); setOpen(null); }
     catch (err) { toast.error(err instanceof Error ? err.message : "Error en la búsqueda"); }
     finally { setBusy(false); }
   };
@@ -344,6 +346,10 @@ function SearchTestPanel() {
         </div>
         <form onSubmit={run} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           <input value={q} onChange={(e) => setQ(e.target.value)} className="input" placeholder="cuántas horas de trabajo independiente tiene Aplicación de las Matemáticas y Física?" style={{ flex: "1 1 320px", boxSizing: "border-box" }} />
+          <input value={program} onChange={(e) => setProgram(e.target.value)} className="input" placeholder="programa (como en Documentos, ej. ingenieria de sistemas)" title="Mismo filtro que aplica el chat cuando la pregunta nombra un programa" style={{ flex: "1 1 220px", boxSizing: "border-box" }} />
+          <select value={topK} onChange={(e) => setTopK(Number(e.target.value))} className="input" style={{ width: 90 }} title="Cantidad de fragmentos">
+            {[5, 8, 10, 15, 20].map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-2)" }}>
             <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} /> forzar multi-query
           </label>

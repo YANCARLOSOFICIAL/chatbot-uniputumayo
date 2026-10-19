@@ -548,7 +548,7 @@ export const apiClient = {
     }>("/api/v1/analytics/overview"),
 
   // ── RAG search (admin dry run — see backend app/routers/rag.py) ──
-  searchRag: (query: string, topK = 6, forceMultiquery = false) =>
+  searchRag: (query: string, topK = 6, forceMultiquery = false, program?: string | null) =>
     request<{
       results: Array<{
         chunk_id: string; content: string; score: number; document_title: string;
@@ -559,7 +559,10 @@ export const apiClient = {
       multiquery_used: boolean;
     }>("/api/v1/rag/search", {
       method: "POST",
-      body: JSON.stringify({ query, top_k: topK, force_multiquery: forceMultiquery }),
+      body: JSON.stringify({
+        query, top_k: topK, force_multiquery: forceMultiquery,
+        filters: program ? { program } : null,
+      }),
     }),
 
   // ── RAG Eval ──
