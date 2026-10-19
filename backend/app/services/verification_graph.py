@@ -297,7 +297,14 @@ async def _grade(state: VerificationState) -> dict:
         # the retry feedback, which is fine: `_build_retry_feedback` falls
         # back to the generic wording in that case.
         grade_reason = " ".join(lines[:-1]).strip() or None
-        logger.debug(
+        # Rejections at INFO: with VERIFICATION_MAX_ATTEMPTS=1 in production a
+        # single "NO" becomes the fixed refusal the user sees, and the
+        # grader's reason is the only way to tell a real hallucination from
+        # an over-strict judge (live 2026-10-18: "¿cuántos créditos tiene
+        # Aplicación de las Matemáticas y Física?" was refused although the
+        # pensum chunk states "Créditos: 2"). Approvals stay at DEBUG.
+        logger.log(
+            logging.DEBUG if approved else logging.INFO,
             "Verification grade | grader=%s/%s | verdict=%s | reason=%r | draft_preview=%r",
             grader_provider_name, grader_model, verdict, grade_reason, state["draft_answer"][:300],
         )

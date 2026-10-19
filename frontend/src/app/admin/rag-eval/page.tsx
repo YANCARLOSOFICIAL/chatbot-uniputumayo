@@ -309,8 +309,86 @@ function SmokeTestPanel() {
   );
 }
 
+/* ── "Probar búsqueda": what retrieval returns for one question (admin dry
+   run of POST /api/v1/rag/search — same pipeline the chat uses: HyDE,
+   hybrid vector + FTS, multi-query). Lets us see WHY a question was refused:
+   no chunk above the threshold, or the right chunk never retrieved. ── */
+type SearchResult = Awaited<ReturnType<typeof apiClient.searchRag>>;
+
+function SearchTestPanel() {
+  const [q, setQ] = useState("");
+  const [force, setForce] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState<SearchResult | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const THRESHOLD = 0.35; // settings.rag_score_threshold — "good" when the top score reaches it
+
+  const run = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (q.trim().length < 3) return;
+    setBusy(true);
+    try { setRes(await apiClient.searchRag(q.trim(), 8, force)); setOpen(null); }
+    catch (err) { toast.error(err instanceof Error ? err.message : "Error en la búsqueda"); }
+    finally { setBusy(false); }
+  };
+
+  const top = res?.results[0]?.score ?? null;
+  const quality = res ? (res.results.length === 0 ? "none" : (top ?? 0) >= THRESHOLD ? "good" : "weak") : null;
+
+  return (
+    <div style={{ padding: "24px 32px 48px", display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="card" style={{ padding: 18, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ fontSize: 12, color: "var(--text-3)" }}>
+          Escriba una pregunta como la haría un estudiante. Se muestra lo que la recuperación le entregaría al modelo
+          (sin generar respuesta): fragmentos, documento, puntaje y si supera el umbral de calidad ({THRESHOLD}).
+        </div>
+        <form onSubmit={run} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <input value={q} onChange={(e) => setQ(e.target.value)} className="input" placeholder="cuántas horas de trabajo independiente tiene Aplicación de las Matemáticas y Física?" style={{ flex: "1 1 320px", boxSizing: "border-box" }} />
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-2)" }}>
+            <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} /> forzar multi-query
+          </label>
+          <button type="submit" className="btn btn-primary btn-sm" disabled={busy || q.trim().length < 3}>{busy ? "Buscando..." : "Buscar"}</button>
+        </form>
+        {res && (
+          <div style={{ fontSize: 12, display: "flex", gap: 14, flexWrap: "wrap", color: "var(--text-2)" }}>
+            <span style={{ fontWeight: 700, color: quality === "good" ? "var(--success)" : "var(--danger)" }}>
+              calidad: {quality}{top != null && ` (puntaje máximo ${top.toFixed(3)})`}
+            </span>
+            <span>{res.results.length} fragmentos</span>
+            <span>embedding {fmtMs(res.query_embedding_time_ms)} · búsqueda {fmtMs(res.search_time_ms)}</span>
+            <span>multi-query: {res.multiquery_used ? "sí" : "no"}</span>
+          </div>
+        )}
+      </div>
+
+      {res && res.results.length > 0 && (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          {res.results.map((r, i) => (
+            <div key={r.chunk_id} style={{ borderBottom: "1px solid var(--border)" }}>
+              <button
+                onClick={() => setOpen(open === r.chunk_id ? null : r.chunk_id)}
+                style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+              >
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-3)", width: 18 }}>{i + 1}</span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: r.score >= THRESHOLD ? "var(--success)" : "var(--text-3)", width: 52 }}>{r.score.toFixed(3)}</span>
+                <span style={{ flex: 1, fontSize: 13, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <strong>{r.document_title}</strong>{r.program ? ` · ${r.program}` : ""} — {r.content.slice(0, 120)}
+                </span>
+                {open === r.chunk_id ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              </button>
+              {open === r.chunk_id && (
+                <pre style={{ margin: 0, padding: "0 14px 14px 80px", fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap", color: "var(--text-2)", fontFamily: "inherit" }}>{r.content}</pre>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function RagEvalPage() {
-  const [tab, setTab] = useState<"smoke" | "gold">("smoke");
+  const [tab, setTab] = useState<"smoke" | "gold" | "search">("smoke");
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
@@ -333,10 +411,17 @@ export default function RagEvalPage() {
             >
               GoldStandard
             </button>
+            <button
+              onClick={() => setTab("search")}
+              className={`btn btn-sm ${tab === "search" ? "btn-primary" : ""}`}
+              style={{ background: tab === "search" ? undefined : "transparent", border: "none" }}
+            >
+              Probar búsqueda
+            </button>
           </div>
         }
       />
-      {tab === "smoke" ? <SmokeTestPanel /> : <GoldEvalPanel />}
+      {tab === "smoke" ? <SmokeTestPanel /> : tab === "gold" ? <GoldEvalPanel /> : <SearchTestPanel />}
     </div>
   );
 }

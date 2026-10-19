@@ -547,6 +547,21 @@ export const apiClient = {
       };
     }>("/api/v1/analytics/overview"),
 
+  // ── RAG search (admin dry run — see backend app/routers/rag.py) ──
+  searchRag: (query: string, topK = 6, forceMultiquery = false) =>
+    request<{
+      results: Array<{
+        chunk_id: string; content: string; score: number; document_title: string;
+        program: string | null; faculty: string | null; metadata: Record<string, unknown> | null;
+      }>;
+      query_embedding_time_ms: number;
+      search_time_ms: number;
+      multiquery_used: boolean;
+    }>("/api/v1/rag/search", {
+      method: "POST",
+      body: JSON.stringify({ query, top_k: topK, force_multiquery: forceMultiquery }),
+    }),
+
   // ── RAG Eval ──
   startRagEval: () => request<RagEvalRunSummary>("/api/v1/rag-eval/run", { method: "POST" }),
   getRagEvalRuns: (limit = 20) =>
