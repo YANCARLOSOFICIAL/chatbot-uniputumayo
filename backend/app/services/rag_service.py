@@ -14,7 +14,7 @@ from app.models.retrieval_log import RetrievalLog
 from app.providers.provider_factory import ProviderFactory
 from app.runtime_config import runtime_config
 from app.utils.cache import rag_cache
-from app.utils.query_utils import is_last_semester_query, expand_cost_synonyms, content_terms
+from app.utils.query_utils import is_last_semester_query, expand_cost_synonyms, expand_program_synonyms, content_terms
 
 logger = logging.getLogger(__name__)
 
@@ -800,7 +800,7 @@ class RAGService:
                 logger.debug("Multi-query vector search skipped (%.40s…): %s", variant, e)
             try:
                 lists.append(await self._keyword_search(
-                    expand_cost_synonyms(variant), where_clause, params,
+                    expand_program_synonyms(expand_cost_synonyms(variant)), where_clause, params,
                     exclude_ids=set(), limit=request.top_k,
                     prefer_institutional=bool(request.filters and request.filters.prefer_institutional),
                 ))
@@ -957,7 +957,7 @@ class RAGService:
         fts_candidates: list[SearchResultItem] = []
         try:
             fts_candidates = await self._keyword_search(
-                expand_cost_synonyms(request.query), where_clause, params, exclude_ids=seen_chunk_ids,
+                expand_program_synonyms(expand_cost_synonyms(request.query)), where_clause, params, exclude_ids=seen_chunk_ids,
                 limit=request.top_k,
                 prefer_institutional=bool(request.filters and request.filters.prefer_institutional),
             )

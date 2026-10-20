@@ -58,10 +58,19 @@ _FILLER_WORDS: frozenset[str] = frozenset({
     "uniputumayo", "universidad", "institucion", "institucional", "ofrece",
     "ofrecen", "tiene", "tienen", "existe", "existen", "2025", "2026", "2027",
     "periodo",
+    # "programas académicos" ≡ "programas" for matching purposes
+    "academico", "academica", "academicos", "academicas",
 })
 # Minimum share of the FAQ's core words the query must cover for the free
 # lexical confirmation (see _lexical_subset).
 _LEXICAL_COVERAGE = 0.75
+# Student vocabulary -> the word the FAQ questions use (after _significant_words
+# normalization: lowercase, no accents).
+_PROGRAM_SYNONYMS: dict[str, str] = {
+    "carrera": "programas", "carreras": "programas",
+    "pregrado": "programas", "pregrados": "programas",
+    "programa": "programas",
+}
 
 _JUDGE_PROMPT = (
     "Pregunta de un usuario a un chatbot universitario:\n«{question}»\n\n"
@@ -272,7 +281,11 @@ class FaqService:
 
     @classmethod
     def _core_words(cls, text: str) -> set[str]:
-        return canonicalize_price_words(_significant_words(text)) - _FILLER_WORDS
+        words = canonicalize_price_words(_significant_words(text)) - _FILLER_WORDS
+        # "carreras"/"pregrados" are what students say for "programas" —
+        # advisor's test 2026-10-19: "qué carreras ofrecen" did not reach the
+        # FAQ "¿Qué programas académicos ofrece Uniputumayo?".
+        return {_PROGRAM_SYNONYMS.get(w, w) for w in words}
 
     @classmethod
     def _lexical_subset(cls, entry: FaqEntry, query_text: str) -> bool:
@@ -289,7 +302,12 @@ class FaqService:
         enough: it fits several cost FAQs and must go to the judge."""
         query_words = cls._core_words(query_text)
         faq_words = cls._core_words(entry.question)
-        if len(query_words) < 2 or not faq_words or not query_words <= faq_words:
+        if not query_words or not faq_words or not query_words <= faq_words:
+            return False
+        # A one-word question only counts when the FAQ itself boils down to
+        # that one word ("qué carreras ofrecen" ⊂ "¿Qué programas académicos
+        # ofrece Uniputumayo?" → both {programas}).
+        if len(query_words) < 2 and len(faq_words) != 1:
             return False
         return len(query_words) / len(faq_words) >= _LEXICAL_COVERAGE
 

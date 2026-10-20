@@ -376,6 +376,22 @@ def is_pecuniary_query(query: str) -> bool:
     return bool(_PAYMENT_WORD_RE.search(query))
 
 
+_CARRERA_WORD_RE = re.compile(r"\b(carreras?|pregrados?|licenciaturas?)\b", re.IGNORECASE)
+_PROGRAM_WORD_RE = re.compile(r"\bprogramas?\b", re.IGNORECASE)
+
+
+def expand_program_synonyms(query: str) -> str:
+    """Append "programas académicos" when the question says "carrera(s)" /
+    "pregrado(s)" but not "programa": the corpus (Tríptico, FICB024,
+    Programas_por_Sede) writes "programas académicos" literally, and Spanish
+    stemming keeps carrer/pregrad/program as distinct lexemes. Advisor's
+    test 2026-10-19: "qué carreras ofrecen" retrieved worse than "qué
+    programas ofrecen". Keyword leg only, same as expand_cost_synonyms."""
+    if _CARRERA_WORD_RE.search(query) and not _PROGRAM_WORD_RE.search(query):
+        return f"{query} programas académicos"
+    return query
+
+
 def expand_cost_synonyms(query: str) -> str:
     """Append canonical price terms to a pecuniary query phrased with a synonym.
 

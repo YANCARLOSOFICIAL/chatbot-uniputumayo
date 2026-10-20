@@ -1,5 +1,5 @@
 from app.utils.query_utils import (
-    content_terms,
+    content_terms, expand_program_synonyms,
     is_procedural_query,
     is_pecuniary_query,
     detect_temperature, is_greeting, keyword_score,
@@ -320,6 +320,20 @@ class TestProceduralGradoPhrasings:
 
     def test_bare_grado_still_not_procedural(self):
         assert not is_procedural_query("qué materias tiene el tercer grado de primaria")
+
+
+class TestExpandProgramSynonyms:
+    def test_appends_canonical_term_for_carreras(self):
+        assert expand_program_synonyms("qué carreras ofrecen") == "qué carreras ofrecen programas académicos"
+        assert expand_program_synonyms("cuáles pregrados hay?").endswith("programas académicos")
+
+    def test_unchanged_when_programa_already_present(self):
+        q = "qué programas académicos ofrece la carrera"
+        assert expand_program_synonyms(q) == q
+
+    def test_unchanged_for_unrelated_queries(self):
+        q = "cuánto cuesta la inscripción"
+        assert expand_program_synonyms(q) == q
 
 
 class TestContentTerms:

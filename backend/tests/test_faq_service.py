@@ -52,6 +52,17 @@ class TestLexicalSubset:
         # "tienen" is filler, so this is effectively one word too
         assert not FaqService._lexical_subset(_entry("¿Qué especializaciones o posgrados ofrece Uniputumayo?"), "qué especializaciones tienen?")
 
+    def test_carreras_and_pregrados_mean_programas(self):
+        # Advisor's test 2026-10-19: "carreras" never reached the FAQ.
+        e = _entry("¿Qué programas académicos ofrece Uniputumayo?")
+        assert FaqService._lexical_subset(e, "qué carreras ofrecen")
+        assert FaqService._lexical_subset(e, "cuáles son los pregrados de la universidad?")
+        assert FaqService._lexical_subset(e, "qué programas tienen?")
+
+    def test_one_word_question_needs_a_one_word_faq(self):
+        e = _entry("¿Cuánto cuesta la inscripción en Uniputumayo?")
+        assert not FaqService._lexical_subset(e, "inscripción")
+
     def test_low_coverage_is_ambiguous_and_rejected(self):
         # "cuánto cuesta" fits every cost FAQ — only 2 of 3 core words.
         e = _entry("¿Cuánto cuesta la inscripción en Uniputumayo?")
