@@ -91,7 +91,7 @@ function SmokeTestPanel() {
   const passRate = selectedRun?.total ? Math.round(((selectedRun.passed ?? 0) / selectedRun.total) * 100) : null;
 
   return (
-    <div className="rag-eval-layout" style={{ padding: "28px 32px 48px", flex: 1 }}>
+    <div className="admin-content rag-eval-layout">
 
       {/* Main column */}
       <div>
@@ -131,7 +131,7 @@ function SmokeTestPanel() {
                   {
                     label: "Latencia retrieval prom.",
                     value: fmtMs(selectedRun.avg_retrieval_ms),
-                    color: "#8B5CF6",
+                    color: "var(--accent-ink)",
                   },
                   {
                     label: "Latencia generación prom.",

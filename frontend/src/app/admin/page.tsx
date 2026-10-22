@@ -31,8 +31,6 @@ interface ConvItem {
   updated_at: string;
 }
 
-
-
 function StatusBadge({ status }: { status: string }) {
   if (status === "completed" || status === "indexed")
     return <span className="badge badge-suc">● Indexado</span>;
@@ -98,90 +96,65 @@ export default function AdminPage() {
         }
       />
 
-      <div style={{ padding: "28px 32px 48px", flex: 1 }}>
+      <div className="admin-content">
 
-        {/* Welcome banner */}
-        <div className="admin-welcome-grid" style={{
-          borderRadius: 16, overflow: "hidden",
-          background: "var(--sb-bg)",
-          marginBottom: 24, padding: "28px 32px",
-          position: "relative", minHeight: 120,
-        }}>
-          {/* Background image */}
-          <div style={{ position: "absolute", inset: 0, backgroundImage: "url('/estudiantes.jpg')", backgroundSize: "cover", backgroundPosition: "center top", opacity: 0.22 }} />
-          {/* Gradient overlay left-to-right */}
-          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(11,52,71,0.88) 45%, rgba(11,52,71,0.45) 100%)" }} />
+        {/* Banner de bienvenida */}
+        <div className="admin-hero">
+          <div className="admin-hero-img" aria-hidden />
+          <div className="admin-hero-scrim" aria-hidden />
 
-          {/* Left: greeting */}
-          <div style={{ position: "relative", zIndex: 1 }}>
-            <div style={{
-              display: "inline-flex", alignItems: "center", gap: 5, marginBottom: 10,
-              padding: "3px 10px", borderRadius: 9999,
-              border: "1px solid rgba(123,181,46,0.3)",
-              background: "rgba(123,181,46,0.08)",
-              fontSize: 10, fontWeight: 700, letterSpacing: "0.09em",
-              textTransform: "uppercase", color: "var(--brand-accent)",
-              fontFamily: "var(--font-mono)",
-            }}>
-              <span style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--brand-accent)", display: "inline-block", animation: "pulse-soft 2s ease-in-out infinite" }} />
+          <div className="admin-hero-body">
+            <div className="admin-hero-badge">
+              <span style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--accent)", display: "inline-block" }} />
               Panel de control
             </div>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(20px,2.2vw,28px)", fontWeight: 900, color: "#fff", letterSpacing: "-0.03em", lineHeight: 1.1 }}>
+            <div className="admin-hero-title">
               {greeting}, {user?.display_name ?? "Administrador"}
             </div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.68)", marginTop: 6 }}>
+            <div className="admin-hero-sub">
               Guaca · UniPutumayo — Sistema RAG institucional
             </div>
           </div>
 
-          {/* Right: system status pill */}
           <div style={{ position: "relative", zIndex: 1 }}>
             {loading ? (
-              <div style={{ width: 90, height: 30, borderRadius: 8, background: "rgba(255,255,255,0.08)", animation: "shimmer 1.5s ease-in-out infinite" }} />
+              <div style={{ width: 96, height: 34, borderRadius: "var(--r-sm)", background: "rgba(255,255,255,0.08)" }} className="shimmer" />
             ) : health ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "rgba(255,255,255,0.07)", backdropFilter: "blur(8px)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)", fontSize: 13, color: "#fff", fontWeight: 500 }}>
+              <div className="admin-hero-status">
                 {health.status === "healthy"
-                  ? <CheckCircle2 size={14} style={{ color: "var(--brand-accent)" }} />
+                  ? <CheckCircle2 size={14} style={{ color: "var(--accent)" }} />
                   : <XCircle size={14} style={{ color: "var(--danger)" }} />}
                 Sistema {health.status === "healthy" ? "activo" : "con problemas"}
               </div>
             ) : (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: "rgba(255,255,255,0.06)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)", fontSize: 13, color: "rgba(255,255,255,0.5)" }}>
-                <XCircle size={14} /> Sin conexion
+              <div className="admin-hero-status" style={{ color: "rgba(255,255,255,0.55)" }}>
+                <XCircle size={14} /> Sin conexión
               </div>
             )}
           </div>
         </div>
 
-        {/* Editorial number strip — NOT 4 equal icon cards. KPI surface: glass
-            (per the redesign plan, blur is reserved for chrome/KPI cards, data
-            tables below stay solid for legibility). */}
-        <div className="glass-subtle admin-kpi-strip" style={{ borderRadius: 14, overflow: "hidden", marginBottom: 24 }}>
+        {/* Cifras editoriales */}
+        <div className="admin-kpi-strip">
           {[
-            { label: "Conversaciones", value: loading ? "..." : conversations.length > 0 ? `${conversations.length}+` : "0", color: "var(--brand-primary)" },
-            { label: "Usuarios",       value: loading ? "..." : userCount ?? "—",                                            color: "#8B5CF6" },
-            { label: "Documentos RAG", value: loading ? "..." : documents.length > 0 ? `${documents.length}+` : "0",        color: "var(--warning)" },
-            { label: "Sistema",        value: loading ? "..." : health?.status === "healthy" ? "OK" : "—",                   color: health?.status === "healthy" ? "var(--success)" : "var(--error)" },
+            { label: "Conversaciones", value: loading ? "..." : conversations.length > 0 ? `${conversations.length}+` : "0", color: "var(--brand)" },
+            { label: "Usuarios",       value: loading ? "..." : userCount ?? "—",                                       color: "var(--accent-ink)" },
+            { label: "Documentos RAG", value: loading ? "..." : documents.length > 0 ? `${documents.length}+` : "0",     color: "var(--warning)" },
+            { label: "Sistema",        value: loading ? "..." : health?.status === "healthy" ? "OK" : "—",                color: health?.status === "healthy" ? "var(--success)" : "var(--danger)" },
           ].map((s) => (
             <div key={s.label} className="admin-kpi-cell">
-              <div style={{ fontFamily: "var(--font-display)", fontSize: "clamp(28px,3vw,40px)", fontWeight: 900, color: s.color, lineHeight: 1, letterSpacing: "-0.04em" }}>
-                {s.value}
-              </div>
-              <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 8, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                {s.label}
-              </div>
+              <div className="admin-kpi-value" style={{ color: s.color }}>{s.value}</div>
+              <div className="admin-kpi-label">{s.label}</div>
             </div>
           ))}
         </div>
 
-        {/* Two-col grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6">
-          {/* Knowledge base — real data */}
+        {/* Dos columnas */}
+        <div className="analytics-2col">
+          {/* Base de conocimiento */}
           <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>
-                Base de conocimiento
-              </h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 12 }}>
+              <h3 className="admin-section-title">Base de conocimiento</h3>
               <Link href="/admin/documents" className="btn btn-secondary btn-sm" style={{ textDecoration: "none" }}>Ver todo</Link>
             </div>
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
@@ -190,12 +163,12 @@ export default function AdminPage() {
                   <div className="shimmer" style={{ height: 14, borderRadius: 6, width: "60%", margin: "0 auto" }} />
                 </div>
               ) : documents.length === 0 ? (
-                <div style={{ padding: "40px 0", textAlign: "center", fontSize: 13, color: "var(--text-3)" }}>
-                  Sin documentos. <Link href="/admin/documents" style={{ color: "var(--brand-primary)" }}>Sube el primero →</Link>
+                <div style={{ padding: "40px 0", textAlign: "center", fontSize: 13, color: "var(--ink-3)" }}>
+                  Sin documentos. <Link href="/admin/documents" style={{ color: "var(--brand)" }}>Sube el primero →</Link>
                 </div>
               ) : (
                 <div className="overflow-x-auto w-full">
-                  <table className="admin-table" style={{ width: "100%" }}>
+                  <table className="admin-table">
                     <thead>
                       <tr>
                         <th>Documento</th>
@@ -208,7 +181,7 @@ export default function AdminPage() {
                         <tr key={d.id}>
                           <td>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <FileText size={14} style={{ color: "var(--brand-primary)", flexShrink: 0 }} />
+                              <FileText size={14} style={{ color: "var(--brand)", flexShrink: 0 }} />
                               <span style={{ fontWeight: 500, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200 }}>
                                 {d.title}
                               </span>
@@ -225,12 +198,10 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Recent conversations — real data */}
+          {/* Conversaciones recientes */}
           <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, margin: 0, color: "var(--text-1)" }}>
-                Conversaciones recientes
-              </h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 12 }}>
+              <h3 className="admin-section-title">Conversaciones recientes</h3>
               <Link href="/admin/conversations" className="btn btn-ghost btn-sm" style={{ textDecoration: "none" }}>Ver todas</Link>
             </div>
             <div className="card" style={{ padding: 0 }}>
@@ -239,30 +210,30 @@ export default function AdminPage() {
                   <div className="shimmer" style={{ height: 14, borderRadius: 6, width: "60%", margin: "0 auto" }} />
                 </div>
               ) : conversations.length === 0 ? (
-                <div style={{ padding: "40px 0", textAlign: "center", fontSize: 13, color: "var(--text-3)" }}>
+                <div style={{ padding: "40px 0", textAlign: "center", fontSize: 13, color: "var(--ink-3)" }}>
                   Sin conversaciones aún.
                 </div>
               ) : (
                 conversations.map((c, i) => (
                   <div key={c.id} style={{
                     padding: "13px 18px",
-                    borderBottom: i < conversations.length - 1 ? "1px solid var(--border)" : "none",
+                    borderBottom: i < conversations.length - 1 ? "1px solid var(--rule)" : "none",
                     display: "flex", alignItems: "center", gap: 12,
                   }}>
                     <div style={{
-                      width: 32, height: 32, borderRadius: 9,
-                      background: "var(--brand-dim)",
-                      border: "1px solid var(--brand-light)",
+                      width: 32, height: 32, borderRadius: "var(--r-sm)",
+                      background: "var(--brand-tint)",
+                      border: "1px solid var(--brand-soft)",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       flexShrink: 0,
                     }}>
-                      <MessageSquare size={13} style={{ color: "var(--brand-primary)" }} />
+                      <MessageSquare size={13} style={{ color: "var(--brand)" }} />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {c.title ?? "Sin título"}
                       </div>
-                      <div style={{ fontSize: 11, color: "var(--text-3)", display: "flex", alignItems: "center", gap: 4 }}>
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, color: "var(--ink-3)", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
                         <Clock size={9} /> {timeAgo(c.updated_at)}
                       </div>
                     </div>
@@ -274,14 +245,14 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Service status — horizontal editorial bar */}
+        {/* Estado de servicios */}
         {health && Object.keys(health.services).length > 0 && (
           <div style={{ marginTop: 24 }}>
             <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "11px 18px", borderBottom: "1px solid var(--border)" }}>
-                <BarChart3 size={13} style={{ color: "var(--brand-primary)" }} />
-                <span style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>Estado del sistema</span>
-                <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 10, color: health.status === "healthy" ? "var(--success)" : "var(--error)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "11px 18px", borderBottom: "1px solid var(--rule)" }}>
+                <BarChart3 size={13} style={{ color: "var(--brand)" }} />
+                <span className="admin-section-title" style={{ fontSize: 13 }}>Estado del sistema</span>
+                <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 9, color: health.status === "healthy" ? "var(--success)" : "var(--danger)", fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase" }}>
                   {health.status === "healthy" ? "Todos los servicios activos" : "Degradado"}
                 </span>
               </div>
@@ -292,16 +263,12 @@ export default function AdminPage() {
                     <div key={name} style={{
                       display: "flex", alignItems: "center", gap: 9,
                       padding: "12px 18px", flex: "0 0 auto",
-                      borderRight: i < arr.length - 1 ? "1px solid var(--border)" : "none",
-                      transition: "background 0.1s",
-                    }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                    >
-                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: ok ? "var(--success)" : "var(--error)", boxShadow: ok ? "0 0 5px var(--success)" : "0 0 5px var(--error)", flexShrink: 0 }} />
-                      <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text-1)", textTransform: "capitalize" }}>{name}</span>
+                      borderRight: i < arr.length - 1 ? "1px solid var(--rule)" : "none",
+                    }}>
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: ok ? "var(--success)" : "var(--danger)", flexShrink: 0 }} />
+                      <span style={{ fontWeight: 600, fontSize: 12.5, color: "var(--ink)", textTransform: "capitalize" }}>{name}</span>
                       {svc.latency_ms != null && (
-                        <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>
                           <Clock size={9} /> {svc.latency_ms}ms
                         </span>
                       )}
@@ -313,18 +280,16 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Module nav — editorial list, not equal-card grid */}
+        {/* Módulos */}
         <div style={{ marginTop: 24 }}>
-          <h3 style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 700, margin: "0 0 10px", color: "var(--text-1)" }}>
-            Modulos
-          </h3>
+          <h3 className="admin-section-title" style={{ marginBottom: 10 }}>Módulos</h3>
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
             {[
-              { href: "/admin/documents",     Icon: FileText,      label: "Documentos",      desc: "Base de conocimiento RAG",    iconBg: "var(--brand-dim)",          iconColor: "var(--brand-primary)", featured: true },
-              { href: "/admin/config",        Icon: Settings,      label: "Configuracion IA", desc: "Proveedores, modelos, API",   iconBg: "rgba(139,92,246,0.08)",     iconColor: "#8B5CF6",              featured: false },
-              { href: "/admin/users",         Icon: Users,         label: "Usuarios",          desc: "Roles y permisos",            iconBg: "var(--success-bg)",         iconColor: "var(--success)",       featured: false },
-              { href: "/admin/conversations", Icon: MessageSquare, label: "Conversaciones",    desc: "Historial de interacciones",  iconBg: "var(--warning-bg)",         iconColor: "var(--warning)",       featured: false },
-              { href: "/admin/analytics",     Icon: BarChart3,     label: "Metricas",          desc: "Estadisticas de uso",         iconBg: "var(--brand-dim)",          iconColor: "var(--brand-primary)", featured: false },
+              { href: "/admin/documents",     Icon: FileText,      label: "Documentos",      desc: "Base de conocimiento RAG",    iconBg: "var(--brand-tint)", iconColor: "var(--brand)",       featured: true },
+              { href: "/admin/config",        Icon: Settings,      label: "Configuración IA", desc: "Proveedores, modelos, API",   iconBg: "var(--surface-2)",  iconColor: "var(--ink-2)",       featured: false },
+              { href: "/admin/users",         Icon: Users,         label: "Usuarios",         desc: "Roles y permisos",            iconBg: "var(--success-bg)", iconColor: "var(--success)",     featured: false },
+              { href: "/admin/conversations", Icon: MessageSquare, label: "Conversaciones",   desc: "Historial de interacciones",  iconBg: "var(--warning-bg)", iconColor: "var(--warning)",     featured: false },
+              { href: "/admin/analytics",     Icon: BarChart3,     label: "Métricas",         desc: "Estadísticas de uso",         iconBg: "var(--accent-soft)", iconColor: "var(--accent-ink)", featured: false },
             ].map(({ href, Icon, label, desc, iconBg, iconColor, featured }, i, arr) => (
               <Link
                 key={href}
@@ -332,36 +297,36 @@ export default function AdminPage() {
                 style={{
                   display: "flex", alignItems: "center", gap: 14, padding: "13px 18px",
                   textDecoration: "none",
-                  borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
-                  transition: "background 0.12s",
-                  background: featured ? "var(--brand-dim)" : "transparent",
+                  borderBottom: i < arr.length - 1 ? "1px solid var(--rule)" : "none",
+                  background: featured ? "var(--brand-tint)" : "transparent",
+                  transition: "background-color var(--dur-micro)",
                 }}
-                className="hover:bg-[var(--surface-3)]"
+                className="hover:bg-[var(--surface-2)]"
               >
                 <div style={{
-                  width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+                  width: 34, height: 34, borderRadius: "var(--r-sm)", flexShrink: 0,
                   background: iconBg,
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}>
                   <Icon size={16} style={{ color: iconColor }} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: featured ? 700 : 500, color: "var(--text-1)" }}>{label}</div>
-                  <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 1 }}>{desc}</div>
+                  <div style={{ fontSize: 13, fontWeight: featured ? 600 : 500, color: "var(--ink)" }}>{label}</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 1 }}>{desc}</div>
                 </div>
-                <ChevronRight size={14} style={{ color: "var(--text-3)", flexShrink: 0 }} strokeWidth={1.75} />
+                <ChevronRight size={14} style={{ color: "var(--ink-3)", flexShrink: 0 }} strokeWidth={1.75} />
               </Link>
             ))}
           </div>
         </div>
 
         <div style={{ marginTop: 20, display: "flex", gap: 16 }}>
-          <Link href="/chat" style={{ fontSize: 13, color: "var(--text-2)", textDecoration: "none", display: "flex", alignItems: "center", gap: 6 }}
-            className="hover:text-[var(--brand-primary)] transition-colors">
+          <Link href="/chat" style={{ fontSize: 12.5, color: "var(--ink-2)", textDecoration: "none", display: "flex", alignItems: "center", gap: 6 }}
+            className="hover:text-[var(--brand)] transition-colors">
             <MessageSquare size={13} /> Ir al chat
           </Link>
-          <Link href="/" style={{ fontSize: 13, color: "var(--text-2)", textDecoration: "none" }}
-            className="hover:text-[var(--brand-primary)] transition-colors">
+          <Link href="/" style={{ fontSize: 12.5, color: "var(--ink-2)", textDecoration: "none" }}
+            className="hover:text-[var(--brand)] transition-colors">
             Página principal
           </Link>
         </div>

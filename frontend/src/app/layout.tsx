@@ -1,13 +1,21 @@
 import type { Metadata, Viewport } from "next";
-import { Be_Vietnam_Pro, Inter, JetBrains_Mono } from "next/font/google";
+import { Inter_Tight, Newsreader, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ui/ThemeProvider";
 import { ToastContainer } from "@/components/ui/Toast";
 
-const beVietnam = Be_Vietnam_Pro({
+// Producto (chat/admin): Inter Tight para titulares, Inter para UI.
+const interTight = Inter_Tight({
   variable: "--font-display",
   subsets: ["latin"],
-  weight: ["500", "600", "700", "800", "900"],
+  weight: ["400", "500", "600", "700", "800"],
+});
+// Marketing (landing/FAQ/auth): serif editorial.
+const newsreader = Newsreader({
+  variable: "--font-serif",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600"],
+  style: ["normal", "italic"],
 });
 const inter = Inter({
   variable: "--font-body",
@@ -35,7 +43,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" suppressHydrationWarning>
-      <body className={`${beVietnam.variable} ${inter.variable} ${jetbrainsMono.variable} antialiased transition-theme`}>
+      <body className={`${interTight.variable} ${newsreader.variable} ${inter.variable} ${jetbrainsMono.variable} antialiased`}>
         <ThemeProvider>
           {children}
           <ToastContainer />

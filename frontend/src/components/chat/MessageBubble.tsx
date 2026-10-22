@@ -9,7 +9,7 @@ import { GuacamayaAvatar } from "./GuacamayaAvatar";
 
 const MarkdownContent = dynamic(
   () => import("./MarkdownContent").then((m) => ({ default: m.MarkdownContent })),
-  { ssr: false, loading: () => <span style={{ color: "var(--text-2)", fontSize: 14, opacity: 0.5 }}>...</span> }
+  { ssr: false, loading: () => <span style={{ color: "var(--ink-3)", fontSize: 14, opacity: 0.5 }}>...</span> }
 );
 
 interface MessageBubbleProps {
@@ -26,24 +26,16 @@ function UserMessage({ message }: { message: Message }) {
 
   return (
     <div style={{ display: "flex", justifyContent: "flex-end" }} className="group">
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, maxWidth: "72%" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, maxWidth: "78%" }}>
         {message.input_type === "voice" && (
-          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: "var(--text-3)" }}>
+          <span className="msg-meta-item" style={{ display: "inline-flex" }}>
             <Mic size={9} /> voz
           </span>
         )}
-        <div
-          style={{
-            background: "var(--user-bg)", color: "#fff",
-            padding: "10px 16px", borderRadius: "20px 20px 4px 20px",
-            fontSize: 14, lineHeight: 1.55, whiteSpace: "pre-wrap", wordBreak: "break-word",
-          }}
-        >
-          {message.content}
+        <div className="msg-user-bubble">{message.content}</div>
+        <div className="msg-meta" style={{ justifyContent: "flex-end", marginTop: 0 }}>
+          <span className="msg-meta-item">{timeStr}</span>
         </div>
-        <span style={{ fontSize: 9, color: "var(--text-3)", opacity: 0 }} className="group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-          {timeStr}
-        </span>
       </div>
     </div>
   );
@@ -76,86 +68,53 @@ function BotMessage({ message, isLast, onRegenerate, onCitationClick }: { messag
   return (
     <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }} className="group">
       <div style={{ flexShrink: 0, marginTop: 2 }}>
-        <GuacamayaAvatar
-          state={isStreaming ? "speaking" : "idle"}
-          size={26}
-          className="drop-shadow-sm"
-        />
+        <GuacamayaAvatar state={isStreaming ? "speaking" : "idle"} size={26} />
       </div>
 
-      <div style={{ flex: 1, minWidth: 0, maxWidth: "82%" }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
         {/* Curated FAQ answer — written by the institution, not generated.
             Persisted via answer_source so it survives reloads. */}
         {message.answer_source === "faq" && (
           <Link
             href={message.faq_entry_id ? `/faq?id=${message.faq_entry_id}` : "/faq"}
             title="Esta respuesta viene de las Preguntas frecuentes revisadas por la institución"
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 5, marginBottom: 6,
-              padding: "3px 9px", borderRadius: 9999, fontSize: 10.5, fontWeight: 600,
-              background: "var(--brand-dim)", border: "1px solid var(--brand-light)",
-              color: "var(--brand-primary)", textDecoration: "none",
-            }}
+            className="badge badge-pri"
+            style={{ display: "inline-flex", marginBottom: 8, textDecoration: "none" }}
           >
             <BookmarkCheck size={10} strokeWidth={2} /> Pregunta frecuente · respuesta oficial
           </Link>
         )}
+
         {/* Flat message — editorial newspaper column style */}
-        <div
-          className="msg-bot-flat prose-chat"
-          style={{ color: "var(--text-1)", fontSize: 14, lineHeight: 1.7 }}
-        >
+        <div className="msg-bot-flat prose-chat" style={{ color: "var(--ink)" }}>
           {isStreaming && !message.content ? (
             <span className="streaming-cursor" />
           ) : (
             <MarkdownContent content={message.content} onCitationClick={onCitationClick} />
           )}
-          {isStreaming && message.content && (
-            <span className="streaming-cursor" />
-          )}
+          {isStreaming && message.content && <span className="streaming-cursor" />}
         </div>
 
         {!isStreaming && (
-          <div
-            style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 8, opacity: 0 }}
-            className="group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity duration-150"
-          >
-            <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: "var(--text-3)" }}>
+          <div className="msg-meta">
+            <span className="msg-meta-item">
               <Clock size={9} /> {timeStr}
             </span>
             {message.response_time_ms && (
-              <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: "var(--text-3)" }}>
+              <span className="msg-meta-item">
                 <Zap size={9} /> {(message.response_time_ms / 1000).toFixed(1)}s
               </span>
             )}
             {message.input_type === "voice" && (
-              <span style={{ display: "flex", alignItems: "center", gap: 2, fontSize: 10, color: "var(--text-3)" }}>
+              <span className="msg-meta-item">
                 <Mic size={9} /> voz
               </span>
             )}
-            <button
-              onClick={handleCopy}
-              style={{
-                display: "flex", alignItems: "center", gap: 3,
-                fontSize: 10, color: "var(--text-3)", background: "none",
-                border: "none", cursor: "pointer", padding: "2px 6px",
-                borderRadius: 4, transition: "color 0.12s, background 0.12s",
-              }}
-              className="hover:text-[var(--brand)] hover:bg-[var(--surface-3)]"
-            >
+            <button onClick={handleCopy} className="msg-meta-btn">
               {copied ? <><Check size={9} /> Copiado</> : <><Copy size={9} /> Copiar</>}
             </button>
             {isLast && onRegenerate && (
-              <button
-                onClick={onRegenerate}
-                style={{
-                  display: "flex", alignItems: "center", gap: 3,
-                  fontSize: 10, color: "var(--text-3)", background: "none",
-                  border: "none", cursor: "pointer", padding: "2px 6px",
-                  borderRadius: 4, transition: "color 0.12s",
-                }}
-                className="hover:text-[var(--brand)]"
-              >
+              <button onClick={onRegenerate} className="msg-meta-btn">
                 <RotateCcw size={9} /> Regenerar
               </button>
             )}

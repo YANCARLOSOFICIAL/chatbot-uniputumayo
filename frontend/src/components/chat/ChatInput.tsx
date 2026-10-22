@@ -65,13 +65,9 @@ export function ChatInput({
   const overLimit = value.length > MAX_MESSAGE_LEN;
 
   return (
-    <div
-      className={`flat-input-bar${isListening ? " listening" : ""}${shaking ? " animate-shake" : ""}`}
-      style={{ flexShrink: 0 }}
-    >
-      <div style={{ maxWidth: 720, margin: "0 auto" }}>
-
-        <div className="chatgpt-input-pill" style={{ display: "flex", alignItems: "flex-end", gap: 10, padding: "8px 10px 8px 14px" }}>
+    <div className={`composer-wrap${shaking ? " animate-shake" : ""}`}>
+      <div className="composer-inner">
+        <div className={`composer${isListening ? " listening" : ""}`}>
 
           {/* Voice button */}
           {isVoiceSupported && (
@@ -79,27 +75,18 @@ export function ChatInput({
               type="button"
               onClick={isListening ? onVoiceStop : onVoiceStart}
               disabled={isLoading}
-              aria-label={isListening ? "Detener" : "Microfono"}
-              style={{
-                width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
-                background: isListening ? "rgba(123,181,46,0.12)" : "var(--surface-3)",
-                border: isListening ? "1px solid rgba(123,181,46,0.3)" : "1px solid var(--border)",
-                color: isListening ? "var(--brand-accent)" : "var(--text-3)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: isLoading ? "not-allowed" : "pointer",
-                opacity: isLoading ? 0.4 : 1,
-                transition: "all 0.15s",
-              }}
+              aria-label={isListening ? "Detener" : "Micrófono"}
+              className={`composer-btn${isListening ? " listening" : ""}`}
             >
               {isListening
                 ? <Square size={13} fill="currentColor" strokeWidth={2} />
-                : <Mic size={15} strokeWidth={1.5} />
+                : <Mic size={15} strokeWidth={1.6} />
               }
             </button>
           )}
 
           {/* Textarea + counter */}
-          <div style={{ flex: 1, position: "relative" }}>
+          <div style={{ flex: 1, position: "relative", minWidth: 0 }}>
             <textarea
               ref={textareaRef}
               value={value}
@@ -107,30 +94,20 @@ export function ChatInput({
               onKeyDown={handleKey}
               placeholder={
                 isListening ? "Escuchando..."
-                : isLoading  ? "Buscando en el catalogo..."
-                : "Preguntale a Guaca sobre programas, sedes, requisitos..."
+                : isLoading  ? "Buscando en el catálogo..."
+                : "Pregúntale a Guaca..."
               }
               rows={1}
               maxLength={MAX_MESSAGE_LEN}
               disabled={isLoading || isListening}
               aria-label="Mensaje"
-              style={{
-                width: "100%", resize: "none",
-                background: "transparent", border: "none", outline: "none",
-                fontFamily: "var(--font-body)", fontSize: 15,
-                color: "var(--text-1)", lineHeight: 1.55,
-                maxHeight: 140, overflowY: "auto",
-                paddingBottom: showCounter ? 18 : 0,
-                opacity: (isLoading || isListening) ? 0.5 : 1,
-              }}
+              style={{ paddingBottom: showCounter ? 18 : undefined }}
             />
             {showCounter && (
-              <span style={{
-                position: "absolute", bottom: 0, right: 0,
-                fontFamily: "var(--font-mono)", fontSize: 10,
-                color: overLimit ? "var(--error)" : value.length > MAX_MESSAGE_LEN * 0.85 ? "var(--warning, var(--error))" : "var(--text-3)",
-                fontVariantNumeric: "tabular-nums",
-              }}>
+              <span
+                className="composer-counter"
+                style={{ color: overLimit ? "var(--danger)" : "var(--ink-3)" }}
+              >
                 {value.length > MAX_MESSAGE_LEN * 0.85 ? `${value.length}/${MAX_MESSAGE_LEN}` : value.length}
               </span>
             )}
@@ -141,31 +118,23 @@ export function ChatInput({
             onClick={() => submit()}
             disabled={!canSend}
             aria-label="Enviar"
-            style={{
-              width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
-              background: canSend ? "var(--brand-primary)" : "var(--surface-3)",
-              border: "none",
-              color: canSend ? "#fff" : "var(--text-3)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: canSend ? "pointer" : "not-allowed",
-              transition: "all 0.15s",
-            }}
+            className="composer-btn send"
           >
             {isLoading ? (
               <span style={{ display: "inline-flex", gap: 2, alignItems: "center" }}>
                 {[0, 0.1, 0.2].map((d) => (
-                  <span key={d} style={{ width: 3, height: 3, borderRadius: "50%", background: "rgba(255,255,255,0.7)", display: "inline-block", animation: `pulse-soft 1s ${d}s ease-in-out infinite` }} />
+                  <span key={d} style={{ width: 3, height: 3, borderRadius: "50%", background: "currentColor", display: "inline-block", animation: `pulse-soft 1s ${d}s ease-in-out infinite` }} />
                 ))}
               </span>
             ) : (
-              <ArrowUp size={17} strokeWidth={2.5} />
+              <ArrowUp size={17} strokeWidth={2.4} />
             )}
           </button>
         </div>
 
         {!isListening && !isLoading && (
-          <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 8, opacity: 0.6, textAlign: "center" }}>
-            Guaca puede equivocarse. Verifica informacion critica con admisiones.
+          <p className="composer-note">
+            Guaca puede equivocarse. Verifica la información crítica con admisiones.
           </p>
         )}
       </div>

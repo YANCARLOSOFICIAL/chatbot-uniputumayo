@@ -259,7 +259,7 @@ export default function ConfigPage() {
         }
       />
 
-      <div style={{ padding: "28px 32px 48px", flex: 1 }}>
+      <div className="admin-content">
 
         {loading ? (
           <div style={{ padding: "64px 0", display: "flex", justifyContent: "center", gap: 6 }}>
@@ -342,7 +342,7 @@ export default function ConfigPage() {
                               </span>
                             )}
                             {isActive && (
-                              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 7px", borderRadius: 9999, background: "var(--brand-primary)", color: "#fff", fontSize: 10, fontWeight: 700 }}>
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 7px", borderRadius: 9999, background: "var(--brand-primary)", color: "var(--on-brand)", fontSize: 10, fontWeight: 700 }}>
                                 <Zap size={8} /> Activo
                               </span>
                             )}

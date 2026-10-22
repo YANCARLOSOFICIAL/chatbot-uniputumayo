@@ -13,7 +13,7 @@ import dynamic from "next/dynamic";
 
 const MarkdownContent = dynamic(
   () => import("@/components/chat/MarkdownContent").then((m) => ({ default: m.MarkdownContent })),
-  { ssr: false, loading: () => <span style={{ color: "var(--text-3)", fontSize: 13 }}>...</span> }
+  { ssr: false, loading: () => <span style={{ color: "var(--ink-3)", fontSize: 13 }}>...</span> }
 );
 
 const UNCATEGORIZED = "Otras preguntas";
@@ -30,43 +30,28 @@ function FaqItem({
   return (
     <div
       id={`faq-${entry.id}`}
-      style={{
-        borderBottom: "1px solid var(--border)",
-        background: highlighted ? "var(--brand-dim)" : "transparent",
-        transition: "background 0.4s",
-      }}
+      className="faq-item"
+      data-highlight={highlighted}
     >
-      <button
-        onClick={onToggle}
-        aria-expanded={open}
-        style={{
-          width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
-          background: "none", border: "none", cursor: "pointer", textAlign: "left",
-        }}
-      >
-        <span style={{ flex: 1, fontSize: 14.5, fontWeight: 600, color: "var(--text-1)", lineHeight: 1.35 }}>
-          {entry.question}
-        </span>
-        <ChevronDown
-          size={15}
-          style={{ color: "var(--text-3)", flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}
-        />
+      <button onClick={onToggle} aria-expanded={open} className="faq-q">
+        <span>{entry.question}</span>
+        <ChevronDown size={15} className="faq-chevron" />
       </button>
 
       {open && (
-        <div style={{ padding: "0 16px 16px" }} className="animate-fade-up">
-          <div className="prose-chat" style={{ fontSize: 14, lineHeight: 1.7, color: "var(--text-1)" }}>
+        <div className="faq-a animate-fade-up">
+          <div className="prose-chat" style={{ fontSize: 13.5, lineHeight: 1.7, color: "var(--ink)" }}>
             <MarkdownContent content={entry.answer} />
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
+          <div className="faq-meta">
             {entry.source_document && (
-              <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--text-3)" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
                 <FileText size={11} /> Fuente: {entry.source_document}
               </span>
             )}
             {entry.valid_period && (
-              <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--text-3)" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
                 <CalendarCheck size={11} /> Vigencia: {entry.valid_period}
               </span>
             )}
@@ -99,7 +84,7 @@ function FaqPageContent() {
   useEffect(() => {
     apiClient.getFaq()
       .then(setEntries)
-      .catch((e) => setError(e instanceof Error ? e.message : "No se pudieron cargar las preguntas frecuentes"))
+      .catch(() => setError("No pudimos cargar las preguntas frecuentes. Intenta de nuevo en unos minutos."))
       .finally(() => setLoading(false));
   }, []);
 
@@ -135,15 +120,15 @@ function FaqPageContent() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text-1)", display: "flex", flexDirection: "column" }}>
+    <div className="faq-shell">
       {/* Header */}
-      <header style={{ borderBottom: "1px solid var(--border)", background: "var(--surface)", position: "sticky", top: 0, zIndex: 20 }}>
-        <div style={{ maxWidth: 760, margin: "0 auto", padding: "10px 16px", display: "flex", alignItems: "center", gap: 10 }}>
-          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", color: "var(--text-1)" }}>
+      <header className="faq-header">
+        <div className="faq-header-inner">
+          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", color: "var(--ink)" }}>
             <Image src="/isotipo.webp" alt="Guaca" width={24} height={24} style={{ objectFit: "contain" }} />
-            <span style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 800 }}>Guaca</span>
+            <span style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, letterSpacing: "-0.01em" }}>Guaca</span>
           </Link>
-          <span style={{ color: "var(--text-3)", fontSize: 13 }}>/ Preguntas frecuentes</span>
+          <span className="faq-crumb">/ Preguntas frecuentes</span>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
             <ThemeToggle />
             <Link href="/chat" className="btn btn-primary btn-sm" style={{ display: "flex", alignItems: "center", gap: 5, textDecoration: "none" }}>
@@ -153,54 +138,51 @@ function FaqPageContent() {
         </div>
       </header>
 
-      <main style={{ flex: 1, width: "100%", maxWidth: 760, margin: "0 auto", padding: "32px 16px 48px" }}>
-        <div style={{ marginBottom: 22 }}>
-          <h1 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(22px, 3vw, 30px)", fontWeight: 800, margin: "0 0 8px", letterSpacing: "-0.02em", lineHeight: 1.15 }}>
-            Preguntas frecuentes
-          </h1>
-          <p style={{ fontSize: 14, color: "var(--text-2)", margin: 0, lineHeight: 1.6 }}>
+      <main className="faq-main">
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ marginBottom: 12 }}>
+            <span className="eyebrow">Respuestas oficiales</span>
+          </div>
+          <h1 className="faq-title">Preguntas frecuentes</h1>
+          <p className="faq-lede">
             Respuestas oficiales, revisadas por la institución, a las preguntas que más recibe Guaca.
             Si no encuentras la tuya, pregúntale directamente al chat.
           </p>
         </div>
 
         {/* Search */}
-        <div style={{ position: "relative", marginBottom: 20 }}>
-          <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-3)" }} />
+        <div className="search-box" style={{ maxWidth: "none", marginBottom: 24 }}>
+          <Search size={14} style={{ color: "var(--ink-3)", flexShrink: 0 }} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar en las preguntas frecuentes..."
-            className="input"
-            style={{ width: "100%", boxSizing: "border-box", paddingLeft: 34 }}
             aria-label="Buscar preguntas frecuentes"
           />
         </div>
 
         {loading ? (
-          <div style={{ padding: "48px 0", textAlign: "center", color: "var(--text-3)", fontSize: 13 }}>Cargando...</div>
+          <div className="faq-empty">Cargando…</div>
         ) : error ? (
-          <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--danger)", fontSize: 13, border: "1px solid var(--border)", borderRadius: 12 }}>
-            {error}
-          </div>
+          <div className="faq-empty" style={{ color: "var(--danger)" }}>{error}</div>
         ) : entries.length === 0 ? (
-          <div style={{ padding: "48px 16px", textAlign: "center", color: "var(--text-3)", fontSize: 13, border: "1px solid var(--border)", borderRadius: 12 }}>
+          <div className="faq-empty">
             <HelpCircle size={22} style={{ marginBottom: 8, opacity: 0.6 }} />
             <div>Todavía no hay preguntas frecuentes publicadas.</div>
           </div>
         ) : filtered.length === 0 ? (
-          <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-3)", fontSize: 13, border: "1px solid var(--border)", borderRadius: 12 }}>
+          <div className="faq-empty">
             Ninguna pregunta coincide con «{query}».{" "}
             <button onClick={() => askGuaca(query)} className="btn btn-ghost btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
               Preguntarle a Guaca <ArrowRight size={11} />
             </button>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
             {groups.map(([category, items]) => (
               <section key={category}>
-                <h2 style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-3)", margin: "0 0 8px 2px" }}>
-                  {category} <span style={{ fontFamily: "var(--font-mono)", fontWeight: 500 }}>· {items.length}</span>
+                <h2 className="faq-group-label">
+                  {category} <span style={{ opacity: 0.6 }}>· {items.length}</span>
                 </h2>
                 <div className="card" style={{ padding: 0, overflow: "hidden" }}>
                   {items.map((entry) => (
@@ -219,8 +201,8 @@ function FaqPageContent() {
           </div>
         )}
 
-        <div style={{ marginTop: 32, display: "flex", justifyContent: "center" }}>
-          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--text-3)", textDecoration: "none" }}>
+        <div style={{ marginTop: 36, display: "flex", justifyContent: "center" }}>
+          <Link href="/" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--ink-3)", textDecoration: "none" }}>
             <ArrowLeft size={12} /> Volver al inicio
           </Link>
         </div>
@@ -234,7 +216,7 @@ function FaqPageContent() {
 export default function FaqPage() {
   // useSearchParams needs a Suspense boundary for static rendering in Next.
   return (
-    <Suspense fallback={<div style={{ padding: 48, textAlign: "center", color: "var(--text-3)", fontSize: 13 }}>Cargando...</div>}>
+    <Suspense fallback={<div className="faq-empty" style={{ margin: 48 }}>Cargando…</div>}>
       <FaqPageContent />
     </Suspense>
   );

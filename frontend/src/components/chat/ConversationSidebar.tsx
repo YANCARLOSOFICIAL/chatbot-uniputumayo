@@ -7,7 +7,8 @@ import {
   MessageSquare, Trash2, Search, LogOut, Settings,
   Home, Plus, Pencil, Check, X, LogIn, UserPlus, HelpCircle,
 } from "lucide-react";
-import { isAuthenticated, getUser, logout, type AuthUser } from "@/lib/auth";
+import { logout } from "@/lib/auth";
+import { useAuthenticated, useAuthUser } from "@/hooks/useAuthState";
 import type { Conversation } from "@/types/chat";
 
 interface ConversationSidebarProps {
@@ -57,11 +58,16 @@ function ConvItem({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (editing) {
-      setEditTitle(conv.title ?? "");
-      setTimeout(() => inputRef.current?.select(), 0);
-    }
-  }, [editing, conv.title]);
+    if (!editing) return;
+    const t = setTimeout(() => inputRef.current?.select(), 0);
+    return () => clearTimeout(t);
+  }, [editing]);
+
+  const startEditing = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditTitle(conv.title ?? "");
+    setEditing(true);
+  };
 
   const commitRename = () => {
     const t = editTitle.trim();
@@ -77,8 +83,14 @@ function ConvItem({
 
   if (editing) {
     return (
-      <div style={{ padding: "3px 6px", marginBottom: 1 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.08)", borderRadius: 7, border: "1px solid rgba(255,255,255,0.15)", padding: "4px 8px" }}>
+      <div style={{ padding: "3px 4px", marginBottom: 1 }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 5,
+          padding: "4px 7px",
+          background: "var(--surface)",
+          border: "1px solid var(--brand)",
+          borderRadius: "var(--r-sm)",
+        }}>
           <input
             ref={inputRef}
             value={editTitle}
@@ -87,15 +99,16 @@ function ConvItem({
               if (e.key === "Enter") commitRename();
               if (e.key === "Escape") setEditing(false);
             }}
+            aria-label="Nombre de la conversación"
             style={{
-              flex: 1, background: "none", border: "none", outline: "none",
-              fontSize: 13, color: "#fff", minWidth: 0,
+              flex: 1, minWidth: 0, background: "none", border: "none", outline: "none",
+              fontFamily: "var(--font-body)", fontSize: 12.5, color: "var(--ink)",
             }}
           />
-          <button onClick={commitRename} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(123,181,46,0.9)", display: "flex", padding: 2 }}>
+          <button onClick={commitRename} aria-label="Guardar nombre" className="chat-item-action">
             <Check size={12} />
           </button>
-          <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.35)", display: "flex", padding: 2 }}>
+          <button onClick={() => setEditing(false)} aria-label="Cancelar" className="chat-item-action">
             <X size={12} />
           </button>
         </div>
@@ -104,60 +117,42 @@ function ConvItem({
   }
 
   return (
-    <div className="conv-item-wrap">
+    <div>
       <div
         role="button"
         tabIndex={0}
         onClick={onSelect}
         onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onSelect();
-          }
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); }
         }}
-        style={{
-          width: "100%", display: "flex", alignItems: "center", gap: 7,
-          padding: "8px 10px", borderRadius: 8, marginBottom: 1, cursor: "pointer",
-          background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
-          border: "none",
-          color: isActive ? "#fff" : "rgba(255,255,255,0.72)",
-          transition: "background 0.1s, color 0.1s",
-          textAlign: "left",
-        }}
-        className={!isActive ? "hover:bg-white/[0.05] hover:text-white/75" : ""}
+        className="chat-item"
+        data-active={isActive}
       >
-        <span style={{ flex: 1, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.35 }}>
-          {conv.title ?? "Conversacion"}
-        </span>
+        <MessageSquare size={13} strokeWidth={1.6} style={{ flexShrink: 0, opacity: isActive ? 1 : 0.65 }} />
+        <span className="chat-item-title">{conv.title ?? "Conversación"}</span>
 
-        {/* Action buttons — visible on hover via CSS */}
-        <div className="conv-item-actions" style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+        <div className="chat-item-actions">
           <button
-            onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+            onClick={startEditing}
             title="Renombrar"
             aria-label={`Renombrar ${conv.title ?? "conversación"}`}
-            style={{ width: 20, height: 20, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.35)" }}
-            className="hover:text-white/70"
+            className="chat-item-action"
           >
-            <Pencil size={10} strokeWidth={1.5} />
+            <Pencil size={10} strokeWidth={1.6} />
           </button>
           <button
             onClick={handleDeleteClick}
-            title={confirmDelete ? "Confirmar" : "Eliminar"}
+            title={confirmDelete ? "Confirmar eliminación" : "Eliminar"}
             aria-label={confirmDelete ? "Confirmar eliminación" : `Eliminar ${conv.title ?? "conversación"}`}
-            style={{
-              width: 20, height: 20, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center",
-              background: "none", border: "none", cursor: "pointer",
-              color: confirmDelete ? "#f87171" : "rgba(255,255,255,0.35)",
-            }}
-            className={!confirmDelete ? "hover:text-red-400" : ""}
+            className="chat-item-action danger"
+            style={confirmDelete ? { color: "var(--danger)" } : undefined}
           >
-            <Trash2 size={10} strokeWidth={1.5} />
+            <Trash2 size={10} strokeWidth={1.6} />
           </button>
         </div>
       </div>
       {confirmDelete && (
-        <div style={{ fontSize: 10, color: "rgba(248,113,113,0.75)", padding: "0 10px 4px", marginTop: -3 }}>
+        <div style={{ padding: "0 9px 5px", fontSize: 9.5, color: "var(--danger)", marginTop: -2 }}>
           Clic de nuevo para confirmar
         </div>
       )}
@@ -169,14 +164,8 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   conversations, activeId, onSelect, onNew, onDelete, onRename, isOpen, onClose,
 }: ConversationSidebarProps) {
   const [search, setSearch] = useState("");
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [authed, setAuthed] = useState(false);
-
-  useEffect(() => {
-    const a = isAuthenticated();
-    setAuthed(a);
-    if (a) setUser(getUser());
-  }, []);
+  const authed = useAuthenticated();
+  const user = useAuthUser();
 
   const handleLogout = () => { logout(); window.location.href = "/"; };
 
@@ -191,78 +180,62 @@ export const ConversationSidebar = memo(function ConversationSidebar({
 
   return (
     <aside
-      style={{
-        // ChatGPT-style: sidebar blends flat into the main canvas — same flat
-        // dark color, no blur, only a hairline seam — instead of a distinct
-        // glass panel. Keeps the institutional navy-dark tone (var(--sb-bg)),
-        // just flattened.
-        width: 260, flexShrink: 0, display: "flex", flexDirection: "column",
-        height: "100%",
-        // Sidebar stays always-dark (var(--sb-bg), non-reactive) regardless of
-        // the chat's light/dark toggle — this is pre-existing app behavior,
-        // and every text color in this file is a hardcoded white/opacity
-        // value that assumes a dark backdrop. Switching this to the reactive
-        // var(--bg) would make all that text vanish in light mode. Flat,
-        // no blur, matches the ChatGPT reference for the dark theme.
-        background: "var(--sb-bg)",
-        borderRight: "1px solid rgba(255,255,255,0.06)",
-      }}
       className={[
+        "chat-sidebar",
         "md:relative md:translate-x-0 md:flex",
         "fixed inset-y-0 left-0 z-40 transition-transform duration-200 ease-out",
         isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
       ].join(" ")}
       aria-label="Conversaciones"
     >
-      {/* Header */}
-      <div style={{ padding: "14px 14px 10px", flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 14 }}>
-          <Image src="/isotipo.webp" alt="Guaca" width={28} height={28} style={{ objectFit: "contain", borderRadius: 6 }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 700, color: "#fff", lineHeight: 1 }}>Guaca</div>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>UniPutumayo</div>
+      {/* Cabecera */}
+      <div className="chat-sidebar-head">
+        <div className="chat-sidebar-brand">
+          <Image
+            src="/isotipo.webp"
+            alt=""
+            width={30}
+            height={30}
+            style={{ objectFit: "contain", flexShrink: 0 }}
+          />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="chat-sidebar-name">Guaca</div>
+            <div className="chat-sidebar-sub">UniPutumayo</div>
           </div>
+          <button
+            onClick={onClose}
+            aria-label="Cerrar menú"
+            className="chat-close-mobile chat-item-action"
+          >
+            <X size={14} />
+          </button>
         </div>
 
-        {/* ChatGPT-style: plain rows, no button/input chrome — flat, only a
-            hover highlight, not a bordered pill. */}
         <button
           onClick={() => { onNew(); onClose(); }}
-          style={{
-            width: "100%", display: "flex", alignItems: "center", gap: 9,
-            padding: "8px 8px", borderRadius: 8,
-            background: "transparent", border: "none",
-            color: "rgba(255,255,255,0.85)", cursor: "pointer",
-            fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 500,
-            marginBottom: 2, transition: "background 0.12s",
-          }}
-          className="hover:bg-white/[0.06]"
+          className="chat-new-btn"
         >
-          <Plus size={15} strokeWidth={1.75} /> Nuevo chat
+          <Plus size={14} strokeWidth={2} /> Nueva conversación
         </button>
 
-        <div style={{ position: "relative", marginTop: 6 }}>
-          <Search size={13} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.45)" }} />
+        <div className="chat-search">
+          <Search size={12} />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar chats"
-            style={{
-              width: "100%", paddingLeft: 30, paddingRight: 28, paddingTop: 8, paddingBottom: 8,
-              fontSize: 13, borderRadius: 8,
-              background: "transparent",
-              border: "none",
-              color: "rgba(255,255,255,0.85)",
-              outline: "none", boxSizing: "border-box",
-              transition: "background 0.12s",
-            }}
-            className="placeholder-white/45 hover:bg-white/[0.06] focus:bg-white/[0.06]"
+            placeholder="Buscar conversaciones"
+            aria-label="Buscar conversaciones"
           />
           {search && (
             <button
               onClick={() => setSearch("")}
-              style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.3)", display: "flex" }}
+              aria-label="Limpiar búsqueda"
+              style={{
+                position: "absolute", right: 7, top: "50%", transform: "translateY(-50%)",
+                background: "none", border: "none", cursor: "pointer",
+                color: "var(--sb-muted)", display: "flex", padding: 2,
+              }}
             >
               <X size={11} />
             </button>
@@ -270,41 +243,45 @@ export const ConversationSidebar = memo(function ConversationSidebar({
         </div>
       </div>
 
-      {/* Conversation list */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "0 8px" }} className="sb-scroll">
+      {/* Lista */}
+      <div className="chat-list sb-scroll">
         {!authed ? (
-          /* Guest — invite to sign in */
-          <div style={{ padding: "28px 12px", textAlign: "center" }}>
-            <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
-              <MessageSquare size={16} style={{ color: "rgba(255,255,255,0.45)" }} strokeWidth={1.5} />
+          <div style={{ padding: "30px 12px", textAlign: "center" }}>
+            <div style={{
+              width: 38, height: 38, margin: "0 auto 12px",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              border: "1px solid var(--sb-border)", borderRadius: "var(--r-sm)",
+              background: "var(--surface)", color: "var(--sb-muted)",
+            }}>
+              <MessageSquare size={15} strokeWidth={1.6} />
             </div>
-            <p style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.72)", margin: "0 0 4px" }}>Sin historial</p>
-            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.50)", margin: "0 0 16px", lineHeight: 1.5 }}>
-              Inicia sesion para guardar y revisar tus conversaciones.
+            <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 600, color: "var(--sb-fg)" }}>
+              Sin historial
             </p>
-            <Link href="/admin/login" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: "rgba(27,110,148,0.25)", border: "1px solid rgba(27,110,148,0.4)", color: "#fff", textDecoration: "none", fontSize: 12, fontWeight: 600 }}>
-              <LogIn size={12} /> Iniciar sesion
+            <p style={{ margin: "0 0 16px", fontSize: 11, lineHeight: 1.5, color: "var(--sb-muted)" }}>
+              Inicia sesión para guardar y revisar tus conversaciones.
+            </p>
+            <Link href="/admin/login" className="btn btn-primary btn-sm" style={{ width: "100%" }}>
+              <LogIn size={12} /> Iniciar sesión
             </Link>
-            <Link href="/admin/login" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "7px 14px", borderRadius: 8, background: "transparent", border: "1px solid rgba(255,255,255,0.14)", color: "rgba(255,255,255,0.65)", textDecoration: "none", fontSize: 12, fontWeight: 500, marginTop: 6 }}>
+            <Link href="/admin/login" className="btn btn-secondary btn-sm" style={{ width: "100%", marginTop: 6 }}>
               <UserPlus size={12} /> Crear cuenta
             </Link>
           </div>
         ) : conversations.length === 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 16px", textAlign: "center" }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-              <MessageSquare size={15} style={{ color: "rgba(255,255,255,0.50)" }} strokeWidth={1.5} />
-            </div>
-            <p style={{ fontSize: 12, color: "rgba(255,255,255,0.70)", margin: 0, fontWeight: 500 }}>Sin conversaciones</p>
-            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.48)", margin: "4px 0 0" }}>Empieza una arriba</p>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 16px", textAlign: "center" }}>
+            <MessageSquare size={17} strokeWidth={1.5} style={{ color: "var(--sb-muted)", marginBottom: 10 }} />
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: "var(--sb-fg)" }}>Sin conversaciones</p>
+            <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--sb-muted)" }}>Empieza una arriba</p>
           </div>
         ) : grouped.length === 0 ? (
-          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", textAlign: "center", padding: "32px 0" }}>Sin resultados</p>
+          <p style={{ padding: "32px 0", textAlign: "center", fontSize: 12, color: "var(--sb-muted)" }}>
+            Sin resultados
+          </p>
         ) : (
           grouped.map(([label, items]) => (
-            <div key={label} style={{ marginBottom: 18 }}>
-              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: "rgba(255,255,255,0.48)", padding: "0 6px 4px", margin: 0 }}>
-                {label}
-              </p>
+            <div key={label}>
+              <p className="chat-group-label">{label}</p>
               {items.map((conv) => (
                 <ConvItem
                   key={conv.id}
@@ -320,45 +297,54 @@ export const ConversationSidebar = memo(function ConversationSidebar({
         )}
       </div>
 
-      {/* Footer */}
-      <div style={{ padding: "8px 8px 10px", borderTop: "1px solid rgba(255,255,255,0.07)", flexShrink: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-        <Link href="/" style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 7, color: "rgba(255,255,255,0.4)", textDecoration: "none", fontSize: 12, transition: "color 0.12s", fontWeight: 500 }} className="hover:text-white/70">
-          <Home size={12} strokeWidth={1.5} /> Inicio
+      {/* Pie */}
+      <div className="chat-sidebar-foot">
+        <Link href="/" className="chat-foot-link">
+          <Home size={12} strokeWidth={1.6} /> Inicio
         </Link>
-        <Link href="/faq" style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 7, color: "rgba(255,255,255,0.4)", textDecoration: "none", fontSize: 12, transition: "color 0.12s", fontWeight: 500 }} className="hover:text-white/70">
-          <HelpCircle size={12} strokeWidth={1.5} /> Preguntas frecuentes
+        <Link href="/faq" className="chat-foot-link">
+          <HelpCircle size={12} strokeWidth={1.6} /> Preguntas frecuentes
         </Link>
-
         {user?.role === "admin" && (
-          <Link href="/admin" style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 8px", borderRadius: 7, color: "rgba(255,255,255,0.4)", textDecoration: "none", fontSize: 12, transition: "color 0.12s", fontWeight: 500 }} className="hover:text-white/70">
-            <Settings size={12} strokeWidth={1.5} /> Admin
+          <Link href="/admin" className="chat-foot-link">
+            <Settings size={12} strokeWidth={1.6} /> Panel de control
           </Link>
         )}
 
-        <div style={{ marginTop: 4, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 8, padding: "8px" }} className="group">
+        <div style={{
+          marginTop: 6, paddingTop: 10, borderTop: "1px solid var(--sb-border)",
+          display: "flex", alignItems: "center", gap: 8, padding: "10px 6px 2px",
+        }}>
           {user ? (
             <>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, var(--brand-primary), var(--brand-accent))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, color: "#fff", textTransform: "uppercase", letterSpacing: "0.01em", flexShrink: 0 }}>
+              <div style={{
+                width: 26, height: 26, borderRadius: 4, flexShrink: 0,
+                background: "var(--brand)", color: "var(--on-brand)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 10, fontWeight: 700, textTransform: "uppercase",
+              }}>
                 {(user.display_name?.split(" ").map((w: string) => w[0]).join("").slice(0, 2)) ?? "U"}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.75)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <p style={{ margin: 0, fontSize: 11.5, fontWeight: 600, color: "var(--sb-fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {user.display_name ?? "Usuario"}
                 </p>
-                <p style={{ fontSize: 10, color: "rgba(255,255,255,0.52)", margin: 0, textTransform: "capitalize" }}>{user.role}</p>
+                <p style={{ margin: 0, fontSize: 9.5, color: "var(--sb-muted)", textTransform: "capitalize" }}>
+                  {user.role}
+                </p>
               </div>
               <button
                 onClick={handleLogout}
-                title="Cerrar sesion"
-                style={{ width: 24, height: 24, borderRadius: 6, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.45)", opacity: 0, transition: "opacity 0.12s, color 0.12s" }}
-                className="group-hover:opacity-100 hover:!text-red-400"
+                title="Cerrar sesión"
+                aria-label="Cerrar sesión"
+                className="chat-item-action"
               >
-                <LogOut size={11} strokeWidth={1.5} />
+                <LogOut size={12} strokeWidth={1.6} />
               </button>
             </>
           ) : (
-            <Link href="/admin/login" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", padding: "8px", borderRadius: 7, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)", textDecoration: "none", fontSize: 12, fontWeight: 500 }}>
-              Iniciar sesion
+            <Link href="/admin/login" className="btn btn-secondary btn-sm" style={{ width: "100%" }}>
+              Iniciar sesión
             </Link>
           )}
         </div>

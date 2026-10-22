@@ -46,10 +46,10 @@ function AudioBars({ mode, amplitude }: { mode: "listening" | "thinking" | "spea
             key={i}
             className={mode !== "speaking" ? `voice-bar voice-bar-${mode}` : undefined}
             style={{
-              width: 4,
+              width: 3,
               height: height ?? undefined,
               borderRadius: 2,
-              background: "var(--brand-accent)",
+              background: "var(--accent)",
               display: "inline-block",
               transition: mode === "speaking" ? "height 60ms linear" : undefined,
               animationDelay: mode !== "speaking" ? `${i * 70}ms` : undefined,
@@ -86,35 +86,24 @@ export function VoiceModeOverlay({
       aria-modal="true"
       aria-label="Modo de voz"
       className="voice-overlay animate-fade-in"
-      style={{
-        position: "fixed", inset: 0, zIndex: 60,
-        // Dramatic full-screen glass: the chat behind this overlay is visible
-        // but heavily blurred, instead of a near-opaque scrim — a real "glass
-        // modal over the app" moment, the best candidate on the whole site
-        // for a strong Liquid Glass treatment (see redesign plan).
-        background: "radial-gradient(circle at 50% 35%, rgba(11,52,71,0.62), rgba(7,24,36,0.72))",
-        backdropFilter: "blur(var(--glass-blur-lg))",
-        WebkitBackdropFilter: "blur(var(--glass-blur-lg))",
-        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        padding: 24,
-      }}
     >
       <button
         onClick={onCancel}
         aria-label="Cerrar modo de voz"
-        className="glass-navy"
+        className="voice-overlay-btn"
         style={{
-          position: "absolute", top: 20, right: 20, width: 40, height: 40, borderRadius: "50%",
-          color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+          position: "absolute", top: 20, right: 20,
+          width: 40, height: 40, padding: 0,
+          justifyContent: "center", borderRadius: "50%",
         }}
       >
-        <X size={18} strokeWidth={1.75} />
+        <X size={17} strokeWidth={1.75} />
       </button>
 
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 22, maxWidth: 480, width: "100%" }}>
         <GuacamayaAvatar state={avatarState} size={140} amplitude={amplitude} glow />
 
-        <div style={{ fontSize: 15, fontWeight: 600, color: "rgba(255,255,255,0.92)", letterSpacing: "0.01em" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 500, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(255,255,255,0.68)" }}>
           {label}
         </div>
 
@@ -122,12 +111,12 @@ export function VoiceModeOverlay({
 
         <div style={{ minHeight: 52, textAlign: "center", padding: "0 12px" }}>
           {error ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#fca5a5", fontSize: 13.5 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#F3AEA6", fontSize: 13.5 }}>
               <AlertCircle size={15} /> {error}
             </div>
           ) : (
             !showTranscribing && interimTranscript && (
-              <p style={{ fontSize: 16, color: "rgba(255,255,255,0.85)", lineHeight: 1.5 }}>
+              <p style={{ fontFamily: "var(--font-serif)", fontSize: 17, color: "rgba(255,255,255,0.84)", lineHeight: 1.5 }}>
                 “{interimTranscript}”
               </p>
             )
@@ -135,25 +124,11 @@ export function VoiceModeOverlay({
         </div>
 
         {avatarState === "speaking" ? (
-          <button
-            onClick={onBargeIn}
-            className="glass-navy"
-            style={{
-              display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 999,
-              color: "#fff", fontSize: 13.5, fontWeight: 500, cursor: "pointer",
-            }}
-          >
+          <button onClick={onBargeIn} className="voice-overlay-btn">
             <Mic size={13} /> Interrumpir
           </button>
         ) : (
-          <button
-            onClick={onCancel}
-            className="glass-navy"
-            style={{
-              display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 999,
-              color: "#fff", fontSize: 13.5, fontWeight: 500, cursor: "pointer",
-            }}
-          >
+          <button onClick={onCancel} className="voice-overlay-btn">
             <Square size={12} fill="currentColor" /> Detener
           </button>
         )}

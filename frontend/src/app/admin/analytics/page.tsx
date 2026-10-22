@@ -49,7 +49,7 @@ export default function AnalyticsPage() {
         }
       />
 
-      <div style={{ padding: "28px 32px 48px", flex: 1 }}>
+      <div className="admin-content">
 
         {loading && !data ? (
           <div style={{ padding: "72px 0", display: "flex", justifyContent: "center", gap: 6 }}>
@@ -61,7 +61,7 @@ export default function AnalyticsPage() {
           <>
             {/* KPI strip — editorial numbers NOT equal icon cards. Glass surface,
                 same treatment as the overview page's number strip. */}
-            <div className="glass-subtle admin-kpi-strip" style={{ borderRadius: 14, overflow: "hidden", marginBottom: 28 }}>
+            <div className="admin-kpi-strip" style={{ marginBottom: 28 }}>
               {[
                 {
                   label: "Conversaciones",
@@ -75,7 +75,7 @@ export default function AnalyticsPage() {
                   value: data.unique_users.toLocaleString("es-CO"),
                   note: `${data.total_messages.toLocaleString("es-CO")} msgs`,
                   positive: null,
-                  color: "#8B5CF6",
+                  color: "var(--accent-ink)",
                 },
                 {
                   label: "Tasa resolucion",

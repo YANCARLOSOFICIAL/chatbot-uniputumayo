@@ -1,20 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { Sun, Moon } from "lucide-react";
+import { useIsClient } from "@/hooks/useAuthState";
 
 export function ThemeToggle({ className = "" }: { className?: string }) {
   const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => { setMounted(true); }, []);
+  const mounted = useIsClient();
 
   if (!mounted) {
     return (
       <div
         className={className}
-        style={{ width: 36, height: 36, borderRadius: 8, background: "var(--surface-3)" }}
+        style={{ width: 34, height: 34, borderRadius: "var(--r-sm)", background: "var(--surface-2)" }}
       />
     );
   }
@@ -25,23 +23,29 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     <button
       onClick={() => setTheme(isDark ? "light" : "dark")}
       title={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+      aria-label={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
       className={className}
       style={{
-        width: 36, height: 36, borderRadius: 8,
+        width: 34, height: 34, borderRadius: "var(--r-sm)",
         display: "flex", alignItems: "center", justifyContent: "center",
-        background: "transparent", border: "none", cursor: "pointer",
-        color: "var(--text-3)", transition: "color 150ms, background 150ms",
+        background: "transparent", border: "1px solid transparent", cursor: "pointer",
+        color: "var(--ink-3)",
+        transition: "color var(--dur-micro), background-color var(--dur-micro), border-color var(--dur-micro)",
       }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.color = "var(--brand)";
-        (e.currentTarget as HTMLElement).style.background = "var(--surface-3)";
+        const el = e.currentTarget as HTMLElement;
+        el.style.color = "var(--brand)";
+        el.style.background = "var(--surface-2)";
+        el.style.borderColor = "var(--rule)";
       }}
       onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.color = "var(--text-3)";
-        (e.currentTarget as HTMLElement).style.background = "transparent";
+        const el = e.currentTarget as HTMLElement;
+        el.style.color = "var(--ink-3)";
+        el.style.background = "transparent";
+        el.style.borderColor = "transparent";
       }}
     >
-      {isDark ? <Sun size={16} strokeWidth={1.5} /> : <Moon size={16} strokeWidth={1.5} />}
+      {isDark ? <Sun size={15} strokeWidth={1.7} /> : <Moon size={15} strokeWidth={1.7} />}
     </button>
   );
 }

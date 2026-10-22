@@ -401,7 +401,7 @@ export default function DocumentsPage() {
         }
       />
 
-      <div style={{ padding: "28px 32px 48px", flex: 1 }}>
+      <div className="admin-content">
 
         {error && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: "var(--r)", background: "var(--error-dim)", border: "1px solid rgba(200,54,44,0.2)", color: "var(--error)", fontSize: 13, marginBottom: 20 }}>

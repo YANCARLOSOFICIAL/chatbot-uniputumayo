@@ -116,7 +116,7 @@ export default function GoldEvalPanel() {
   const generations = selectedRun?.results?.generations ?? [];
 
   return (
-    <div className="rag-eval-layout" style={{ padding: "28px 32px 48px", flex: 1 }}>
+    <div className="admin-content rag-eval-layout">
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
           <div style={{ fontSize: 13, color: "var(--text-3)", maxWidth: 520 }}>
@@ -183,7 +183,7 @@ export default function GoldEvalPanel() {
                 <div className="admin-kpi-strip" style={{ borderRadius: 14, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface)", marginBottom: 22 }}>
                   {[
                     { label: `Precision@${retrieval.k}`, value: fmtPct(retrieval.mean_precision_at_k), color: "var(--brand-primary)" },
-                    { label: `Recall@${retrieval.k}`, value: fmtPct(retrieval.mean_recall_at_k), color: "#8B5CF6" },
+                    { label: `Recall@${retrieval.k}`, value: fmtPct(retrieval.mean_recall_at_k), color: "var(--accent-ink)" },
                     { label: "MRR", value: retrieval.mrr.toFixed(3), color: "var(--text-2)" },
                     { label: "Hit rate", value: fmtPct(retrieval.hit_rate), color: retrieval.hit_rate >= 0.8 ? "var(--success)" : retrieval.hit_rate < 0.5 ? "var(--danger)" : "var(--warning)" },
                   ].map((s) => (

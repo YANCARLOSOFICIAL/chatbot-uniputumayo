@@ -165,7 +165,7 @@ export default function CatalogosPage() {
         subtitle="Gestiona facultades, programas y tipos de documento usados al subir archivos"
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3" style={{ padding: "28px 32px 48px", gap: 20, flex: 1, alignItems: "start" }}>
+      <div className="admin-content grid grid-cols-1 md:grid-cols-3" style={{ gap: 20, alignItems: "start" }}>
         <CatalogPanel
           title="Facultades"
           items={faculties}

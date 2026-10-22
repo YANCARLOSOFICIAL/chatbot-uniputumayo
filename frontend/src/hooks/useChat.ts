@@ -41,7 +41,7 @@ export function useChat() {
     if (savedId && selectConvRef.current) {
       selectConvRef.current(savedId);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // 2. Keep sessionStorage in sync with the active guest conversation
   useEffect(() => {

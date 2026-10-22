@@ -64,7 +64,7 @@ export default function ConversationsPage() {
         }
       />
 
-      <div style={{ padding: "28px 32px 48px", flex: 1 }}>
+      <div className="admin-content">
 
         {/* Editorial stats strip — moved above table, NOT 3 equal cards below */}
         <div style={{ display: "flex", borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface)", marginBottom: 24 }}>

@@ -8,9 +8,10 @@ import { Eye, EyeOff, AlertCircle, Check } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { setToken, setUser } from "@/lib/auth";
 import { FooterCredit } from "@/components/ui/SiteFooter";
+
 type Tab = "login" | "register";
 
-function DarkInputField({
+function InputField({
   id, label, type = "text", value, onChange, placeholder, required, showToggle,
 }: {
   id: string; label?: string; type?: string; value: string;
@@ -21,24 +22,15 @@ function DarkInputField({
   const inputType = type === "password" && show ? "text" : type;
 
   return (
-    <div>
-      {label && (
-        <label htmlFor={id} style={{
-          display: "block", fontSize: 12, fontWeight: 600,
-          color: "rgba(255,255,255,0.65)", marginBottom: 7,
-          letterSpacing: "0.04em", textTransform: "uppercase",
-        }}>
-          {label}
-        </label>
-      )}
-      <div style={{ position: "relative" }}>
+    <div className="auth-field">
+      {label && <label htmlFor={id} className="field-label">{label}</label>}
+      <div className="auth-input-wrap">
         <input
           id={id} type={inputType} value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder} required={required}
-          className="dark-input"
+          className="input"
           autoComplete={type === "password" ? "new-password" : "off"}
-          style={{ paddingRight: showToggle ? 42 : undefined }}
         />
         {showToggle && (
           <button
@@ -46,12 +38,7 @@ function DarkInputField({
             onClick={() => setShow(!show)}
             aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
             aria-pressed={show}
-            style={{
-              position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
-              background: "none", border: "none", cursor: "pointer",
-              color: "rgba(255,255,255,0.35)", display: "flex", alignItems: "center",
-              padding: 4,
-            }}
+            className="auth-input-toggle"
           >
             {show ? <EyeOff size={15} /> : <Eye size={15} />}
           </button>
@@ -86,14 +73,14 @@ export default function LoginPage() {
       setToken(res.access_token); setUser(res.user);
       router.push(res.user.role === "admin" ? "/admin" : "/chat");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al iniciar sesion");
+      setError(err instanceof Error ? err.message : "Error al iniciar sesión");
     } finally { setLoading(false); }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password !== confirmPassword) return setError("Las contrasenas no coinciden");
-    if (password.length < 6) return setError("La contrasena debe tener al menos 6 caracteres");
+    if (password !== confirmPassword) return setError("Las contraseñas no coinciden");
+    if (password.length < 6) return setError("La contraseña debe tener al menos 6 caracteres");
     setLoading(true); setError(null);
     try {
       const res = await apiClient.register(email, password, displayName);
@@ -110,264 +97,214 @@ export default function LoginPage() {
   };
 
   const BULLETS = [
-    "Catalogo oficial de programas 2026",
+    "Catálogo oficial de programas 2026",
     "Respuestas verificadas con fuentes",
     "Voz y texto, disponible 24 horas",
   ];
 
   return (
-    <div style={{ minHeight: "100dvh", background: "#071824", display: "flex", position: "relative", overflow: "hidden" }}>
+    <div className="auth-page">
 
-      {/* Single campus photo spanning the full width — both panels share one
-          continuous image instead of a bright left half + a separately
-          darkened, disconnected-looking right half. The overlay is darkest
-          over the text (left) and lets the photo show through more clearly
-          behind the login card (right), so the glass card's blur has real
-          photographic detail to refract. */}
-      <div aria-hidden style={{
-        position: "absolute", inset: 0,
-        backgroundImage: "url('/hero-fondo.png')",
-        backgroundSize: "cover", backgroundPosition: "center",
-      }} />
-      <div aria-hidden style={{
-        position: "absolute", inset: 0,
-        background: "linear-gradient(100deg, rgba(7,24,36,0.85) 0%, rgba(11,52,71,0.68) 35%, rgba(11,52,71,0.30) 62%, rgba(11,52,71,0.42) 100%)",
-      }} />
-      <div aria-hidden style={{
-        position: "absolute", top: "-8%", right: "8%",
-        width: 420, height: 420, borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(27,110,148,0.28), transparent 70%)",
-        filter: "blur(60px)", pointerEvents: "none",
-      }} />
-      <div aria-hidden style={{
-        position: "absolute", bottom: "-10%", left: "20%",
-        width: 340, height: 340, borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(123,181,46,0.16), transparent 70%)",
-        filter: "blur(60px)", pointerEvents: "none",
-      }} />
+      {/* Panel de marca — solo desktop */}
+      <div className="auth-brand-panel">
+        <Image
+          src="/estudiantes.jpg"
+          alt=""
+          fill
+          sizes="54vw"
+          priority
+          style={{ objectFit: "cover" }}
+        />
 
-      {/* Left panel — brand showcase */}
-      <div
-        className="hidden md:flex"
-        style={{
-          width: "58%", flexShrink: 0, position: "relative",
-          overflow: "hidden", flexDirection: "column", justifyContent: "center",
-          padding: "60px 56px",
-        }}
-      >
-        {/* Content */}
-        <div style={{ position: "relative", zIndex: 1, maxWidth: 440 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 48 }}>
-            <Image src="/isotipo.webp" alt="Guaca" width={48} height={48} style={{ objectFit: "contain" }} />
+        <div className="auth-brand-content">
+          <div className="auth-mark" style={{ marginBottom: 44 }}>
+            <Image src="/isotipo.webp" alt="Guaca" width={40} height={40} style={{ objectFit: "contain" }} />
             <div>
-              <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em", lineHeight: 1 }}>Guaca</div>
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", marginTop: 3 }}>UniPutumayo</div>
+              <div className="auth-mark-name" style={{ color: "#F5F3EE" }}>Guaca</div>
+              <div className="auth-mark-sub" style={{ color: "rgba(245,243,238,0.5)" }}>UniPutumayo</div>
             </div>
           </div>
 
-          <h2 style={{
-            fontFamily: "var(--font-display)",
-            fontSize: "clamp(30px,3vw,48px)",
-            fontWeight: 900, color: "#fff",
-            lineHeight: 1.0, letterSpacing: "-0.04em",
-            margin: "0 0 14px", textWrap: "balance",
-          }}>
-            La guia academica<br />
-            del <span style={{ color: "var(--brand-primary)" }}>Putumayo.</span>
-          </h2>
-
-          <p style={{ fontSize: 15, color: "rgba(255,255,255,0.55)", lineHeight: 1.65, margin: "0 0 36px" }}>
-            Respuestas verificadas del catalogo oficial. Sin filas, sin formularios.
+          <span className="eyebrow on-dark">Asistente institucional</span>
+          <h1 className="display-lg">
+            La guía académica<br />del <em>Putumayo</em>.
+          </h1>
+          <p className="lede">
+            Respuestas verificadas del catálogo oficial. Sin filas, sin formularios.
           </p>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <ul className="auth-bullets">
             {BULLETS.map((b) => (
-              <div key={b} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{
-                  width: 20, height: 20, borderRadius: "50%",
-                  background: "rgba(123,181,46,0.15)", border: "1px solid rgba(123,181,46,0.3)",
-                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                }}>
-                  <Check size={10} color="var(--brand-accent)" strokeWidth={2.5} />
-                </div>
-                <span style={{ fontSize: 14, color: "rgba(255,255,255,0.65)" }}>{b}</span>
-              </div>
+              <li key={b}>
+                <Check size={13} strokeWidth={2.5} />
+                {b}
+              </li>
             ))}
-          </div>
+          </ul>
+        </div>
+
+        <div style={{ position: "relative", zIndex: 1, fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(245,243,238,0.4)" }}>
+          Sistema RAG · Institución Universitaria del Putumayo · 2026
         </div>
       </div>
 
-      {/* Right panel — login form (transparent, sits on the shared photo above) */}
-      <div style={{
-        flex: 1, display: "flex", flexDirection: "column",
-        minHeight: "100dvh", position: "relative",
-      }}>
-        {/* Form area — centered, fills available space */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "48px 40px", position: "relative", zIndex: 1 }}>
-        <div className="glass-navy-strong" style={{ width: "100%", maxWidth: 400, borderRadius: 24, padding: "40px 36px" }}>
+      {/* Formulario */}
+      <div className="auth-form-side">
+        <div className="auth-form-area">
+          <div className="auth-card">
 
-          {/* Logo mobile only */}
-          <div className="md:hidden" style={{ textAlign: "center", marginBottom: 32 }}>
-            <Image src="/isotipo.webp" alt="Guaca" width={40} height={40} style={{ objectFit: "contain", margin: "0 auto" }} />
-          </div>
-
-          <h2 style={{
-            fontFamily: "var(--font-display)",
-            fontSize: 24, fontWeight: 800, color: "#fff",
-            letterSpacing: "-0.02em", margin: "0 0 6px",
-          }}>
-            Accede a Guaca
-          </h2>
-          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.58)", margin: "0 0 28px" }}>
-            Inicia sesion o crea tu cuenta para guardar tu historial
-          </p>
-
-          {/* Tabs */}
-          <div style={{ display: "flex", gap: 24, borderBottom: "1px solid rgba(255,255,255,0.1)", marginBottom: 28 }}>
-            <button className={`dark-tab${tab === "login" ? " active" : ""}`} onClick={() => switchTab("login")}>
-              Iniciar sesion
-            </button>
-            <button className={`dark-tab${tab === "register" ? " active" : ""}`} onClick={() => switchTab("register")}>
-              Registrarse
-            </button>
-          </div>
-
-          {/* Error */}
-          {error && (
-            <div style={{
-              display: "flex", alignItems: "flex-start", gap: 8,
-              padding: "10px 12px", borderRadius: 8, marginBottom: 20,
-              background: "rgba(200,54,44,0.12)", border: "1px solid rgba(200,54,44,0.25)",
-              color: "#fca5a5", fontSize: 13,
-            }}>
-              <AlertCircle size={13} style={{ flexShrink: 0, marginTop: 1 }} /> {error}
-            </div>
-          )}
-
-          {tab === "login" ? (
-            <form onSubmit={handleLogin} autoComplete="off" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <DarkInputField
-                id={`${uid}_email`} label="Correo electronico" type="email"
-                value={email} onChange={setEmail}
-                placeholder="admin@itp.edu.co" required
-              />
+            <div className="auth-mark auth-mark-mobile">
+              <Image src="/isotipo.webp" alt="Guaca" width={34} height={34} style={{ objectFit: "contain" }} />
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.65)", letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                    Contrasena
-                  </label>
-                  <Link href="/forgot-password" style={{ fontSize: 11.5, color: "rgba(255,255,255,0.5)", textDecoration: "none" }}>
-                    ¿Olvidaste tu contrasena?
-                  </Link>
-                </div>
-                <DarkInputField
-                  id={`${uid}_pass`} type="password"
-                  value={password} onChange={setPassword}
-                  placeholder="Minimo 6 caracteres" required showToggle
-                />
+                <div className="auth-mark-name">Guaca</div>
+                <div className="auth-mark-sub">UniPutumayo</div>
               </div>
+            </div>
 
+            <h2>Accede a Guaca</h2>
+            <p className="auth-card-sub">
+              Inicia sesión o crea tu cuenta para guardar tu historial
+            </p>
+
+            <div className="auth-tabs">
               <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  width: "100%", padding: "13px", borderRadius: 10,
-                  background: "var(--brand-accent)", color: "#fff", border: "none",
-                  fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 600,
-                  cursor: loading ? "not-allowed" : "pointer", marginTop: 8,
-                  opacity: loading ? 0.7 : 1,
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  transition: "background 0.15s",
-                }}
+                className={`auth-tab${tab === "login" ? " active" : ""}`}
+                onClick={() => switchTab("login")}
+                type="button"
               >
-                {loading ? (
-                  <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
-                    {[0, 0.12, 0.24].map((d) => (
-                      <span key={d} style={{ width: 4, height: 4, borderRadius: "50%", background: "#fff", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
-                    ))}
-                  </span>
-                ) : "Iniciar sesion"}
+                Iniciar sesión
               </button>
-            </form>
-          ) : (
-            <form onSubmit={handleRegister} autoComplete="off" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <DarkInputField
-                id={`${uid}_name`} label="Nombre completo" type="text"
-                value={displayName} onChange={setDisplayName}
-                placeholder="Tu nombre" required
-              />
-              <DarkInputField
-                id={`${uid}_email2`} label="Correo electronico" type="email"
-                value={email} onChange={setEmail}
-                placeholder="correo@ejemplo.com" required
-              />
-              <DarkInputField
-                id={`${uid}_pass2`} label="Contrasena" type="password"
-                value={password} onChange={setPassword}
-                placeholder="Minimo 6 caracteres" required showToggle
-              />
-              <DarkInputField
-                id={`${uid}_conf`} label="Confirmar contrasena" type="password"
-                value={confirmPassword} onChange={setConfirmPassword}
-                placeholder="Repite tu contrasena" required showToggle
-              />
-
               <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  width: "100%", padding: "13px", borderRadius: 10,
-                  background: "var(--brand-accent)", color: "#fff", border: "none",
-                  fontFamily: "var(--font-body)", fontSize: 14, fontWeight: 600,
-                  cursor: loading ? "not-allowed" : "pointer", marginTop: 6,
-                  opacity: loading ? 0.7 : 1,
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  transition: "background 0.15s",
-                }}
+                className={`auth-tab${tab === "register" ? " active" : ""}`}
+                onClick={() => switchTab("register")}
+                type="button"
               >
-                {loading ? (
-                  <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
-                    {[0, 0.12, 0.24].map((d) => (
-                      <span key={d} style={{ width: 4, height: 4, borderRadius: "50%", background: "#fff", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
-                    ))}
-                  </span>
-                ) : "Crear cuenta"}
+                Registrarse
               </button>
-            </form>
-          )}
+            </div>
 
-          {/* Continue without account — two half-width rules with a gap for
-              the label, instead of a full-width line + a background-matched
-              mask (fragile against the card's gradient sheen). */}
-          <div style={{ marginTop: 20, display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ flex: 1, borderTop: "1px solid rgba(255,255,255,0.12)" }} />
-            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)" }}>o</span>
-            <div style={{ flex: 1, borderTop: "1px solid rgba(255,255,255,0.12)" }} />
-          </div>
-          <button
-            onClick={() => router.push("/chat")}
-            style={{
-              width: "100%", padding: "11px", borderRadius: 10, marginTop: 16,
-              background: "transparent", color: "rgba(255,255,255,0.5)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 500,
-              cursor: "pointer", transition: "border-color 0.15s, color 0.15s",
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,255,255,0.25)"; (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.75)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(255,255,255,0.1)"; (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.5)"; }}
-          >
-            Continuar sin cuenta
-          </button>
+            {error && (
+              <div className="auth-error">
+                <AlertCircle size={13} style={{ flexShrink: 0, marginTop: 1 }} /> {error}
+              </div>
+            )}
 
-          <div style={{ marginTop: 24, textAlign: "center" }}>
-            <Link href="/" style={{ fontSize: 12, color: "rgba(255,255,255,0.52)", textDecoration: "none" }}>
-              ← Volver al inicio
-            </Link>
+            {tab === "login" ? (
+              <form onSubmit={handleLogin} autoComplete="off">
+                <InputField
+                  id={`${uid}_email`} label="Correo electrónico" type="email"
+                  value={email} onChange={setEmail}
+                  placeholder="admin@itp.edu.co" required
+                />
+                <PasswordField
+                  id={`${uid}_pass`}
+                  label="Contraseña"
+                  value={password}
+                  onChange={setPassword}
+                  placeholder="Mínimo 6 caracteres"
+                  forgotHref="/forgot-password"
+                />
+
+                <button type="submit" disabled={loading} className="btn btn-primary auth-submit">
+                  {loading ? (
+                    <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
+                      {[0, 0.12, 0.24].map((d) => (
+                        <span key={d} style={{ width: 4, height: 4, borderRadius: "50%", background: "currentColor", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
+                      ))}
+                    </span>
+                  ) : "Iniciar sesión"}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleRegister} autoComplete="off">
+                <InputField
+                  id={`${uid}_name`} label="Nombre completo" type="text"
+                  value={displayName} onChange={setDisplayName}
+                  placeholder="Tu nombre" required
+                />
+                <InputField
+                  id={`${uid}_email2`} label="Correo electrónico" type="email"
+                  value={email} onChange={setEmail}
+                  placeholder="correo@ejemplo.com" required
+                />
+                <InputField
+                  id={`${uid}_pass2`} label="Contraseña" type="password"
+                  value={password} onChange={setPassword}
+                  placeholder="Mínimo 6 caracteres" required showToggle
+                />
+                <InputField
+                  id={`${uid}_conf`} label="Confirmar contraseña" type="password"
+                  value={confirmPassword} onChange={setConfirmPassword}
+                  placeholder="Repite tu contraseña" required showToggle
+                />
+
+                <button type="submit" disabled={loading} className="btn btn-primary auth-submit">
+                  {loading ? (
+                    <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
+                      {[0, 0.12, 0.24].map((d) => (
+                        <span key={d} style={{ width: 4, height: 4, borderRadius: "50%", background: "currentColor", display: "inline-block", animation: `pulse-soft 1.2s ${d}s ease-in-out infinite` }} />
+                      ))}
+                    </span>
+                  ) : "Crear cuenta"}
+                </button>
+              </form>
+            )}
+
+            <div className="auth-divider">o</div>
+
+            <button
+              onClick={() => router.push("/chat")}
+              className="btn btn-secondary"
+              style={{ width: "100%" }}
+            >
+              Continuar sin cuenta
+            </button>
+
+            <div className="auth-foot">
+              <Link href="/">← Volver al inicio</Link>
+            </div>
           </div>
         </div>
-        </div>
-        {/* Crédito compacto al pie del panel derecho */}
+
         <FooterCredit />
+      </div>
+    </div>
+  );
+}
+
+/** Campo de contraseña con toggle de visibilidad y enlace opcional. */
+function PasswordField({
+  id, label, value, onChange, placeholder, forgotHref,
+}: {
+  id: string; label: string; value: string; onChange: (v: string) => void;
+  placeholder: string; forgotHref?: string;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="auth-field" style={{ marginBottom: 18 }}>
+      <div className="auth-field-row">
+        <label htmlFor={id} className="field-label" style={{ marginBottom: 0 }}>{label}</label>
+        {forgotHref && (
+          <Link href={forgotHref} className="auth-link-sm">¿Olvidaste tu contraseña?</Link>
+        )}
+      </div>
+      <div className="auth-input-wrap" style={{ marginTop: 6 }}>
+        <input
+          id={id} type={show ? "text" : "password"} value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder} required
+          className="input"
+          autoComplete="new-password"
+        />
+        <button
+          type="button"
+          onClick={() => setShow(!show)}
+          aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
+          aria-pressed={show}
+          className="auth-input-toggle"
+        >
+          {show ? <EyeOff size={15} /> : <Eye size={15} />}
+        </button>
       </div>
     </div>
   );

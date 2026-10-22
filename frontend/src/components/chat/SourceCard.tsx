@@ -14,40 +14,26 @@ interface SourceCardProps {
 export function SourceCard({ sources, open: openProp, onOpenChange, highlightedIndex }: SourceCardProps) {
   const [openState, setOpenState] = useState(false);
   const open = openProp ?? openState;
-  const setOpen = (v: boolean) => { onOpenChange ? onOpenChange(v) : setOpenState(v); };
+  const setOpen = (v: boolean) => {
+    if (onOpenChange) onOpenChange(v);
+    else setOpenState(v);
+  };
   if (!sources.length) return null;
 
   return (
     <div style={{ marginTop: 12 }}>
       {/* Toggle — subtle, editorial */}
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          display: "inline-flex", alignItems: "center", gap: 5,
-          padding: "4px 10px 4px 8px", borderRadius: 9999,
-          border: "1px solid var(--border)", background: "transparent",
-          fontSize: 11, fontWeight: 600, color: "var(--text-3)",
-          cursor: "pointer", transition: "border-color 0.15s, color 0.15s",
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--brand-primary)";
-          (e.currentTarget as HTMLButtonElement).style.color = "var(--brand-primary)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)";
-          (e.currentTarget as HTMLButtonElement).style.color = "var(--text-3)";
-        }}
-      >
-        <BookOpen size={10} strokeWidth={2} style={{ color: "var(--brand-primary)" }} />
+      <button onClick={() => setOpen(!open)} className="source-toggle">
+        <BookOpen size={10} strokeWidth={2} style={{ color: "var(--brand)" }} />
         {sources.length} {sources.length === 1 ? "fuente" : "fuentes"}
         {open ? <ChevronUp size={10} strokeWidth={2} /> : <ChevronDown size={10} strokeWidth={2} />}
       </button>
 
       {open && (
-        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 0, border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
-          {sources.map((source, i) => {
+        <div className="source-list">
+          {sources.map((source) => {
             const score = source.score;
-            const dotColor = score >= 0.55 ? "var(--success)" : score >= 0.38 ? "var(--warning)" : "var(--text-3)";
+            const dotColor = score >= 0.55 ? "var(--success)" : score >= 0.38 ? "var(--warning)" : "var(--ink-3)";
             // Matches the "[N]" citation marker in the message text, which is
             // this source's original retrieval position — NOT its index in
             // this (possibly filtered/non-contiguous) list.
@@ -57,67 +43,35 @@ export function SourceCard({ sources, open: openProp, onOpenChange, highlightedI
               <div
                 key={source.chunk_id}
                 id={`source-${n}`}
-                style={{
-                  display: "flex", alignItems: "flex-start", gap: 10,
-                  padding: "10px 14px",
-                  borderBottom: i < sources.length - 1 ? "1px solid var(--border)" : "none",
-                  background: isHighlighted ? "var(--brand-dim)" : "var(--surface)",
-                  outline: isHighlighted ? "2px solid var(--brand-primary)" : "none",
-                  outlineOffset: -2,
-                  transition: "background 0.3s, outline-color 0.3s",
-                }}
-                onMouseEnter={(e) => { if (!isHighlighted) (e.currentTarget as HTMLDivElement).style.background = "var(--surface-2)"; }}
-                onMouseLeave={(e) => { if (!isHighlighted) (e.currentTarget as HTMLDivElement).style.background = "var(--surface)"; }}
+                className="source-item"
+                data-highlight={isHighlighted}
               >
                 {/* Index */}
-                <span style={{
-                  fontFamily: "var(--font-mono)", fontSize: 9,
-                  color: "var(--text-3)", width: 16, flexShrink: 0, textAlign: "right",
-                }}>
-                  {n}
-                </span>
+                <span className="source-index">{n}</span>
 
                 {/* Doc icon */}
-                <div style={{
-                  width: 26, height: 26, borderRadius: 7, flexShrink: 0,
-                  background: "var(--brand-dim)", border: "1px solid var(--brand-light)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  <BookOpen size={11} style={{ color: "var(--brand-primary)" }} />
+                <div className="source-icon">
+                  <BookOpen size={11} />
                 </div>
 
                 {/* Title + program + fragment */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <div style={{
-                      fontSize: 12, fontWeight: 600, color: "var(--text-1)",
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                      lineHeight: 1.3, flex: 1, minWidth: 0,
-                    }}>
+                <div className="source-body">
+                  <div className="source-head">
+                    <div className="source-title" title={source.document_title}>
                       {source.document_title}
                     </div>
                     {source.program && (
-                      <div style={{
-                        fontSize: 10, color: "var(--text-3)", flexShrink: 0,
-                        fontFamily: "var(--font-mono)",
-                      }}>
-                        {source.program}
-                      </div>
+                      <div className="source-program">{source.program}</div>
                     )}
                     {/* Relevance dot */}
-                    <div style={{
-                      width: 6, height: 6, borderRadius: "50%",
-                      background: dotColor, flexShrink: 0,
-                      boxShadow: `0 0 4px ${dotColor}`,
-                    }} title={`Relevancia: ${Math.round(score * 100)}%`} />
+                    <div
+                      className="source-dot"
+                      style={{ background: dotColor }}
+                      title={`Relevancia: ${Math.round(score * 100)}%`}
+                    />
                   </div>
                   {source.content_preview && (
-                    <div style={{
-                      fontSize: 11, color: "var(--text-2)", marginTop: 4,
-                      lineHeight: 1.45, display: "-webkit-box",
-                      WebkitLineClamp: isHighlighted ? 6 : 2, WebkitBoxOrient: "vertical",
-                      overflow: "hidden",
-                    }}>
+                    <div className="source-preview" data-expanded={isHighlighted}>
                       &ldquo;{source.content_preview.trim()}&rdquo;
                     </div>
                   )}

@@ -26,15 +26,11 @@ interface MessageListProps {
 /* ── "¿Te refieres a…?" — related curated FAQ for the latest turn ── */
 function FaqSuggestionChip({ suggestion, onSelect }: { suggestion: FaqSuggestion; onSelect?: (q: string) => void }) {
   return (
-    <div className="pl-8 animate-fade-up" style={{ animationFillMode: "both" }}>
-      <div style={{
-        display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
-        padding: "9px 12px", borderRadius: 10,
-        background: "var(--brand-dim)", border: "1px solid var(--brand-light)", fontSize: 12,
-      }}>
-        <BookmarkCheck size={13} style={{ color: "var(--brand-primary)", flexShrink: 0 }} />
-        <span style={{ color: "var(--text-2)", flex: 1, minWidth: 180 }}>
-          ¿Te refieres a <strong style={{ color: "var(--text-1)", fontWeight: 600 }}>«{suggestion.question}»</strong>?
+    <div className="pl-8 animate-fade-up">
+      <div className="faq-suggest">
+        <BookmarkCheck size={13} style={{ color: "var(--brand)", flexShrink: 0 }} />
+        <span style={{ flex: 1, minWidth: 180 }}>
+          ¿Te refieres a <strong>«{suggestion.question}»</strong>?
           Hay una respuesta oficial en Preguntas frecuentes.
         </span>
         <button
@@ -72,6 +68,13 @@ const DOC_TYPE_ICONS: Record<string, LucideIcon> = {
   reglamento: FileText,
 };
 
+const CARD_HINTS = [
+  "Programas, SNIES y sedes",
+  "Mocoa, Sibundoy y Puerto Asís",
+  "Pasos, fechas y documentos",
+  "Canales de atención oficiales",
+];
+
 /* ── Welcome / empty state ── */
 function WelcomeState({ onSend }: { onSend?: (q: string) => void }) {
   const [CARDS, setCards] = useState<SuggestionCard[]>(DEFAULT_CARDS);
@@ -92,109 +95,54 @@ function WelcomeState({ onSend }: { onSend?: (q: string) => void }) {
   }, []);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", padding: "36px 24px 24px", userSelect: "none" }}>
+    <div className="welcome">
+      <div className="welcome-inner">
+        <div className="welcome-avatar animate-fade-up">
+          <GuacamayaAvatar state="idle" size={56} />
+        </div>
 
-      {/* Avatar */}
-      <div className="animate-fade-up nexus-idle" style={{ marginBottom: 14 }}>
-        <GuacamayaAvatar state="idle" size={52} />
-      </div>
+        <div className="animate-fade-up" style={{ animationDelay: "0.05s" }}>
+          <span className="eyebrow">Asistente institucional</span>
+          <h1>¿Qué quieres saber de la UniPutumayo?</h1>
+          <p className="welcome-sub">
+            Pregunta por programas, costos, sedes o admisión. Cada respuesta
+            viene del catálogo oficial, con su fuente citada.
+          </p>
+        </div>
 
-      {/* Heading */}
-      <div className="animate-fade-up" style={{ animationDelay: "0.05s", textAlign: "center", marginBottom: 24, maxWidth: 360 }}>
-        <h1 style={{
-          fontFamily: "var(--font-display)",
-          fontSize: "clamp(20px, 2.8vw, 26px)", fontWeight: 800,
-          margin: "0 0 8px", color: "var(--text-1)",
-          letterSpacing: "-0.022em", lineHeight: 1.12,
-        }}>
-          Que quieres saber de UniPutumayo?
-        </h1>
-        <p style={{ fontSize: 13, color: "var(--text-3)", margin: 0, lineHeight: 1.6 }}>
-          Respuestas del catalogo oficial, con fuentes citadas.
-        </p>
-      </div>
-
-      {/* Suggestions — asymmetric: 1 featured wide + 3 compact hairline rows */}
-      {onSend && (
-        <div className="animate-fade-up" style={{ animationDelay: "0.1s", width: "100%", maxWidth: 456 }}>
-
-          {/* Featured wide card */}
-          <button
-            onClick={() => onSend(CARDS[0].query)}
-            className="prompt-card"
-            style={{ width: "100%", marginBottom: 6, padding: "14px 16px", gap: 12 }}
-          >
-            <div style={{
-              width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-              background: "var(--brand-dim)", border: "1px solid var(--brand-light)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <GraduationCap size={16} style={{ color: "var(--brand-primary)" }} />
-            </div>
-            <div style={{ flex: 1, textAlign: "left" }}>
-              <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-1)", marginBottom: 3, lineHeight: 1.2 }}>
-                {CARDS[0].label}
-              </div>
-              <div style={{ fontSize: 11.5, color: "var(--text-3)", lineHeight: 1.4 }}>
-                Programa, sede, SNIES y requisitos de admision
-              </div>
-            </div>
-            <ArrowRight size={13} style={{ color: "var(--text-3)", flexShrink: 0 }} strokeWidth={1.5} />
-          </button>
-
-          {/* Compact hairline rows */}
-          <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
-            {CARDS.slice(1).map(({ icon: Icon, label, query }, i) => (
-              <button
-                key={label}
-                onClick={() => onSend(query)}
-                style={{
-                  width: "100%", display: "flex", alignItems: "center", gap: 10,
-                  padding: "11px 14px",
-                  background: "var(--surface)",
-                  border: "none",
-                  borderTop: i > 0 ? "1px solid var(--border)" : "none",
-                  cursor: "pointer", textAlign: "left",
-                  fontFamily: "var(--font-body)",
-                  transition: "background 0.12s",
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-2)"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--surface)"; }}
-              >
-                <Icon size={13} style={{ color: "var(--text-3)", flexShrink: 0 }} strokeWidth={1.5} />
-                <span style={{ flex: 1, fontSize: 13, color: "var(--text-1)", fontWeight: 500 }}>{label}</span>
-                <ArrowRight size={11} style={{ color: "var(--text-3)", opacity: 0.4, flexShrink: 0 }} strokeWidth={1.5} />
+        {onSend && (
+          <div className="prompt-grid animate-fade-up" style={{ animationDelay: "0.1s" }}>
+            {CARDS.slice(0, 4).map(({ icon: Icon, label, query }, i) => (
+              <button key={label} onClick={() => onSend(query)} className="prompt-tile">
+                <span className="prompt-tile-icon">
+                  <Icon size={14} strokeWidth={1.6} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span className="prompt-tile-label">{label}</span>
+                  <span className="prompt-tile-desc">{CARD_HINTS[i] ?? "Respuesta con fuentes verificadas"}</span>
+                </span>
+                <ArrowRight size={12} strokeWidth={1.6} style={{ color: "var(--ink-3)", flexShrink: 0, marginTop: 4 }} />
               </button>
             ))}
           </div>
+        )}
+
+        <div className="welcome-caps animate-fade-up" style={{ animationDelay: "0.16s" }}>
+          {[
+            { icon: Mic,      label: "Voz y texto" },
+            { icon: Clock,    label: "24/7" },
+            { icon: FileText, label: "Fuentes citadas" },
+          ].map(({ icon: Icon, label }) => (
+            <span key={label} className="welcome-cap">
+              <Icon size={9} strokeWidth={1.6} /> {label}
+            </span>
+          ))}
         </div>
-      )}
 
-      {/* Capabilities */}
-      <div className="animate-fade-up" style={{ animationDelay: "0.22s", display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 5, marginTop: 18 }}>
-        {[
-          { icon: Mic,      label: "Voz y texto" },
-          { icon: Clock,    label: "24/7" },
-          { icon: FileText, label: "Fuentes citadas" },
-        ].map(({ icon: Icon, label }) => (
-          <div key={label} style={{
-            display: "flex", alignItems: "center", gap: 4, fontSize: 11,
-            color: "var(--text-3)", padding: "3px 9px", borderRadius: 9999,
-            border: "1px solid var(--border)",
-          }}>
-            <Icon size={9} strokeWidth={1.5} /> {label}
-          </div>
-        ))}
+        <Link href="/faq" className="welcome-faq animate-fade-up" style={{ animationDelay: "0.2s" }}>
+          <HelpCircle size={12} strokeWidth={1.7} /> Ver preguntas frecuentes revisadas
+        </Link>
       </div>
-
-      {/* Curated FAQ — official answers without waiting for the model */}
-      <Link
-        href="/faq"
-        className="animate-fade-up hover:text-[var(--brand-primary)] transition-colors"
-        style={{ animationDelay: "0.2s", display: "flex", alignItems: "center", gap: 5, marginTop: 14, fontSize: 12, color: "var(--text-3)", textDecoration: "none" }}
-      >
-        <HelpCircle size={12} strokeWidth={1.75} /> Ver las preguntas frecuentes
-      </Link>
     </div>
   );
 }
@@ -223,6 +171,8 @@ export function MessageList({ messages, sources, faqSuggestion, isLoading, onQui
   };
 
   useEffect(() => {
+    // La bienvenida debe quedar arriba: no hay mensajes que seguir.
+    if (messages.length === 0) return;
     // Durante streaming (isLoading) usar salto instantáneo: smooth por token = jank.
     if (isAtBottomRef.current) scrollToBottom(!isLoading);
   }, [messages, isLoading]);
@@ -255,7 +205,8 @@ export function MessageList({ messages, sources, faqSuggestion, isLoading, onQui
         {isEmpty ? (
           <WelcomeState onSend={onQuickReply} />
         ) : (
-          <div className="max-w-2xl mx-auto px-4 sm:px-5 py-6 space-y-5">
+          <div className="chat-thread space-y-5">
+            <div className="chat-day">Hoy</div>
             {(() => {
               const lastBotIdx = messages.reduceRight((found, m, idx) => found === -1 && m.role === "assistant" ? idx : found, -1);
               return messages.map((msg, i) => {
@@ -305,8 +256,8 @@ export function MessageList({ messages, sources, faqSuggestion, isLoading, onQui
       {showBtn && (
         <button
           onClick={() => scrollToBottom()}
-          className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 px-3 py-1.5 rounded-full bg-[var(--surface)] border border-[var(--border)] shadow-[var(--shadow-md)] text-[12px] text-[var(--text-2)] hover:text-[var(--brand)] hover:border-[var(--brand)] transition-all animate-fade-up"
-          aria-label="Ir al final" style={{ textDecoration: "none" }}
+          className="chat-scroll-fab animate-fade-up"
+          aria-label="Ir al final"
         >
           <ChevronDown size={12} /> Ir al final
         </button>

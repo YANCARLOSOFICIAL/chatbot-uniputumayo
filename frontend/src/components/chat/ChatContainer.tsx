@@ -214,7 +214,7 @@ export function ChatContainer() {
     : "U";
 
   return (
-    <div className="flex h-[100dvh] bg-[var(--bg)] overflow-hidden relative">
+    <div className="chat-shell">
 
       {mounted && voiceOverlayOpen && (
         <VoiceModeOverlay
@@ -244,7 +244,7 @@ export function ChatContainer() {
           {/* Desktop sidebar */}
           <div
             className="hidden md:block flex-shrink-0 overflow-hidden transition-all duration-200 relative"
-            style={{ width: sidebarOpen ? 260 : 0, zIndex: 1 }}
+            style={{ width: sidebarOpen ? 272 : 0, zIndex: 1 }}
             aria-hidden={!sidebarOpen}
           >
             <ConversationSidebar
@@ -276,69 +276,81 @@ export function ChatContainer() {
       )}
 
       {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative" style={{ zIndex: 1 }}>
+      <div className="chat-main" style={{ zIndex: 1 }}>
 
-        {/* Top bar — flat, blends into the canvas like ChatGPT's borderless
-            header (no card/glass chrome, just a hairline separator). */}
-        <header className="flex-shrink-0 h-14 px-3 flex items-center gap-2" style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
-          {/* Toggle buttons */}
+        <header className="chat-header">
+          {/* Toggle */}
           <button
             onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-            className="md:hidden w-9 h-9 rounded-md flex items-center justify-center text-[var(--text-3)] hover:bg-[var(--surface-3)] hover:text-[var(--text-1)] transition-colors"
+            className="composer-btn only-mobile"
             aria-label="Abrir menú"
           >
-            <PanelLeft size={20} strokeWidth={1.5} />
+            <PanelLeft size={18} strokeWidth={1.6} />
           </button>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="hidden md:flex w-9 h-9 rounded-md items-center justify-center text-[var(--text-3)] hover:bg-[var(--surface-3)] hover:text-[var(--text-1)] transition-colors"
+            className="composer-btn only-desktop"
             aria-label={sidebarOpen ? "Colapsar barra lateral" : "Expandir barra lateral"}
             title={sidebarOpen ? "Colapsar" : "Expandir"}
           >
-            <PanelLeft size={18} strokeWidth={1.5} style={{ transform: sidebarOpen ? "none" : "scaleX(-1)" }} />
+            <PanelLeft size={17} strokeWidth={1.6} style={{ transform: sidebarOpen ? "none" : "scaleX(-1)" }} />
           </button>
 
-          {/* Brand */}
-          <div className="flex items-center gap-2 min-w-0 ml-1">
+          {/* Marca — el sidebar ya la muestra cuando está abierto en desktop */}
+          <div
+            className="chat-header-brand"
+            data-sidebar={sidebarOpen ? "open" : "closed"}
+          >
             <GuacamayaAvatar
               state={(avatarState as GuacamayaState) ?? "idle"}
-              size={26}
+              size={28}
               amplitude={voicePlayback.amplitude}
               className="flex-shrink-0"
             />
-            <span className="text-[14px] font-semibold text-[var(--text-1)] truncate" style={{ fontFamily: "var(--font-display)" }}>
-              Guaca
-            </span>
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)] flex-shrink-0" />
+            <div style={{ minWidth: 0 }}>
+              <div className="chat-title">
+                Guaca
+                <span
+                  aria-label="En línea"
+                  style={{
+                    display: "inline-block", width: 5, height: 5, borderRadius: "50%",
+                    background: "var(--success)", marginLeft: 6, verticalAlign: "middle",
+                  }}
+                />
+              </div>
+              <div className="chat-title-sub">Asistente UniPutumayo</div>
+            </div>
           </div>
 
-          {/* Right actions */}
-          <div className="ml-auto flex items-center gap-1">
+          {/* Acciones */}
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 2 }}>
             <ThemeToggle />
             {mounted && (
               authed && user ? (
                 <>
                   <button
                     onClick={() => { logout(); window.location.href = "/"; }}
-                    className="hidden sm:flex items-center gap-1.5 text-[12px] text-[var(--text-3)] hover:text-[var(--error)] transition-colors px-2 py-1.5 rounded-md hover:bg-[var(--error-dim)]"
+                    className="hidden sm:inline-flex btn btn-ghost btn-sm"
                     title="Cerrar sesión"
                   >
                     <LogOut size={12} /> Salir
                   </button>
                   <div
                     title={user.display_name}
-                    style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: "linear-gradient(135deg, var(--brand-primary), var(--brand-accent))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#fff", letterSpacing: "0.01em", textTransform: "uppercase", cursor: "default" }}
+                    style={{
+                      width: 30, height: 30, flexShrink: 0,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: "var(--brand)", color: "var(--on-brand)",
+                      borderRadius: 4, fontSize: 10.5, fontWeight: 700,
+                      letterSpacing: "0.02em", textTransform: "uppercase",
+                    }}
                   >
                     {initials}
                   </div>
                 </>
               ) : (
-                <Link
-                  href="/admin/login"
-                  className="flex items-center gap-1.5 text-[12px] text-[var(--text-2)] hover:text-[var(--brand-primary)] transition-colors px-2.5 py-1.5 rounded-md border border-[var(--border)] hover:border-[var(--brand-primary)] font-medium"
-                  style={{ whiteSpace: "nowrap" }}
-                >
-                  <LogIn size={12} /> Iniciar sesion
+                <Link href="/admin/login" className="btn btn-secondary btn-sm" style={{ whiteSpace: "nowrap" }}>
+                  <LogIn size={12} /> Iniciar sesión
                 </Link>
               )
             )}
@@ -362,16 +374,14 @@ export function ChatContainer() {
 
         {/* Guest banner — subtle, dismissible */}
         {mounted && !authed && messages.length > 0 && (
-          <div style={{ padding: "0 16px 8px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 14px", borderRadius: 10, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", fontSize: 12 }}>
-              <span style={{ color: "var(--text-2)", flex: 1 }}>
-                Esta conversacion no se guardara.{" "}
-                <Link href="/admin/login" style={{ color: "var(--brand-primary)", fontWeight: 600, textDecoration: "none" }}>
-                  Inicia sesion
-                </Link>{" "}
-                para guardar tu historial.
-              </span>
-            </div>
+          <div className="guest-banner">
+            <span style={{ flex: 1 }}>
+              Esta conversación no se guardará.{" "}
+              <Link href="/admin/login" style={{ color: "var(--brand)", fontWeight: 600 }}>
+                Inicia sesión
+              </Link>{" "}
+              para conservar tu historial.
+            </span>
           </div>
         )}
 

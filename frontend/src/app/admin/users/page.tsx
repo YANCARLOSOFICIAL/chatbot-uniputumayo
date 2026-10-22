@@ -78,7 +78,7 @@ export default function UsersPage() {
         }
       />
 
-      <div style={{ padding: "28px 32px 48px", flex: 1 }}>
+      <div className="admin-content">
 
         {error && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: "var(--r)", background: "var(--error-dim)", border: "1px solid rgba(200,54,44,0.2)", color: "var(--error)", fontSize: 13, marginBottom: 20 }}>
@@ -91,7 +91,7 @@ export default function UsersPage() {
         <div style={{ display: "flex", borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface)", marginBottom: 24 }}>
           {[
             { label: "Total",         value: !stats ? "..." : stats.total,   color: "var(--brand-primary)" },
-            { label: "Admins",        value: !stats ? "..." : stats.admins,  color: "#8B5CF6" },
+            { label: "Admins",        value: !stats ? "..." : stats.admins,  color: "var(--accent-ink)" },
             { label: "Estudiantes",   value: !stats ? "..." : stats.users,   color: "var(--success)" },
           ].map((s, i, arr) => (
             <div key={s.label} style={{ flex: 1, padding: "22px 24px", borderRight: i < arr.length - 1 ? "1px solid var(--border)" : "none", textAlign: "center" }}>
@@ -177,7 +177,7 @@ export default function UsersPage() {
                             display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 9999,
                             fontSize: 11, fontWeight: 600,
                             background: user.role === "admin" ? "rgba(139,92,246,0.1)" : "var(--surface-2)",
-                            color: user.role === "admin" ? "#8B5CF6" : "var(--text-2)",
+                            color: user.role === "admin" ? "var(--brand)" : "var(--text-2)",
                             border: `1px solid ${user.role === "admin" ? "rgba(139,92,246,0.2)" : "var(--border)"}`,
                           }}>
                             {user.role === "admin" ? <Shield size={9} /> : <User size={9} />}
