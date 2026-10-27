@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ArrowRight, ChevronDown, FileText, CalendarCheck, Search, MessageCircle, HelpCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, FileText, CalendarCheck, Search, MessageCircle, HelpCircle } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { SiteFooter } from "@/components/ui/SiteFooter";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
@@ -17,6 +17,9 @@ const MarkdownContent = dynamic(
 );
 
 const UNCATEGORIZED = "Otras preguntas";
+// Entries per page on the public list — enough to scan without endless
+// scrolling on a phone; the search box narrows the set first.
+const PAGE_SIZE = 10;
 
 function normalize(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -104,15 +107,38 @@ function FaqPageContent() {
     return entries.filter((e) => normalize(e.question).includes(q) || normalize(e.answer).includes(q));
   }, [entries, query]);
 
+  // Client-side pagination over the filtered list (the whole FAQ is one
+  // small request). A deep link (/faq?id=...) opens on the page that holds
+  // that entry; typing in the search box goes back to page 1.
+  const [pageOverride, setPageOverride] = useState<number | null>(null);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const focusPage = useMemo(() => {
+    if (!focusId) return null;
+    const idx = filtered.findIndex((e) => e.id === focusId);
+    return idx >= 0 ? Math.floor(idx / PAGE_SIZE) + 1 : null;
+  }, [filtered, focusId]);
+  const safePage = Math.min(pageOverride ?? focusPage ?? 1, totalPages);
+  const pageItems = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage],
+  );
+  const rangeStart = filtered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(safePage * PAGE_SIZE, filtered.length);
+  const goToPage = (n: number) => {
+    setPageOverride(Math.min(Math.max(1, n), totalPages));
+    setOpenId(null);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const groups = useMemo(() => {
     const map = new Map<string, FaqPublic[]>();
-    for (const e of filtered) {
+    for (const e of pageItems) {
       const key = e.category?.trim() || UNCATEGORIZED;
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(e);
     }
     return Array.from(map.entries());
-  }, [filtered]);
+  }, [pageItems]);
 
   const askGuaca = (q: string) => {
     sessionStorage.setItem("guaca_initial_query", q);
@@ -155,7 +181,7 @@ function FaqPageContent() {
           <Search size={14} style={{ color: "var(--ink-3)", flexShrink: 0 }} />
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setQuery(e.target.value); setPageOverride(null); }}
             placeholder="Buscar en las preguntas frecuentes..."
             aria-label="Buscar preguntas frecuentes"
           />
@@ -198,6 +224,25 @@ function FaqPageContent() {
                 </div>
               </section>
             ))}
+
+            {totalPages > 1 && (
+              <nav aria-label="Paginación de preguntas frecuentes" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", paddingTop: 4 }}>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                  Mostrando <strong style={{ fontWeight: 600 }}>{rangeStart}–{rangeEnd}</strong> de {filtered.length}
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <button onClick={() => goToPage(safePage - 1)} disabled={safePage <= 1}
+                    className="btn btn-secondary btn-sm" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <ChevronLeft size={13} /> Anterior
+                  </button>
+                  <span style={{ fontSize: 12, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>{safePage} / {totalPages}</span>
+                  <button onClick={() => goToPage(safePage + 1)} disabled={safePage >= totalPages}
+                    className="btn btn-secondary btn-sm" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    Siguiente <ChevronRight size={13} />
+                  </button>
+                </div>
+              </nav>
+            )}
           </div>
         )}
 

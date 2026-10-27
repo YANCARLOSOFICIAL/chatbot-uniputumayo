@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Plus, Pencil, Trash2, RefreshCw, Upload, Eye, EyeOff, Search, X, HelpCircle, AlertTriangle, CheckCircle2, FlaskConical } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw, Upload, Eye, EyeOff, Search, X, HelpCircle, AlertTriangle, CheckCircle2, FlaskConical, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import { toast } from "@/components/ui/Toast";
 import { AdminHeader } from "@/components/admin/AdminHeader";
+import { Select } from "@/components/ui/Select";
 import type { FaqAdmin, FaqInput, FaqMatchTest } from "@/types/chat";
 
 /* ── "Probar coincidencia": dry run of what the chat would do ── */
@@ -85,6 +86,9 @@ function MatchTester() {
     </div>
   );
 }
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
+const DEFAULT_PAGE_SIZE = 10;
 
 const EMPTY: FaqInput = {
   question: "", answer: "", category: "", source_document: "", valid_period: "",
@@ -202,6 +206,19 @@ export default function FaqAdminPage() {
     const q = query.trim().toLowerCase();
     return q ? entries.filter((e) => e.question.toLowerCase().includes(q) || (e.category ?? "").toLowerCase().includes(q)) : entries;
   }, [entries, query]);
+
+  // Client-side pagination (the admin list is one small request). Search
+  // resets to page 1; the page is clamped when entries are deleted.
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(DEFAULT_PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = useMemo(
+    () => filtered.slice((safePage - 1) * perPage, safePage * perPage),
+    [filtered, safePage, perPage],
+  );
+  const rangeStart = filtered.length === 0 ? 0 : (safePage - 1) * perPage + 1;
+  const rangeEnd = Math.min(safePage * perPage, filtered.length);
 
   const notIndexed = entries.filter((e) => !e.indexed).length;
   const totalHits = entries.reduce((a, e) => a + e.hit_count, 0);
@@ -321,8 +338,8 @@ export default function FaqAdminPage() {
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
           <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
             <Search size={13} style={{ color: "var(--text-3)" }} />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por pregunta o categoría..." className="input" style={{ flex: 1, boxSizing: "border-box" }} />
-            {query && <button onClick={() => setQuery("")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", display: "flex" }}><X size={13} /></button>}
+            <input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="Buscar por pregunta o categoría..." className="input" style={{ flex: 1, boxSizing: "border-box" }} />
+            {query && <button onClick={() => { setQuery(""); setPage(1); }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", display: "flex" }}><X size={13} /></button>}
           </div>
 
           {loading ? (
@@ -332,7 +349,7 @@ export default function FaqAdminPage() {
               {entries.length === 0 ? "Aún no hay preguntas frecuentes. Cree una o importe el archivo scripts/faq_seed.json del backend." : "Sin coincidencias"}
             </div>
           ) : (
-            filtered.map((e) => (
+            pageItems.map((e) => (
               <div key={e.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px", borderBottom: "1px solid var(--border)", opacity: e.is_enabled ? 1 : 0.6 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text-1)", lineHeight: 1.35 }}>{e.question}</div>
@@ -368,6 +385,36 @@ export default function FaqAdminPage() {
                 </div>
               </div>
             ))
+          )}
+
+          {!loading && filtered.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 14px", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 12, color: "var(--text-3)" }}>
+                  Mostrando <strong style={{ color: "var(--text-2)", fontWeight: 600 }}>{rangeStart}–{rangeEnd}</strong> de {filtered.length}
+                </span>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-3)" }}>
+                  Por página
+                  <Select
+                    value={String(perPage)}
+                    onValueChange={(v) => { setPerPage(Number(v)); setPage(1); }}
+                    options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
+                    triggerStyle={{ width: "auto", padding: "4px 8px", fontSize: 12 }}
+                  />
+                </label>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
+                  className="btn btn-secondary btn-sm" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <ChevronLeft size={13} /> Anterior
+                </button>
+                <span style={{ fontSize: 12, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>{safePage} / {totalPages}</span>
+                <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
+                  className="btn btn-secondary btn-sm" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  Siguiente <ChevronRight size={13} />
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
