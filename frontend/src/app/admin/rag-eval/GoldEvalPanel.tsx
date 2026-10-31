@@ -26,6 +26,10 @@ export default function GoldEvalPanel() {
   const [selectedRun, setSelectedRun] = useState<GoldEvalRunDetail | null>(null);
   const [loadingRuns, setLoadingRuns] = useState(true);
   const [starting, setStarting] = useState(false);
+  // Run options — see POST /api/v1/goldstandard-eval/run.
+  const [providers, setProviders] = useState<"openai" | "openai,ollama">("openai");
+  const [includeFaq, setIncludeFaq] = useState(false);
+  const [kValue, setKValue] = useState(5);
   const [downloading, setDownloading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -82,8 +86,12 @@ export default function GoldEvalPanel() {
 
     setStarting(true);
     try {
-      const run = await apiClient.startGoldEval(file);
-      toast.success("Comparación iniciada — corre retrieval + generación real en Ollama y OpenAI para cada pregunta, puede tardar bastante.");
+      const run = await apiClient.startGoldEval(file, kValue, providers, includeFaq);
+      toast.success(
+        providers === "openai"
+          ? "Evaluación iniciada — retrieval + generación real con OpenAI para cada pregunta (unos 15-20 minutos)."
+          : "Evaluación iniciada — retrieval + generación real con OpenAI y Ollama; la pasada por Ollama puede tardar horas."
+      );
       await loadRuns();
       await loadRunDetail(run.id);
     } catch (err) {
@@ -120,7 +128,44 @@ export default function GoldEvalPanel() {
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
           <div style={{ fontSize: 13, color: "var(--text-3)", maxWidth: 520 }}>
-            Sube el banco de preguntas <code>GoldStandard_Evaluacion_Chatbot.xlsx</code> (hoja &quot;Consultas&quot;) para comparar Ollama vs OpenAI: Precision@k, Recall@k, MRR y tasa de alucinación por proveedor.
+            Sube el banco de preguntas <code>GoldStandard_Evaluacion_Chatbot.xlsx</code> (hoja &quot;Consultas&quot;) para medir Precision@k, Recall@k, MRR y, por proveedor de generación, tasa de alucinación, rechazos y respuestas útiles.
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginTop: 10, alignItems: "center" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                Proveedores
+                <select
+                  value={providers}
+                  onChange={(e) => setProviders(e.target.value as "openai" | "openai,ollama")}
+                  disabled={starting || selectedRun?.status === "running"}
+                  className="input"
+                  style={{ fontSize: 12, padding: "3px 8px" }}
+                >
+                  <option value="openai">Solo OpenAI (recomendado)</option>
+                  <option value="openai,ollama">OpenAI y Ollama (horas)</option>
+                </select>
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                k
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={kValue}
+                  onChange={(e) => setKValue(Math.min(20, Math.max(1, Number(e.target.value) || 5)))}
+                  disabled={starting || selectedRun?.status === "running"}
+                  className="input"
+                  style={{ width: 56, fontSize: 12, padding: "3px 8px" }}
+                />
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 6 }} title="Desactivadas: mide solo recuperación + generación (comparable con la corrida del 13/09). Activas: mide el sistema tal como lo usan los estudiantes; las respuestas de FAQ se cuentan como respaldadas.">
+                <input
+                  type="checkbox"
+                  checked={includeFaq}
+                  onChange={(e) => setIncludeFaq(e.target.checked)}
+                  disabled={starting || selectedRun?.status === "running"}
+                />
+                Mantener preguntas frecuentes activas
+              </label>
+            </div>
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
             <input
@@ -165,7 +210,7 @@ export default function GoldEvalPanel() {
             {selectedRun.status === "running" && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 10, background: "var(--brand-dim)", border: "1px solid var(--brand-light)", fontSize: 12.5, color: "var(--text-2)", marginBottom: 18 }}>
                 <Clock size={13} style={{ color: "var(--brand-primary)" }} className="animate-pulse" />
-                Ejecutando {selectedRun.total_queries || ""} consultas × retrieval + generación real en 2 proveedores. Puede tardar varios minutos (más aún en Ollama sin GPU). Esta vista se actualiza sola cada 15s.
+                Ejecutando {selectedRun.total_queries || ""} consultas × retrieval + generación real{selectedRun.results?.config?.providers ? ` (${selectedRun.results.config.providers.join(", ")})` : ""}. Puede tardar varios minutos (horas si incluye Ollama sin GPU). Esta vista se actualiza sola cada 15s.
               </div>
             )}
 

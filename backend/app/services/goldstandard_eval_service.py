@@ -116,6 +116,22 @@ def _normalize_doc_ref(name: str) -> str:
     return n.strip()
 
 
+# Gold-set cells that name a KIND of document rather than a file ("mallas",
+# "mallas curriculares", "Documentos de programas"): any curriculum document
+# counts as relevant for them. Matched in _ref_matches_title.
+_GENERIC_CURRICULUM_REFS = {"mallas", "mallas curriculares", "documentos de programas", "malla curricular"}
+_CURRICULUM_TITLE_RE = re.compile(r"^\d\d_|malla|pensum|plan de estudios|plandeestudios")
+
+
+def _ref_matches_title(expected: str, title: str) -> bool:
+    """Substring match in either direction (gold-set names are often
+    shortened or lengthened versions of the real title), plus the generic
+    curriculum references above."""
+    if expected in _GENERIC_CURRICULUM_REFS:
+        return bool(_CURRICULUM_TITLE_RE.search(title))
+    return expected in title or title in expected
+
+
 def _split_doc_refs(cell: str) -> list[str]:
     """"07_X.xlsx; sitio web / 09_Y.xls (nota)" -> ["07_X", "09_Y"] — drops
     parenthetical notes and generic non-file references (sitio web, FICB024
@@ -191,11 +207,11 @@ async def _run_retrieval_case(rag_service: RAGService, q: GoldQuery, k: int) -> 
         expected = q.expected_documents
 
         def _matches(title: str) -> bool:
-            return any(e in title or title in e for e in expected)
+            return any(_ref_matches_title(e, title) for e in expected)
 
         relevant_flags = [_matches(t) for t in retrieved_titles]
         precision = sum(relevant_flags) / k if k else 0.0
-        found_expected = {e for e in expected if any(e in t or t in e for t in retrieved_titles)}
+        found_expected = {e for e in expected if any(_ref_matches_title(e, t) for t in retrieved_titles)}
         recall = len(found_expected) / len(expected)
         rr = 0.0
         for i, is_rel in enumerate(relevant_flags):
@@ -370,6 +386,10 @@ class GenerationCaseResult:
     verification_reason: str | None = None  # grader's own explanation for its last verdict (see ChatService.last_verification_reason) — most useful on `refused` cases, to see WHY without live tracing
     rag_quality: str | None = None  # ChatService.last_rag_quality ("good"/"weak"/"none") — on a `refused` case, distinguishes "retrieval came back weak/empty" (quality != "good", zero LLM calls) from "LLM had good context but self-refused anyway" (quality == "good", REFUSAL_MARKER short-circuit in verification_graph._grade leaves verification_reason=None too — see goldstandard_eval_wip memory, 2026-08-24)
     hallucination_reason: str | None = None  # the eval judge's own explanation (see _judge_hallucination) — set whenever hallucinated is not None; lets a `hallucinated=True` case be diagnosed from the report alone instead of re-deriving context by hand (see goldstandard_eval_wip memory, 2026-09-11)
+    # "faq" | "cache" | "rag" | "refusal" | "clarification" | "greeting" (see
+    # models/message.py). A FAQ answer is curated text with no retrieval
+    # context behind it, so it is never sent to the hallucination judge.
+    answer_source: str | None = None
 
 
 async def _run_generation_case(
@@ -402,6 +422,7 @@ async def _run_generation_case(
         )
     generation_ms = int((time.time() - t0) * 1000)
     answer = response.assistant_message.content
+    answer_source = getattr(response.assistant_message, "answer_source", None)
     refused = REFUSAL_MARKER in answer
     clarification = CLARIFICATION_MARKER in answer
     verification_reason = chat_service.last_verification_reason
@@ -412,7 +433,14 @@ async def _run_generation_case(
 
     hallucinated = None
     hallucination_reason = None
-    if q.query_type == _RETRIEVAL_EXPECTED_TYPE and not refused and not clarification:
+    if answer_source == "faq" and q.query_type == _RETRIEVAL_EXPECTED_TYPE:
+        # Curated FAQ answer: official text written by the admin, served with
+        # no retrieval context. Judging it against last_rag_context_text
+        # (empty for this call) would flag every FAQ answer as a
+        # hallucination. Counted as a grounded answer and reported apart.
+        hallucinated = False
+        hallucination_reason = "respuesta curada (FAQ), no juzgada"
+    elif q.query_type == _RETRIEVAL_EXPECTED_TYPE and not refused and not clarification:
         try:
             # Judge against the context this exact call actually fed the LLM
             # (chat_service's own internal RAG search), not a separately
@@ -441,7 +469,7 @@ async def _run_generation_case(
         query=q, answer=answer, refused=refused, clarification=clarification, expected_refusal=expected_refusal,
         refusal_ok=refusal_ok, hallucinated=hallucinated, generation_ms=generation_ms,
         verification_reason=verification_reason, rag_quality=rag_quality,
-        hallucination_reason=hallucination_reason,
+        hallucination_reason=hallucination_reason, answer_source=answer_source,
     )
 
 
@@ -467,6 +495,7 @@ class GenerationSummary:
     clarification_rate: float     # asked "which program/faculty?" instead of answering
     useful_answer_rate: float     # answered AND the judge found it grounded
     cases: list[dict]
+    faq_cases: int = 0            # answers served from the curated FAQ (not judged)
 
 
 async def run_generation_eval(
@@ -496,8 +525,10 @@ async def run_generation_eval(
     n_refused = sum(1 for r in in_scope if r.refused)
     n_clarified = sum(1 for r in in_scope if r.clarification)
     n_useful = sum(1 for r in answered if r.hallucinated is False)
+    n_faq = sum(1 for r in ok if r.answer_source == "faq")
 
     return GenerationSummary(
+        faq_cases=n_faq,
         provider=provider_name,
         model=model,
         hallucination_rate=(sum(1 for r in judged if r.hallucinated) / len(judged)) if judged else 0.0,
@@ -525,6 +556,7 @@ async def run_generation_eval(
             "verification_reason": r.verification_reason,
             "rag_quality": r.rag_quality,
             "hallucination_reason": r.hallucination_reason,
+            "answer_source": r.answer_source,
         } for r in results],
     )
 

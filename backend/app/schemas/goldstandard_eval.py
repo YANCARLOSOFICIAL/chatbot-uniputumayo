@@ -38,6 +38,7 @@ class GenerationCaseDetail(BaseModel):
     hallucinated: bool | None
     generation_ms: int
     error: str | None = None
+    answer_source: str | None = None
 
 
 class GenerationSummaryDetail(BaseModel):
@@ -49,6 +50,7 @@ class GenerationSummaryDetail(BaseModel):
     refusal_cases: int
     avg_generation_ms: float
     error_cases: int = 0
+    faq_cases: int = 0
     cases: list[GenerationCaseDetail]
 
 

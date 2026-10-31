@@ -580,10 +580,11 @@ export const apiClient = {
     request<RagEvalRunDetail>(`/api/v1/rag-eval/${runId}`),
 
   // ── GoldStandard Eval (Ollama vs OpenAI comparison) ──
-  startGoldEval: (file: File, k = 5) => {
+  startGoldEval: (file: File, k = 5, providers = "openai", includeFaq = false) => {
     const body = new FormData();
     body.append("file", file);
-    return request<GoldEvalRunSummary>(`/api/v1/goldstandard-eval/run?k=${k}`, {
+    const params = new URLSearchParams({ k: String(k), providers, include_faq: String(includeFaq) });
+    return request<GoldEvalRunSummary>(`/api/v1/goldstandard-eval/run?${params.toString()}`, {
       method: "POST",
       body,
     });
@@ -671,6 +672,7 @@ export interface GoldGenerationCase {
   hallucinated: boolean | null;
   generation_ms: number;
   error?: string | null;
+  answer_source?: string | null;
 }
 
 export interface GoldGenerationSummary {
@@ -682,11 +684,24 @@ export interface GoldGenerationSummary {
   refusal_cases: number;
   avg_generation_ms: number;
   error_cases?: number;
+  faq_cases?: number;
   cases: GoldGenerationCase[];
+}
+
+/** Snapshot of the settings a run was executed with (written by the backend). */
+export interface GoldEvalRunConfig {
+  providers: string[];
+  models: Record<string, string>;
+  grader_model?: string;
+  condensation_model?: string;
+  k: number;
+  include_faq: boolean;
+  [key: string]: unknown;
 }
 
 export interface GoldEvalRunDetail extends GoldEvalRunSummary {
   results: {
+    config?: GoldEvalRunConfig;
     retrieval: GoldRetrievalSummary;
     generations: GoldGenerationSummary[];
   } | null;
