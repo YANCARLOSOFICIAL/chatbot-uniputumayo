@@ -86,3 +86,17 @@ class TestSystemPromptSynonymRule:
         assert "derechos pecuniarios" in prompt
         assert "precios" in prompt
         assert "valores" in prompt
+
+
+class TestPersonalDataRule:
+    """GoldStandard run of 2026-11-02, GS-046: asked for a teacher's *personal*
+    mobile number, the bot returned an institutional contact number found in
+    Posgrados_matriculas and labelled it "celular personal". The number was in
+    the context (no hallucination), but the framing is wrong and the gold set
+    expects the bot never to hand out data presented as personal."""
+
+    def test_system_prompt_forbids_personal_data_and_allows_institutional_contacts(self):
+        prompt = build_chat_prompt("contexto de prueba").lower()
+        assert "datos personales" in prompt
+        assert "celular personal" in prompt
+        assert "institucional" in prompt
