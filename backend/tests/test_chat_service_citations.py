@@ -50,6 +50,18 @@ def service():
 
 
 class TestFilterCitedSources:
+    def test_normalizes_missing_cached_citation_numbers(self, service):
+        sources = [
+            {"document_title": "Doc 1"},
+            {"document_title": "Doc 2", "citation_number": 4},
+            {"document_title": "Doc 3", "citation_number": None},
+        ]
+
+        normalized = service._normalize_source_payload(sources)
+
+        assert [source["citation_number"] for source in normalized] == [1, 4, 3]
+        assert sources[0].get("citation_number") is None
+
     def test_refusal_marker_yields_zero_sources(self, service):
         rag_ctx = make_rag_ctx(3)
         payload, infos = service._filter_cited_sources(REFUSAL_MARKER, rag_ctx)

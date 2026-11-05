@@ -23,6 +23,7 @@ export interface Message {
   // on answers stored before the FAQ feature.
   answer_source?: string | null;
   faq_entry_id?: string | null;
+  sources?: SourceInfo[] | null;
   created_at: string;
 }
 

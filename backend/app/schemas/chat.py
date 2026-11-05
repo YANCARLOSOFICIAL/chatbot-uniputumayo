@@ -66,6 +66,7 @@ class MessageResponse(BaseModel):
     # see models/message.py. None for user messages and legacy rows.
     answer_source: str | None = None
     faq_entry_id: UUID | None = None
+    sources: list["SourceInfo"] | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

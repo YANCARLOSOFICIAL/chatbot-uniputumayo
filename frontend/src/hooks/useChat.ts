@@ -7,6 +7,7 @@ import { isAuthenticated } from "@/lib/auth";
 import type { Message } from "@/types/chat";
 
 const _GUEST_CONV_KEY = "guest_conv_id";
+const _ACTIVE_CONV_KEY = "active_conv_id";
 
 export function useChat() {
   const { state, dispatch } = useChatContext();
@@ -34,18 +35,24 @@ export function useChat() {
   // doesn't need it in its dependency array (avoids re-running on each render).
   const selectConvRef = useRef<((id: string) => Promise<void>) | null>(null);
 
-  // 1. On mount: restore a guest conversation saved in sessionStorage (e.g. after page refresh)
+  // Restore the active conversation after a page refresh for both guests and
+  // authenticated users. Authenticated conversations remain on the server;
+  // this key only remembers which one was open.
   useEffect(() => {
-    if (isAuthenticated()) return;
-    const savedId = sessionStorage.getItem(_GUEST_CONV_KEY);
+    const savedId = isAuthenticated()
+      ? localStorage.getItem(_ACTIVE_CONV_KEY)
+      : sessionStorage.getItem(_GUEST_CONV_KEY);
     if (savedId && selectConvRef.current) {
       selectConvRef.current(savedId);
     }
   }, []);
 
-  // 2. Keep sessionStorage in sync with the active guest conversation
+  // Keep the active conversation in sync so a reload stays in the same chat.
   useEffect(() => {
     if (isAuthenticated()) {
+      if (state.activeConversationId) {
+        localStorage.setItem(_ACTIVE_CONV_KEY, state.activeConversationId);
+      }
       sessionStorage.removeItem(_GUEST_CONV_KEY);
       return;
     }
@@ -126,7 +133,12 @@ export function useChat() {
       try {
         const messages = await apiClient.getMessages(conversationId);
         if (selectReqIdRef.current !== reqId) return; // selección cambió, descartar
-        dispatch({ type: "SET_MESSAGES", payload: messages as unknown as Message[] });
+        const loadedMessages = messages as unknown as Message[];
+        const latestAssistant = [...loadedMessages].reverse().find(
+          (message) => message.role === "assistant"
+        );
+        dispatch({ type: "SET_MESSAGES", payload: loadedMessages });
+        dispatch({ type: "SET_SOURCES", payload: latestAssistant?.sources ?? [] });
       } catch (error) {
         if (selectReqIdRef.current !== reqId) return;
         dispatch({
@@ -219,16 +231,24 @@ export function useChat() {
                   score: number;
                   program: string | null;
                   faculty: string | null;
-                  citation_number: number;
-                }>).map((s) => ({
-                  chunk_id: s.chunk_id,
-                  document_title: s.document_title,
-                  content_preview: s.content_preview,
-                  score: s.score,
-                  program: s.program ?? null,
-                  faculty: s.faculty ?? null,
-                  citation_number: s.citation_number,
-                })),
+                  citation_number?: number;
+                }>).map((s, index) => {
+                  const citationNumber =
+                    typeof s.citation_number === "number" &&
+                    Number.isInteger(s.citation_number) &&
+                    s.citation_number > 0
+                      ? s.citation_number
+                      : index + 1;
+                  return {
+                    chunk_id: s.chunk_id,
+                    document_title: s.document_title,
+                    content_preview: s.content_preview,
+                    score: s.score,
+                    program: s.program ?? null,
+                    faculty: s.faculty ?? null,
+                    citation_number: citationNumber,
+                  };
+                }),
               });
             } else if (e.type === "token" && e.content) {
               assistantContent += e.content;

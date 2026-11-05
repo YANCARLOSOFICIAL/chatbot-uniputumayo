@@ -119,6 +119,18 @@ class _RAGContext:
 
 
 class ChatService:
+    @staticmethod
+    def _normalize_source_payload(sources: list[dict]) -> list[dict]:
+        """Ensure cached and newly-created sources have stable citation numbers."""
+        normalized: list[dict] = []
+        for index, source in enumerate(sources):
+            item = dict(source)
+            citation_number = item.get("citation_number")
+            if not isinstance(citation_number, int) or citation_number < 1:
+                item["citation_number"] = index + 1
+            normalized.append(item)
+        return normalized
+
     def __init__(self, db: AsyncSession):
         self.db = db
         # Exposes the exact RAG context text this instance's last
@@ -1329,7 +1341,7 @@ class ChatService:
             provider_name = cached["llm_provider"]
             model_name = cached["llm_model"]
             quality = "cached"
-            sources_payload = cached["sources"]
+            sources_payload = self._normalize_source_payload(cached.get("sources") or [])
             source_infos = [SourceInfo(**s) for s in sources_payload]
             tokens_used = None
         else:
@@ -1551,6 +1563,7 @@ class ChatService:
             verification_approved=verification_approved,
             answer_source=answer_source,
             faq_entry_id=faq_entry_id,
+            sources=sources_payload or None,
         )
         self.db.add(assistant_message)
 
@@ -1856,6 +1869,7 @@ class ChatService:
                 verification_approved=verification_approved,
                 answer_source=answer_source,
                 faq_entry_id=faq_entry_id,
+                sources=sources_payload or None,
             )
             self.db.add(assistant_message)
 
@@ -1902,6 +1916,7 @@ class ChatService:
                     "response_time_ms": response_time,
                     "answer_source": answer_source,
                     "faq_entry_id": str(faq_entry_id) if faq_entry_id else None,
+                    "sources": sources_payload or None,
                     "created_at": assistant_message.created_at.isoformat(),
                 },
             }

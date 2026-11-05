@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, Text, Integer, Boolean, DateTime, ForeignKey
+from sqlalchemy import String, Text, Integer, Boolean, DateTime, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -42,6 +42,9 @@ class Message(Base):
         ForeignKey("faq_entries.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Sources used by the assistant answer, persisted so citations survive
+    # conversation reloads and page refreshes.
+    sources: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
