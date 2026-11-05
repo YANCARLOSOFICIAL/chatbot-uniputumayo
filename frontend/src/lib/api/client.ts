@@ -76,7 +76,7 @@ async function requestPaginated<T>(
 }
 
 import type { AuthUser } from "@/lib/auth";
-import type { FaqAdmin, FaqInput, FaqMatchTest, FaqPublic } from "@/types/chat";
+import type { FaqAdmin, FaqInput, FaqMatchTest, FaqPublic, Message } from "@/types/chat";
 export type { AuthUser };
 
 export interface AuthResponse {
@@ -294,9 +294,7 @@ export const apiClient = {
     ),
 
   getMessages: (conversationId: string, limit = 50, offset = 0) =>
-    request<
-      Array<{ id: string; role: string; content: string; created_at: string }>
-    >(
+    request<Message[]>(
       `/api/v1/chat/conversations/${conversationId}/messages?limit=${limit}&offset=${offset}`
     ),
 

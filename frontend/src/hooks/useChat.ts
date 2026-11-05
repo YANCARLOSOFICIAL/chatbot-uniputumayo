@@ -3,11 +3,15 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useChatContext } from "@/context/ChatContext";
 import { apiClient } from "@/lib/api/client";
-import { isAuthenticated } from "@/lib/auth";
+import { getUser, isAuthenticated } from "@/lib/auth";
 import type { Message } from "@/types/chat";
 
 const _GUEST_CONV_KEY = "guest_conv_id";
-const _ACTIVE_CONV_KEY = "active_conv_id";
+
+function activeConversationKey(): string | null {
+  const user = getUser();
+  return user ? `active_conv_id_${user.id}` : null;
+}
 
 export function useChat() {
   const { state, dispatch } = useChatContext();
@@ -39,9 +43,11 @@ export function useChat() {
   // authenticated users. Authenticated conversations remain on the server;
   // this key only remembers which one was open.
   useEffect(() => {
-    const savedId = isAuthenticated()
-      ? localStorage.getItem(_ACTIVE_CONV_KEY)
-      : sessionStorage.getItem(_GUEST_CONV_KEY);
+    const routeConversationId = window.location.pathname.match(/^\/chat\/([^/]+)$/)?.[1];
+    const key = activeConversationKey();
+    const savedId = routeConversationId || (isAuthenticated() && key
+      ? localStorage.getItem(key)
+      : sessionStorage.getItem(_GUEST_CONV_KEY));
     if (savedId && selectConvRef.current) {
       selectConvRef.current(savedId);
     }
@@ -50,8 +56,9 @@ export function useChat() {
   // Keep the active conversation in sync so a reload stays in the same chat.
   useEffect(() => {
     if (isAuthenticated()) {
-      if (state.activeConversationId) {
-        localStorage.setItem(_ACTIVE_CONV_KEY, state.activeConversationId);
+      const key = activeConversationKey();
+      if (state.activeConversationId && key) {
+        localStorage.setItem(key, state.activeConversationId);
       }
       sessionStorage.removeItem(_GUEST_CONV_KEY);
       return;
@@ -60,19 +67,6 @@ export function useChat() {
       sessionStorage.setItem(_GUEST_CONV_KEY, state.activeConversationId);
     }
   }, [state.activeConversationId]);
-
-  // 3. On tab/window close: delete the guest conversation via sendBeacon
-  useEffect(() => {
-    const handleUnload = () => {
-      const guestId = sessionStorage.getItem(_GUEST_CONV_KEY);
-      if (guestId) {
-        apiClient.guestClose(guestId);
-        sessionStorage.removeItem(_GUEST_CONV_KEY);
-      }
-    };
-    window.addEventListener("beforeunload", handleUnload);
-    return () => window.removeEventListener("beforeunload", handleUnload);
-  }, []);
 
   // ────────────────────────────────────────────────────────────────────────
 
@@ -131,9 +125,17 @@ export function useChat() {
       dispatch({ type: "SET_ACTIVE_CONVERSATION", payload: conversationId });
       dispatch({ type: "SET_ERROR", payload: null });
       try {
-        const messages = await apiClient.getMessages(conversationId);
+        const pageSize = 200;
+        const allMessages: Message[] = [];
+        let offset = 0;
+        while (true) {
+          const page = await apiClient.getMessages(conversationId, pageSize, offset);
+          allMessages.push(...page);
+          if (page.length < pageSize) break;
+          offset += pageSize;
+        }
         if (selectReqIdRef.current !== reqId) return; // selección cambió, descartar
-        const loadedMessages = messages as unknown as Message[];
+        const loadedMessages = allMessages;
         const latestAssistant = [...loadedMessages].reverse().find(
           (message) => message.role === "assistant"
         );
@@ -141,6 +143,14 @@ export function useChat() {
         dispatch({ type: "SET_SOURCES", payload: latestAssistant?.sources ?? [] });
       } catch (error) {
         if (selectReqIdRef.current !== reqId) return;
+        if (error instanceof Error && error.message.toLowerCase().includes("conversation not found")) {
+          const key = activeConversationKey();
+          if (key) localStorage.removeItem(key);
+          if (sessionStorage.getItem(_GUEST_CONV_KEY) === conversationId) {
+            sessionStorage.removeItem(_GUEST_CONV_KEY);
+          }
+          dispatch({ type: "SET_ACTIVE_CONVERSATION", payload: null });
+        }
         dispatch({
           type: "SET_ERROR",
           payload: error instanceof Error ? error.message : "Error cargando mensajes",
@@ -342,6 +352,13 @@ export function useChat() {
     async (conversationId: string) => {
       try {
         await apiClient.deleteConversation(conversationId);
+        const key = activeConversationKey();
+        if (key && localStorage.getItem(key) === conversationId) {
+          localStorage.removeItem(key);
+        }
+        if (sessionStorage.getItem(_GUEST_CONV_KEY) === conversationId) {
+          sessionStorage.removeItem(_GUEST_CONV_KEY);
+        }
         dispatch({ type: "REMOVE_CONVERSATION", payload: conversationId });
       } catch (error) {
         dispatch({

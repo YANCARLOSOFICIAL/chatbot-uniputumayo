@@ -52,6 +52,20 @@ class MessageCreate(BaseModel):
         return v
 
 
+class SourceInfo(BaseModel):
+    chunk_id: UUID
+    document_title: str
+    content_preview: str
+    score: float
+    program: str | None
+    faculty: str | None
+    # 1-based position among retrieved context fragments — matches the "[N]"
+    # marker the LLM was shown/asked to cite, independent of this source's
+    # position in a filtered/reordered list. Frontend uses this (not array
+    # index) to match a clicked "[N]" citation back to its source card.
+    citation_number: int = 1
+
+
 class MessageResponse(BaseModel):
     id: UUID
     conversation_id: UUID
@@ -66,24 +80,10 @@ class MessageResponse(BaseModel):
     # see models/message.py. None for user messages and legacy rows.
     answer_source: str | None = None
     faq_entry_id: UUID | None = None
-    sources: list["SourceInfo"] | None = None
+    sources: list[SourceInfo] | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
-
-
-class SourceInfo(BaseModel):
-    chunk_id: UUID
-    document_title: str
-    content_preview: str
-    score: float
-    program: str | None
-    faculty: str | None
-    # 1-based position among retrieved context fragments — matches the "[N]"
-    # marker the LLM was shown/asked to cite, independent of this source's
-    # position in a filtered/reordered list. Frontend uses this (not array
-    # index) to match a clicked "[N]" citation back to its source card.
-    citation_number: int = 1
 
 
 class ConversationUpdate(BaseModel):

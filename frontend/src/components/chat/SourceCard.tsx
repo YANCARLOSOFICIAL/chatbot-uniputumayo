@@ -6,12 +6,13 @@ import type { SourceInfo } from "@/types/chat";
 
 interface SourceCardProps {
   sources: SourceInfo[];
+  idPrefix?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   highlightedIndex?: number | null;
 }
 
-export function SourceCard({ sources, open: openProp, onOpenChange, highlightedIndex }: SourceCardProps) {
+export function SourceCard({ sources, idPrefix = "", open: openProp, onOpenChange, highlightedIndex }: SourceCardProps) {
   const [openState, setOpenState] = useState(false);
   const open = openProp ?? openState;
   const setOpen = (v: boolean) => {
@@ -42,7 +43,7 @@ export function SourceCard({ sources, open: openProp, onOpenChange, highlightedI
             return (
               <div
                 key={source.chunk_id}
-                id={`source-${n}`}
+                id={`source-${idPrefix ? `${idPrefix}-` : ""}${n}`}
                 className="source-item"
                 data-highlight={isHighlighted}
               >

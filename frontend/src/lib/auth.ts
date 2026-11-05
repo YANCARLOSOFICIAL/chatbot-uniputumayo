@@ -43,6 +43,8 @@ export function removeUser(): void {
 }
 
 export function logout(): void {
+  const user = getUser();
+  if (user) localStorage.removeItem(`active_conv_id_${user.id}`);
   removeToken();
   removeUser();
 }

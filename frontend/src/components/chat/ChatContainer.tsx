@@ -163,6 +163,13 @@ export function ChatContainer() {
 
   handleSendRef.current = handleSend;
 
+  useEffect(() => {
+    const initialQuery = sessionStorage.getItem("guaca_initial_query");
+    if (!initialQuery) return;
+    sessionStorage.removeItem("guaca_initial_query");
+    handleSendRef.current?.(initialQuery, "text");
+  }, []);
+
   const handleRegenerate = useCallback(() => {
     const lastUser = [...messages].reverse().find((m) => m.role === "user");
     if (lastUser) handleSend(lastUser.content, lastUser.input_type ?? "text");

@@ -3,6 +3,7 @@ import logging
 import random
 import re
 import time
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import AsyncIterator
 from uuid import UUID
@@ -119,6 +120,11 @@ class _RAGContext:
 
 
 class ChatService:
+    async def _touch_conversation(self, conversation_id: UUID) -> None:
+        conversation = await self.get_conversation(conversation_id)
+        if conversation:
+            conversation.updated_at = datetime.now(timezone.utc)
+
     @staticmethod
     def _normalize_source_payload(sources: list[dict]) -> list[dict]:
         """Ensure cached and newly-created sources have stable citation numbers."""
@@ -1566,6 +1572,7 @@ class ChatService:
             sources=sources_payload or None,
         )
         self.db.add(assistant_message)
+        await self._touch_conversation(conversation_id)
 
         await self._maybe_set_title(
             conversation_id, data.content, content, provider_name,
@@ -1872,6 +1879,7 @@ class ChatService:
                 sources=sources_payload or None,
             )
             self.db.add(assistant_message)
+            await self._touch_conversation(conversation_id)
 
             await self._maybe_set_title(
                 conversation_id, data.content, full_content, provider_name,

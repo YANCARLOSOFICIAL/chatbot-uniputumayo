@@ -16,6 +16,7 @@ import type { LucideIcon } from "lucide-react";
 
 interface MessageListProps {
   messages: Message[];
+  // Sources received before the streamed assistant message is finalized.
   sources: SourceInfo[];
   faqSuggestion?: FaqSuggestion | null;
   isLoading: boolean;
@@ -153,15 +154,17 @@ export function MessageList({ messages, sources, faqSuggestion, isLoading, onQui
   const [showBtn, setShowBtn] = useState(false);
   const isAtBottomRef   = useRef(true);
   const [sourcesOpen, setSourcesOpen] = useState(false);
-  const [highlightedSource, setHighlightedSource] = useState<number | null>(null);
+  const [highlightedSource, setHighlightedSource] = useState<{ messageId: string; number: number } | null>(null);
 
-  const handleCitationClick = (n: number) => {
+  const handleCitationClick = (messageId: string, n: number) => {
     setSourcesOpen(true);
     requestAnimationFrame(() => {
-      document.getElementById(`source-${n}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.getElementById(`source-${messageId}-${n}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
-    setHighlightedSource(n);
-    setTimeout(() => setHighlightedSource((cur) => (cur === n ? null : cur)), 1500);
+    setHighlightedSource({ messageId, number: n });
+    setTimeout(() => setHighlightedSource((cur) =>
+      cur?.messageId === messageId && cur.number === n ? null : cur
+    ), 1500);
   };
 
   const scrollToBottom = (smooth = true) => {
@@ -211,6 +214,9 @@ export function MessageList({ messages, sources, faqSuggestion, isLoading, onQui
               const lastBotIdx = messages.reduceRight((found, m, idx) => found === -1 && m.role === "assistant" ? idx : found, -1);
               return messages.map((msg, i) => {
               const isLast = msg.role === "assistant" && i === lastBotIdx;
+              const messageSources = msg.role === "assistant"
+                ? (msg.sources ?? (isLast && msg.id.startsWith("streaming-") ? sources : []))
+                : [];
               return (
                 <div
                   key={msg.id}
@@ -224,23 +230,27 @@ export function MessageList({ messages, sources, faqSuggestion, isLoading, onQui
                     // `sources` only ever holds the latest turn's sources (see
                     // ChatContext), so wiring citation clicks on older messages
                     // would open/highlight the wrong turn's source list.
-                    onCitationClick={isLast ? handleCitationClick : undefined}
+                    onCitationClick={(n) => handleCitationClick(msg.id, n)}
                   />
+                  {messageSources.length > 0 && (
+                    <div className="pl-8">
+                      <SourceCard
+                        sources={messageSources}
+                        idPrefix={msg.id}
+                        open={sourcesOpen}
+                        onOpenChange={setSourcesOpen}
+                        highlightedIndex={
+                          highlightedSource?.messageId === msg.id
+                            ? highlightedSource.number
+                            : null
+                        }
+                      />
+                    </div>
+                  )}
                 </div>
               );
             });
             })()}
-
-            {sources.length > 0 && (
-              <div className="pl-8">
-                <SourceCard
-                  sources={sources}
-                  open={sourcesOpen}
-                  onOpenChange={setSourcesOpen}
-                  highlightedIndex={highlightedSource}
-                />
-              </div>
-            )}
 
             {!isLoading && faqSuggestion && (
               <FaqSuggestionChip suggestion={faqSuggestion} onSelect={onQuickReply} />
