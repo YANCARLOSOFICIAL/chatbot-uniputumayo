@@ -652,3 +652,173 @@ class TestComputeGenerationStatsRecomputesFromCases:
         assert stats["useful_answer_rate"] == pytest.approx(0.25)  # only GS-001 grounded
         assert stats["unnecessary_refusal_rate"] == pytest.approx(0.25)  # GS-003
         assert stats["clarification_rate"] == pytest.approx(0.25)  # GS-004
+
+
+class TestGenericCurriculumReferences:
+    """Gold-set cells such as "mallas" or "Documentos de programas" name a
+    KIND of document, not a file. Before, they could never match a title and
+    silently dragged Precision/Recall down for correct retrievals."""
+
+    @pytest.mark.asyncio
+    async def test_generic_mallas_matches_any_curriculum_document(self):
+        q = GoldQuery(
+            id="5", category="c", query="query",
+            query_type="dentro de alcance", expected_documents=["mallas"],
+        )
+        rag = FakeRAGService(["07_ingenieria de sistemas malla", "costos de matricula 2026"])
+        result = await _run_retrieval_case(rag, q, k=5)
+        assert result.recall_at_k == pytest.approx(1.0)
+        assert result.reciprocal_rank == pytest.approx(1.0)
+
+    @pytest.mark.asyncio
+    async def test_generic_reference_does_not_match_non_curriculum_titles(self):
+        q = GoldQuery(
+            id="6", category="c", query="query",
+            query_type="dentro de alcance", expected_documents=["mallas curriculares"],
+        )
+        rag = FakeRAGService(["reglamento estudiantil", "costos de matricula 2026"])
+        result = await _run_retrieval_case(rag, q, k=5)
+        assert result.recall_at_k == 0.0
+
+
+class TestFaqAnswersAreNotJudged:
+    """A curated FAQ answer carries no retrieval context, so judging it
+    against last_rag_context_text (empty) would flag every FAQ hit as a
+    hallucination. It must count as grounded and be tagged by source."""
+
+    @pytest.mark.asyncio
+    async def test_faq_answer_counts_as_grounded_without_calling_the_judge(self, monkeypatch):
+        from app.services.goldstandard_eval_service import _run_generation_case
+
+        async def fake_process_message(self, *args, **kwargs):
+            self.last_rag_context_text = ""
+            return SimpleNamespace(assistant_message=SimpleNamespace(
+                content="La IUP ofrece 10 programas de pregrado.", answer_source="faq",
+            ))
+
+        monkeypatch.setattr(
+            "app.services.goldstandard_eval_service.ChatService.process_message", fake_process_message,
+        )
+        called = []
+
+        async def fake_judge(*args, **kwargs):
+            called.append(args)
+            return True, "no debería llamarse"
+
+        monkeypatch.setattr("app.services.goldstandard_eval_service._judge_hallucination", fake_judge)
+        fake_db = SimpleNamespace(add=lambda *_: None, flush=_noop)
+        q = GoldQuery(
+            id="GS-001", category="c", query="¿Cuántos programas ofrece la IUP?",
+            query_type="dentro de alcance", expected_documents=["triptico"],
+        )
+
+        result = await _run_generation_case(fake_db, q, "openai", "gpt-4.1")
+
+        assert called == []
+        assert result.hallucinated is False
+        assert result.answer_source == "faq"
+
+    @pytest.mark.asyncio
+    async def test_summary_counts_faq_cases_and_router_stats_expose_them(self, monkeypatch):
+        from app.services.goldstandard_eval_service import (
+            GenerationCaseResult, RetrievalCaseResult, run_generation_eval,
+        )
+        from app.routers.goldstandard_eval import _compute_generation_stats
+
+        def q(id):
+            return GoldQuery(id=id, category="c", query=f"q{id}", query_type="dentro de alcance",
+                             expected_documents=["x"])
+        plan = {"1": ("faq", False), "2": ("rag", False), "3": ("rag", True)}
+
+        async def fake_case(db, query, provider_name, model):
+            source, hallucinated = plan[query.id]
+            return GenerationCaseResult(
+                query=query, answer="a", refused=False, clarification=False, expected_refusal=False,
+                refusal_ok=True, hallucinated=hallucinated, generation_ms=10, answer_source=source,
+            )
+
+        monkeypatch.setattr("app.services.goldstandard_eval_service._run_generation_case", fake_case)
+        fake_db = SimpleNamespace(execute=_noop_async_any, commit=_noop)
+        retrieval = [
+            RetrievalCaseResult(query=q(i), retrieved_titles=[], precision_at_k=None,
+                                recall_at_k=None, reciprocal_rank=None, retrieval_ms=1)
+            for i in ("1", "2", "3")
+        ]
+
+        summary = await run_generation_eval(fake_db, retrieval, "openai", "gpt-4.1")
+
+        assert summary.faq_cases == 1
+        assert summary.useful_answer_rate == pytest.approx(2 / 3)
+        assert summary.hallucination_rate == pytest.approx(1 / 3)
+        gen = {"provider": "openai", "model": "gpt-4.1", "avg_generation_ms": 1, "error_cases": 0,
+               "cases": summary.cases}
+        assert _compute_generation_stats(gen)["faq_cases"] == 1
+
+
+async def _noop_async_any(*_, **__):
+    return None
+
+
+class TestRunOptions:
+    def test_parse_providers_defaults_to_openai_and_dedups(self):
+        from app.routers.goldstandard_eval import _parse_providers
+
+        assert _parse_providers(None) == ["openai"]
+        assert _parse_providers("openai, ollama,openai") == ["openai", "ollama"]
+
+    def test_parse_providers_rejects_unknown(self):
+        from fastapi import HTTPException
+        from app.routers.goldstandard_eval import _parse_providers
+
+        with pytest.raises(HTTPException):
+            _parse_providers("anthropic")
+
+    def test_run_config_snapshot_names_models_and_flags(self, monkeypatch):
+        from app.routers.goldstandard_eval import _run_config
+
+        monkeypatch.setattr(
+            "app.routers.goldstandard_eval.runtime_config.resolve_model", lambda p: f"model-{p}",
+        )
+        cfg = _run_config(["openai"], 5, include_faq=False)
+        assert cfg["models"] == {"openai": "model-openai"}
+        assert cfg["k"] == 5 and cfg["include_faq"] is False
+        assert "verification_max_attempts" in cfg and "hyde_enabled" in cfg
+
+    @pytest.mark.asyncio
+    async def test_run_disables_faq_during_run_and_restores_it(self, monkeypatch):
+        """FAQ off by default keeps the run comparable with the 2026-09-13
+        reference (no FAQ existed) and measures the RAG path the thesis
+        methodology describes. The flag must come back even on failure."""
+        from app.config import settings
+        from app.routers import goldstandard_eval as router
+
+        seen = {}
+
+        async def fake_compare(db, file_bytes, k, providers):
+            seen["faq_enabled"] = settings.faq_enabled
+            seen["providers"] = providers
+            raise RuntimeError("boom")
+
+        class FakeRun:
+            status = "running"; error_message = None; total_queries = 0; results = None
+
+        run = FakeRun()
+
+        class FakeDB:
+            async def execute(self, *_):
+                return SimpleNamespace(scalar_one_or_none=lambda: run)
+            async def commit(self): pass
+            async def __aenter__(self): return self
+            async def __aexit__(self, *a): return False
+
+        monkeypatch.setattr(router, "run_gold_comparison", fake_compare)
+        monkeypatch.setattr(router, "async_session", lambda: FakeDB())
+        monkeypatch.setattr(router.runtime_config, "resolve_model", lambda p: f"model-{p}")
+        monkeypatch.setattr(settings, "faq_enabled", True)
+
+        await router._run_and_store(None, b"", 5, ["openai"], include_faq=False)
+
+        assert seen["faq_enabled"] is False
+        assert seen["providers"] == [("openai", "model-openai")]
+        assert settings.faq_enabled is True
+        assert run.status == "failed"

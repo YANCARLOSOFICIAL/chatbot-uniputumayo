@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Respons
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db, async_session
 from app.models.gold_eval_run import GoldEvalRun
 from app.models.user import User
@@ -27,7 +28,45 @@ router = APIRouter()
 _eval_tasks: set[asyncio.Task] = set()
 
 
-async def _run_and_store(run_id: UUID, file_bytes: bytes, k: int) -> None:
+_VALID_PROVIDERS = ("openai", "ollama")
+
+
+def _parse_providers(raw: str | None) -> list[str]:
+    """'openai' | 'openai,ollama' -> ordered, de-duplicated provider names.
+    Defaults to OpenAI only: a full Ollama pass on the production CPU takes
+    hours (208 s per answer measured on 2026-09-13) and saturates the host."""
+    names = [n.strip().lower() for n in (raw or "openai").split(",") if n.strip()]
+    out: list[str] = []
+    for n in names:
+        if n not in _VALID_PROVIDERS:
+            raise HTTPException(status_code=400, detail=f"Proveedor desconocido: {n}")
+        if n not in out:
+            out.append(n)
+    return out or ["openai"]
+
+
+def _run_config(providers: list[str], k: int, include_faq: bool) -> dict:
+    """Snapshot of the configuration the run was executed with — the thesis
+    needs to state which models and retrieval settings produced each number."""
+    return {
+        "providers": providers,
+        "models": {p: runtime_config.resolve_model(p) for p in providers},
+        "grader_model": settings.openai_grader_model or runtime_config.resolve_model("openai"),
+        "condensation_model": settings.openai_condensation_model,
+        "k": k,
+        "include_faq": include_faq,
+        "rag_top_k": settings.rag_top_k,
+        "rag_score_threshold": settings.rag_score_threshold,
+        "hyde_enabled": settings.rag_hyde_enabled,
+        "reranker_enabled": settings.rag_reranker_enabled,
+        "multiquery_enabled": settings.rag_multiquery_enabled,
+        "verification_max_attempts": settings.verification_max_attempts,
+        "embedding_model": settings.ollama_embedding_model,
+        "answer_cache": "disabled during run",
+    }
+
+
+async def _run_and_store(run_id: UUID, file_bytes: bytes, k: int, providers: list[str], include_faq: bool) -> None:
     """Background task — a full run is 1 retrieval pass + 2 provider passes
     (each with a real LLM generation + judge call) over the whole query bank,
     easily minutes on CPU-only Ollama. Opens its own session since the
@@ -46,14 +85,21 @@ async def _run_and_store(run_id: UUID, file_bytes: bytes, k: int) -> None:
         # would silently invalidate the comparison. Disabled for the run's
         # duration only, always re-enabled in finally.
         answer_cache.disable()
+        # Same reasoning for the curated FAQ: by default the run measures the
+        # retrieval + generation path the methodology promised to evaluate
+        # (and stays comparable with the 2026-09-13 reference run, which had
+        # no FAQ). `include_faq=True` measures the deployed system as users
+        # see it; FAQ answers are then counted as grounded and reported apart.
+        faq_was_enabled = settings.faq_enabled
+        if not include_faq:
+            settings.faq_enabled = False
+        config = _run_config(providers, k, include_faq)
         try:
-            providers = [
-                ("ollama", runtime_config.resolve_model("ollama")),
-                ("openai", runtime_config.resolve_model("openai")),
-            ]
-            comparison = await run_gold_comparison(db, file_bytes, k, providers)
+            provider_pairs = [(p, runtime_config.resolve_model(p)) for p in providers]
+            comparison = await run_gold_comparison(db, file_bytes, k, provider_pairs)
             run.total_queries = comparison.total_queries
             run.results = {
+                "config": config,
                 "retrieval": comparison.retrieval.__dict__,
                 "generations": [g.__dict__ for g in comparison.generations],
             }
@@ -64,6 +110,7 @@ async def _run_and_store(run_id: UUID, file_bytes: bytes, k: int) -> None:
             run.error_message = str(e) or repr(e)
         finally:
             answer_cache.enable()
+            settings.faq_enabled = faq_was_enabled
         run.completed_at = datetime.now(timezone.utc)
         await db.commit()
 
@@ -72,17 +119,20 @@ async def _run_and_store(run_id: UUID, file_bytes: bytes, k: int) -> None:
 async def start_gold_eval_run(
     file: UploadFile = File(...),
     k: int = 5,
+    providers: str = "openai",
+    include_faq: bool = False,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_admin),
 ):
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="El archivo debe ser un .xlsx")
+    provider_names = _parse_providers(providers)
 
     openai_provider = ProviderFactory.get_provider("openai")
     if not await openai_provider.is_available():
         raise HTTPException(
             status_code=400,
-            detail="OpenAI no está configurado (falta API key en /admin/config) — se necesita para la comparación con Ollama.",
+            detail="OpenAI no está configurado (falta API key en /admin/config) — se necesita para la generación y para el juez de alucinaciones.",
         )
 
     file_bytes = await file.read()
@@ -92,7 +142,9 @@ async def start_gold_eval_run(
     await db.commit()
     await db.refresh(run)
 
-    task = asyncio.create_task(_run_and_store(run.id, file_bytes, k), name=f"gold-eval-{run.id}")
+    task = asyncio.create_task(
+        _run_and_store(run.id, file_bytes, k, provider_names, include_faq), name=f"gold-eval-{run.id}",
+    )
     _eval_tasks.add(task)
     task.add_done_callback(_eval_tasks.discard)
 
@@ -172,8 +224,10 @@ def _compute_generation_stats(g: dict) -> dict:
     answered = judged + judge_failed  # in_scope, not refused, not clarification
     n_useful = sum(1 for c in judged if not c.get("hallucinated"))
     hallucinated_cases = [c for c in judged if c.get("hallucinated")]
+    faq_cases = [c for c in ok_cases if c.get("answer_source") == "faq"]
 
     return {
+        "faq_cases": len(faq_cases),
         "provider": g.get("provider", ""),
         "model": g.get("model", ""),
         "hallucination_rate": (sum(1 for c in judged if c.get("hallucinated")) / len(judged)) if judged else 0.0,
@@ -201,11 +255,32 @@ def _compute_generation_stats(g: dict) -> dict:
 def _render_markdown_report(run: GoldEvalRun) -> str:
     r = run.results or {}
     retrieval = r.get("retrieval", {})
+    cfg = r.get("config") or {}
     lines = [
         f"# Evaluación GoldStandard — {run.created_at.strftime('%Y-%m-%d %H:%M')} UTC",
         "",
         f"Total de consultas: {run.total_queries} · k = {run.k}",
         "",
+    ]
+    if cfg:
+        lines += [
+            "## Configuración de la corrida",
+            "",
+            "| Parámetro | Valor |",
+            "|---|---|",
+            f"| Proveedores evaluados | {', '.join(cfg.get('providers', []))} |",
+            "| Modelos de generación | " + ", ".join(f"{p}: {m}" for p, m in (cfg.get("models") or {}).items()) + " |",
+            f"| Juez de alucinación | {cfg.get('grader_model', '')} |",
+            f"| Modelo auxiliar (HyDE, condensación, reformulaciones) | {cfg.get('condensation_model', '')} |",
+            f"| Modelo de embeddings | {cfg.get('embedding_model', '')} |",
+            f"| top_k en chat / umbral de calidad | {cfg.get('rag_top_k', '')} / {cfg.get('rag_score_threshold', '')} |",
+            f"| HyDE / reranker / multi-query | {cfg.get('hyde_enabled')} / {cfg.get('reranker_enabled')} / {cfg.get('multiquery_enabled')} |",
+            f"| Intentos de verificación | {cfg.get('verification_max_attempts', '')} |",
+            f"| Preguntas frecuentes durante la corrida | {'activas' if cfg.get('include_faq') else 'desactivadas'} |",
+            f"| Caché de respuestas | {cfg.get('answer_cache', '')} |",
+            "",
+        ]
+    lines += [
         "## Retrieval (independiente del proveedor de generación)",
         "",
         "| Métrica | Valor |",
@@ -218,7 +293,7 @@ def _render_markdown_report(run: GoldEvalRun) -> str:
         f"| Tiempo promedio de retrieval (ms) | {retrieval.get('avg_retrieval_ms', 0):.0f} |",
         f"| Casos con error (búsqueda falló, excluidos de las métricas) | {retrieval.get('error_cases', 0)} |",
         "",
-        "## Comparación de generación: Ollama vs OpenAI",
+        "## Generación por proveedor",
         "",
         "| Métrica | " + " | ".join(g.get("provider", "") for g in r.get("generations", [])) + " |",
         "|---|" + "|".join(["---"] * len(r.get("generations", []))) + "|",
@@ -230,6 +305,7 @@ def _render_markdown_report(run: GoldEvalRun) -> str:
     lines.append("| Tasa de rechazo seguro | " + " | ".join(f"{g['safe_rejection_rate']:.3f}" for g in gens) + " |")
     lines.append("| Tiempo promedio de generación (ms) | " + " | ".join(f"{g['avg_generation_ms']:.0f}" for g in gens) + " |")
     lines.append("| Casos con error (excluidos de las tasas anteriores) | " + " | ".join(str(g["error_cases"]) for g in gens) + " |")
+    lines.append("| Respuestas servidas por preguntas frecuentes (no juzgadas, contadas como respaldadas) | " + " | ".join(str(g.get("faq_cases", 0)) for g in gens) + " |")
 
     lines += [
         "",

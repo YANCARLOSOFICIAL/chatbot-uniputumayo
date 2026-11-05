@@ -216,17 +216,17 @@
     },
     {
       "question": "¿Qué ingenierías ofrece Uniputumayo?",
-      "answer": "Para 2026-II Uniputumayo ofrece seis ingenierías, todas por ciclos propedéuticos (6 semestres de ciclo tecnológico + 4 de ciclo profesional):\n\n- **Ingeniería de Sistemas** (Tecnología en Desarrollo de Software) — Mocoa y Colón, diurna y nocturna.\n- **Ingeniería Ambiental** (Tecnología en Saneamiento Ambiental) — Mocoa y Colón, diurna.\n- **Ingeniería Forestal** (Tecnología en Recursos Forestales) — Mocoa, diurna.\n- **Ingeniería Civil** (Tecnología en Obras Civiles) — Mocoa y Colón, diurna.\n- **Ingeniería Agropecuaria** (Tecnología en Producción Agropecuaria) — Mocoa y Colón, diurna.\n- **Ingeniería Industrial** (Tecnología en Procesos Industriales) — Mocoa y Colón, diurna.",
+      "answer": "Para 2026-II Uniputumayo ofrece seis ingenierías, todas por ciclos propedéuticos (6 semestres de ciclo tecnológico + 4 de ciclo profesional):\n\n- **Ingeniería de Sistemas** (Tecnología en Desarrollo de Software) — Mocoa y Colón, diurna y nocturna.\n- **Ingeniería Ambiental** (Tecnología en Saneamiento Ambiental) — Mocoa y Colón, diurna.\n- **Ingeniería Forestal** (Tecnología en Recursos Forestales) — Mocoa, diurna.\n- **Ingeniería Civil** (Tecnología en Obras Civiles) — Mocoa y Colón, diurna.\n- **Ingeniería Agropecuaria** (Tecnología en Producción Agropecuaria) — Mocoa y Colón, diurna.\n- **Ingeniería Industrial** (Tecnología en Procesos Industriales) — Mocoa y Colón, diurna.\n\nAdemás existe **Ingeniería Agroindustrial** (Tecnología en Producción Agroindustrial), sede Mocoa, registrada en el documento institucional de perfiles y títulos; es un programa distinto de Ingeniería Agropecuaria. Para saber si abre inscripciones en el periodo actual, consulta a admisiones.",
       "category": "Oferta académica",
-      "source_document": "Tríptico oferta académica 2026-2",
+      "source_document": "Tríptico oferta académica 2026-2; Pregrados_Perfiles_Titulos",
       "valid_period": "2026-II",
       "sort_order": 9
     },
     {
-      "question": "¿Ofrecen Ingeniería Agrícola o Ingeniería Agropecuaria?",
-      "answer": "Con el nombre Ingeniería Agrícola no hay programa en Uniputumayo. El programa afín de la oferta 2026-II es **Ingeniería Agropecuaria**, por ciclos propedéuticos con la **Tecnología en Producción Agropecuaria** (6 semestres) y luego el ciclo profesional (4 semestres), en jornada diurna en las sedes Mocoa y Colón. En documentos anteriores este programa figura como Ingeniería Agroindustrial.",
+      "question": "¿Ofrecen Ingeniería Agrícola, Agropecuaria o Agroindustrial?",
+      "answer": "Con el nombre Ingeniería Agrícola no hay programa en Uniputumayo. Hay dos ingenierías distintas del área:\n\n- **Ingeniería Agropecuaria**, en la oferta 2026-II: por ciclos propedéuticos con la **Tecnología en Producción Agropecuaria** (6 semestres) y luego el ciclo profesional (4 semestres), jornada diurna, sedes Mocoa y Colón.\n- **Ingeniería Agroindustrial**, con la **Tecnología en Producción Agroindustrial** como ciclo tecnológico, sede Mocoa, según el documento institucional de perfiles y títulos. Para su oferta en el periodo actual consulta a admisiones.",
       "category": "Oferta académica",
-      "source_document": "Tríptico oferta académica 2026-2",
+      "source_document": "Tríptico oferta académica 2026-2; Pregrados_Perfiles_Titulos",
       "valid_period": "2026-II",
       "sort_order": 10
     }
